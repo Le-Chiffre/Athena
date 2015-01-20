@@ -1087,7 +1087,7 @@ parseT:
 	//Check for the end of the file.
 	else if(!*p)
 	{
-		tok.type = Token::EOF;
+		tok.type = Token::EndOfFile;
 		tok.kind = Token::Special;
 	}
 	

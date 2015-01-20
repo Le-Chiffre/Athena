@@ -39,7 +39,7 @@ struct ASTList<T*>
 	const T* item;
 
 	ASTList(const T* i) : item(i) {}
-	ASTList(const T* i, ASTList<T*>* n) : item(i), next(n) {}
+	ASTList(const T* i, ASTList<T*>* n) : next(n), item(i) {}
 
 	struct It {
 		ASTList<T*>* curr;
@@ -77,7 +77,8 @@ struct Expr {
 		Var,
 		App,
 		Infix,
-		Prefix
+		Prefix,
+        If
 	} type;
 
 	Expr(Type t) : type(t) {}
@@ -112,6 +113,13 @@ struct PrefixExpr : Expr {
 	PrefixExpr(Id op, ExprRef dst) : Expr(Prefix), dst(dst), op(op) {}
 	ExprRef dst;
 	Id op;
+};
+
+struct IfExpr : Expr {
+    IfExpr(ExprRef cond, ExprRef then, const Expr* otherwise) : Expr(If), cond(cond), then(then), otherwise(otherwise) {}
+    ExprRef cond;
+    ExprRef then;
+    const Expr* otherwise;
 };
 
 

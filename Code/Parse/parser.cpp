@@ -13,7 +13,7 @@ inline Literal toLiteral(Token& tok) {
 }
 
 void Parser::parseModule() {
-	while(token != Token::EOF) {
+	while(token != Token::EndOfFile) {
 		parseDecl();
 	}
 }
@@ -24,7 +24,7 @@ void Parser::parseDecl() {
 	 * args			→	arg0 arg1 ... argn		(n ≥ 0)
 	 * arg			→	varid
 	 */
-	if(auto var = tryParse(parseVar)) {
+	if(auto var = tryParse(&Parser::parseVar)) {
 		if(token == Token::opColonColon) {
 			eat();
 
@@ -80,7 +80,7 @@ Expr* Parser::parseExpr() {
 
 	// Left-expression or binary operator.
 	if(auto lhs = parseLeftExpr()) {
-		if(auto op = tryParse(parseQop)) {
+		if(auto op = tryParse(&Parser::parseQop)) {
 			// Binary operator.
 			if(auto rhs = parseExpr()) {
 				return build<InfixExpr>(op, *lhs, *rhs);
@@ -106,11 +106,11 @@ Expr* Parser::parseCallExpr() {
 	 */
 	if(auto callee = parseAppExpr()) {
 		// Parse any arguments applied to the callee.
-		if(auto app = tryParse(parseAppExpr)) {
+		if(auto app = tryParse(&Parser::parseAppExpr)) {
 			auto list = build<ExprList>(app);
 			auto p = list;
 
-			while((app = tryParse(parseAppExpr))) {
+			while((app = tryParse(&Parser::parseAppExpr))) {
 				auto l = build<ExprList>(app);
 				p->next = l;
 				p = l;
@@ -145,7 +145,7 @@ Expr* Parser::parseAppExpr() {
 		} else {
 			return (Expr*)error("Expected expression after '('.");
 		}
-	} else if(auto var = tryParse(parseVar)) {
+	} else if(auto var = tryParse(&Parser::parseVar)) {
 		return build<VarExpr>(var());
 	} else {
 		return (Expr*)error("Expected an expression.");

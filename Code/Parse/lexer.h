@@ -150,7 +150,7 @@ private:
 
 struct Token {
 	enum Type {
-		EOF,
+		EndOfFile,
 		Comment,
 		Whitespace,
 		
