@@ -11,8 +11,15 @@ struct Resolver {
 	Resolver(ast::CompileContext& context, ast::Module& source) : context(context), source(source), buffer(4*1024*1024) {}
 
 	Module* resolve();
-	Function* resolveFunction(ast::FunDecl& decl);
-	Expr* resolveExpression(ast::ExprRef expr);
+	bool resolveFunction(Function& fun, ast::FunDecl& decl);
+	Expr* resolveExpression(Scope& scope, ast::ExprRef expr);
+	Expr* resolveInfix(Scope& scope, const ast::InfixExpr& expr);
+	Expr* resolvePrefix(Scope& scope, const ast::PrefixExpr& expr);
+	Expr* resolveCall(Scope& scope, const ast::AppExpr& expr);
+    Expr* resolveVar(Scope& scope, Id var);
+    Expr* resolveIf(Scope& scope, const ast::IfExpr& expr);
+	Expr* resolvePrimitiveOp(Scope& scope, PrimitiveOp op, const ast::InfixExpr& expr);
+	Expr* resolvePrimitiveOp(Scope& scope, PrimitiveOp op, const ast::PrefixExpr& expr);
 	Variable* resolveArgument(ScopeRef scope, Id arg);
 
 	template<class T, class... P>
@@ -20,6 +27,7 @@ struct Resolver {
 		return buffer.New<T>(Core::Forward<P>(p)...);
 	}
 
+	Id primitiveOps[(uint)PrimitiveOp::OpCount];
 	ast::CompileContext& context;
 	ast::Module& source;
 	Core::StaticBuffer buffer;
