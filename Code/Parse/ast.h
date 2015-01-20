@@ -21,7 +21,7 @@ struct ASTList
 	ASTList(const T& i, ASTList<T>* n) : item(i), next(n) {}
 
 	struct It {
-		ASTList<T>* curr;
+		const ASTList<T>* curr;
 		It operator ++ () {curr = curr->next; return *this;}
 		bool hasNext() const {return curr->next != nullptr;}
 		const T& operator * () const {return curr->item;}
@@ -42,7 +42,7 @@ struct ASTList<T*>
 	ASTList(const T* i, ASTList<T*>* n) : next(n), item(i) {}
 
 	struct It {
-		ASTList<T*>* curr;
+		const ASTList<T*>* curr;
 		It operator ++ () {curr = curr->next; return *this;}
 		bool hasNext() const {return curr->next != nullptr;}
 		const T& operator * () const {return *curr->item;}

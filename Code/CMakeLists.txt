@@ -16,10 +16,12 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/../Bin/Win32")
 set(SOURCE_FILES
     main.cpp
     Parse/ast.h
+    Parse/ast_print.cpp
     Parse/lexer.h
     Parse/lexer.cpp
     Parse/parser.h
     Parse/parser.cpp
+    Parse/resolve_ast.cpp
     Parse/resolve_ast.h
     Parse/resolve.h
     Parse/resolve.cpp

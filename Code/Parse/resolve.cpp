@@ -68,7 +68,7 @@ Expr* Resolver::resolveExpression(Scope& scope, ast::ExprRef expr) {
 	
 Expr* Resolver::resolveInfix(Scope& scope, const ast::InfixExpr& expr) {
 	// Check if this can be a primitive operator.
-	for(auto i = 0; i < (uint)PrimitiveOp::FirstUnary; i++) {
+	for(uint i = 0; i < (uint)PrimitiveOp::FirstUnary; i++) {
 		if(expr.op == primitiveOps[i]) {
 			return resolvePrimitiveOp(scope, (PrimitiveOp)i, expr);
 		}
