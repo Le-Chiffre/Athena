@@ -14,14 +14,20 @@ struct Variable;
 struct Scope;
 struct Function;
 struct Expr;
+struct Alt;
 
-typedef const Scope& ScopeRef;
-typedef const Function& FuncRef;
+typedef Scope& ScopeRef;
+typedef Function& FuncRef;
 
 typedef Core::Array<Variable*> VarList;
+typedef Core::Array<Function*> FunList;
 typedef ast::ASTList<Scope*> ScopeList;
+typedef ast::ASTList<Alt*> AltList;
 
 struct Scope {
+    Variable* findVar(Id name);
+    Function* findFun(Id name);
+
 	// The function containing this scope, or null if it is a function or global scope.
 	Function* function;
 
@@ -36,9 +42,14 @@ struct Scope {
 
 	// The variables that were declared in this scope.
 	VarList variables;
+
+    // The functions that were declared in this scope.
+    FunList functions;
 };
 
 struct Function : Scope {
+    Function(Id name) : name(name) {}
+
 	// The mangled name of this function.
 	Id name;
 
@@ -54,13 +65,20 @@ struct Variable {
 	ScopeRef scope;
 };
 
+struct Alt {
+    Alt(Expr* c, Expr* r) : cond(c), result(r) {}
+    Expr* cond;
+    Expr* result;
+};
+
 struct Expr {
 	enum Type {
 		Lit,
 		Var,
 		App,
 		AppI,
-		AppP
+		AppP,
+        Case
 	} type;
 
 	Expr(Type t) : type(t) {}
@@ -89,16 +107,20 @@ enum class PrimitiveOp {
 	CmpLe,
 
 	// Unary
-	Neg,
+	FirstUnary,
+	Neg = (uint)FirstUnary,
 	Not,
+	
+	// Must be last
+	OpCount
 };
 
 inline bool isUnary(PrimitiveOp op) {
-	return op >= PrimitiveOp::Neg;
+	return op >= PrimitiveOp::FirstUnary;
 }
 
 inline bool isBinary(PrimitiveOp op) {
-	return op < PrimitiveOp::Neg;
+	return op < PrimitiveOp::FirstUnary;
 }
 
 struct LitExpr : Expr {
@@ -127,6 +149,12 @@ struct AppPExpr : Expr {
 	AppPExpr(PrimitiveOp op, ExprList* args) : Expr(AppP), args(args), op(op) {}
 	ExprList* args;
 	PrimitiveOp op;
+};
+
+struct CaseExpr : Expr {
+    CaseExpr(AltList* alts, Expr* otherwise) : Expr(Case), alts(alts), otherwise(otherwise) {}
+    AltList* alts;
+    Expr* otherwise;
 };
 
 struct Module {
