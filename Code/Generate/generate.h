@@ -19,13 +19,14 @@ struct Generator {
 
 	llvm::Function* genFunction(resolve::Function& function);
 	llvm::BasicBlock* genScope(resolve::Scope& scope);
-	llvm::Value* genExpr(resolve::Expr& expr);
+	llvm::Value* genExpr(resolve::ExprRef expr);
 	llvm::Value* genLiteral(resolve::Literal& literal);
 
 	llvm::Value* genCall(resolve::Function& function, resolve::ExprList* args);
 	llvm::Value* genPrimitiveCall(resolve::PrimitiveOp op, resolve::ExprList* args);
 	llvm::Value* genUnaryOp(resolve::PrimitiveOp op, llvm::Value* in);
 	llvm::Value* genBinaryOp(resolve::PrimitiveOp op, llvm::Value* lhs, llvm::Value* rhs);
+    llvm::Value* genCase(resolve::CaseExpr& casee);
 
 private:
 	llvm::LLVMContext& context;
