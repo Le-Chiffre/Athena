@@ -11,6 +11,8 @@
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/ExecutionEngine/Interpreter.h>
 #include <core.h>
+#include <Terminal.h>
+#include "Parse/parser.h"
 
 void CreateAddFunc(llvm::LLVMContext& context, llvm::Module* module)
 {
@@ -28,7 +30,24 @@ void CreateAddFunc(llvm::LLVMContext& context, llvm::Module* module)
 
 void CoreMain(Core::ArgList& args)
 {
-	llvm::LLVMContext context;
+	Core::Terminal.Show();
+	athena::ast::CompileContext context;
+
+	auto test = R"s(
+let x = 5
+    y = 6
+x + y
+)s";
+
+	athena::ast::Parser p(context, test);
+	auto expr = p.parseExpr();
+	if(expr) {
+		Core::Terminal << athena::ast::toString(*expr, context);
+	}
+
+	Core::Terminal.WaitForInput();
+
+	/*llvm::LLVMContext context;
 	auto module = std::make_unique<llvm::Module>("top", context);
 	llvm::IRBuilder<> builder{context};
 
@@ -47,7 +66,7 @@ void CoreMain(Core::ArgList& args)
 	auto putsFunc = module->getOrInsertFunction("puts", putsType);
 
 	builder.CreateCall(putsFunc, helloworld);
-	builder.CreateRetVoid();
+	builder.CreateRetVoid();*/
 
 	/*llvm::InitializeNativeTarget();
 	llvm::InitializeNativeTargetAsmPrinter();
@@ -55,5 +74,5 @@ void CoreMain(Core::ArgList& args)
 	std::string errors;
 	auto engine = llvm::EngineBuilder(std::move(module)).setEngineKind(llvm::EngineKind::Interpreter).setErrorStr(&errors).create();
 	engine->runFunction(mainFunc, {});*/
-	module->dump();
+	//module->dump();
 }
