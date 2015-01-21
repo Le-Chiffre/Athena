@@ -37,16 +37,19 @@ inline SourcePos updateStringPos(SourcePos pos, Core::StringRef string) {
 
 
 struct Parser {
-	Parser(CompileContext& context, const char* text) : lexer(context, text, &token), buffer(4*1024*1024) {}
+	Parser(CompileContext& context, const char* text) : lexer(context, text, &token), buffer(4*1024*1024) {lexer.Next();}
 
 	void parseModule();
 	void parseDecl();
 
 	Expr* parseExpr();
+	Expr* parseInfixExpr();
 	Expr* parseLeftExpr();
 	Expr* parseCallExpr();
 	Expr* parseAppExpr();
 	Expr* parseLiteral();
+	Expr* parseVarDecl(bool constant);
+	Expr* parseDeclExpr(bool constant);
 	void  parseFixity();
 	Maybe<Id> parseVar();
 	Maybe<Id> parseQop();

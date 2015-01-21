@@ -465,7 +465,6 @@ Lexer::Lexer(CompileContext& context, const char* text, Token* tok) :
 	mToken(tok), mText(text), mP(text), mL(text), mNewItem(true), mContext(context)
 {
 	// The first indentation level of a file should be 0.
-	mLayoutStack += 0;
 	mIdent = 0;
 }
 	
@@ -490,6 +489,7 @@ void Lexer::NextLine()
 {
 	mL = mP + 1;
 	mLine++;
+	mTabs = 0;
 }
 	
 bool Lexer::WhiteChar_UpdateLine()
@@ -499,7 +499,13 @@ bool Lexer::WhiteChar_UpdateLine()
 		NextLine();
 		return true;
 	}
-	
+
+	if(*mP == '\t')
+	{
+		mTabs++;
+		return true;
+	}
+
 	return IsWhiteChar(*mP);
 }
 	
@@ -953,21 +959,14 @@ void Lexer::ParseVariable()
 			if(CompareConstString(c, "ata")) tok.type = Token::kwData;
 			else if(CompareConstString(c, "efault")) tok.type = Token::kwDefault;
 			else if(CompareConstString(c, "eriving")) tok.type = Token::kwDeriving;
-			else if(*c == 'o') {
-				c++;
-				tok.type = Token::kwDo;
-				mNewBlock = true;
-			}
+			else if(*c == 'o') {c++; tok.type = Token::kwDo;}
 			break;
 		case 'e':
 			if(CompareConstString(c, "lse")) tok.type = Token::kwElse;
 			break;
 		case 'f':
 			if(CompareConstString(c, "oreign")) tok.type = Token::kwForeign;
-			else if(*c == 'o' && c[1] == 'r') {
-				c += 2;
-				tok.type = Token::kwFor;
-			}
+			else if(*c == 'o' && c[1] == 'r') {c += 2; tok.type = Token::kwFor;}
 			break;
 		case 'i':
 			if(*c == 'f') {c++; tok.type = Token::kwIf;}
@@ -980,11 +979,7 @@ void Lexer::ParseVariable()
 			} else if(CompareConstString(c, "nstance")) tok.type = Token::kwInstance;
 			break;
 		case 'l':
-			if(*c == 'e' && c[1] == 't') {
-				c += 2;
-				tok.type = Token::kwLet;
-				mNewBlock = true;
-			}
+			if(*c == 'e' && c[1] == 't') {c += 2; tok.type = Token::kwLet;}
 			break;
 		case 'm':
 			if(CompareConstString(c, "odule")) tok.type = Token::kwModule;
@@ -993,11 +988,7 @@ void Lexer::ParseVariable()
 			if(CompareConstString(c, "ewtype")) tok.type = Token::kwNewType;
 			break;
 		case 'o':
-			if(*c == 'f') {
-				c++;
-				tok.type = Token::kwOf;
-				mNewBlock = true;
-			}
+			if(*c == 'f') {c++; tok.type = Token::kwOf;}
 			break;
 		case 'p':
 			if(CompareConstString(c, "refix")) tok.type = Token::kwPrefix;
@@ -1006,11 +997,10 @@ void Lexer::ParseVariable()
 			if(CompareConstString(c, "hen")) tok.type = Token::kwThen;
 			else if(CompareConstString(c, "ype")) tok.type = Token::kwType;
 			break;
+		case 'v':
+			if(*c == 'a' && c[1] == 'r') {c += 2; tok.type = Token::kwVar;}
 		case 'w':
-			if(CompareConstString(c, "here")) {
-				tok.type = Token::kwWhere;
-				mNewBlock = true;
-			}
+			if(CompareConstString(c, "here")) tok.type = Token::kwWhere;
 			else if(CompareConstString(c, "hile")) tok.type = Token::kwWhile;
 			break;
 	}
@@ -1049,25 +1039,21 @@ parseT:
 	//Skip any whitespace and comments.
 	SkipWhitespace();
 	
-	tok.sourceColumn = (uint)(p - mL);
+	tok.sourceColumn = (uint)(p - mL) + mTabs * (kTabWidth - 1);
 	tok.sourceLine = mLine;
-	
-	//Check if we need to start a new layout block.
-	if(mNewBlock && *p != '{')
+
+	//Check for the end of the file.
+	if(!*p)
 	{
-		mLayoutStack += mIdent;
-		mIdent = tok.sourceColumn;
-		tok.type = Token::BraceL;
 		tok.kind = Token::Special;
-		mNewBlock = false;
-		mNewItem = true;
-		goto newItem;
+		if(mIdent) tok.type = Token::EndOfBlock;
+		else tok.type = Token::EndOfFile;
 	}
-	
+
 	//Check if we need to insert a layout token.
 	else if(tok.sourceColumn == mIdent && !mNewItem)
 	{
-		tok.type = Token::Semicolon;
+		tok.type = Token::EndOfStmt;
 		tok.kind = Token::Special;
 		mNewItem = true;
 		goto newItem;
@@ -1076,18 +1062,7 @@ parseT:
 	//Check if we need to end a layout block.
 	else if(tok.sourceColumn < mIdent)
 	{
-		tok.type = Token::BraceR;
-		tok.kind = Token::Special;
-		mLayoutStack.Remove(mLayoutStack.Count()-1);
-		mIdent = mLayoutStack.Back();
-		mNewItem = true;
-		goto newItem;
-	}
-	
-	//Check for the end of the file.
-	else if(!*p)
-	{
-		tok.type = Token::EndOfFile;
+		tok.type = Token::EndOfBlock;
 		tok.kind = Token::Special;
 	}
 	

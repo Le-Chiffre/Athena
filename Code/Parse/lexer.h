@@ -153,11 +153,13 @@ struct Token {
 		EndOfFile,
 		Comment,
 		Whitespace,
+		EndOfBlock,
 		
 		/* Special symbols */
 		ParenL = '(',
 		ParenR = ')',
 		Comma = ',',
+		EndOfStmt = Comma,
 		Semicolon = ';',
 		BracketL = '[',
 		BracketR = ']',
@@ -185,6 +187,7 @@ struct Token {
 		kwDeriving,
 		kwDo,
 		kwElse,
+		kwFor,
 		kwForeign,
 		kwIf,
 		kwImport,
@@ -200,7 +203,9 @@ struct Token {
 		kwOf,
 		kwThen,
 		kwType,
+		kwVar,
 		kwWhere,
+		kwWhile,
 		kw_,
 		
 		/* Reserved operators */
@@ -215,9 +220,6 @@ struct Token {
 		opAt,
 		opTilde,
 		opArrowD,
-
-		kwFor,		// Beginning of for loop.
-		kwWhile		// Beginning of while loop.
 	};
 	
 	enum Kind {
@@ -369,8 +371,10 @@ private:
 	}
 
 	friend struct SaveLexer;
-	
-	Core::Array<uint> mLayoutStack{32U};
+	friend struct IndentLevel;
+
+	static const uint kTabWidth = 4;
+
 	Token* mToken; //The token currently being parsed.
 	uint mIdent = 0; //The current indentation level.
 	const char* mText; //The full source code.
@@ -378,10 +382,23 @@ private:
 	const char* mL; //The first character of the current line.
 	Qualified mQualifier; //The current qualified name being built up.
 	uint mLine = 0; //The current source line.
-	bool mNewBlock = false; //Indicates that the previous token was "let", "where", "do" or "of".
+	uint mTabs = 0; // The number of tabs processed on the current line.
 	bool mNewItem = false; //Indicates that a new item was started by the previous token.
 	Diagnostics mDiag;
 	CompileContext& mContext;
+};
+
+struct IndentLevel {
+	IndentLevel(Token& start, Lexer& lexer) : lexer(lexer), previous(lexer.mIdent) {
+		lexer.mIdent = start.sourceColumn;
+	}
+
+	void end() {
+		lexer.mIdent = previous;
+	}
+
+	Lexer& lexer;
+	const uint previous;
 };
 
 struct SaveLexer {
@@ -390,22 +407,25 @@ struct SaveLexer {
 		p(lexer.mP),
 		l(lexer.mL),
 		line(lexer.mLine),
-		newBlock(lexer.mNewBlock),
+		indent(lexer.mIdent),
+		tabs(lexer.mTabs),
 		newItem(lexer.mNewItem) {}
 
 	void restore() {
 		lexer.mP = p;
 		lexer.mL = l;
 		lexer.mLine = line;
-		lexer.mNewBlock = newBlock;
+		lexer.mIdent = indent;
 		lexer.mNewItem = newItem;
+		lexer.mTabs = tabs;
 	}
 
 	Lexer& lexer;
 	const char* p;
 	const char* l;
 	uint line;
-	bool newBlock;
+	uint indent;
+	uint tabs;
 	bool newItem;
 };
 

@@ -1,4 +1,3 @@
-
 #include "parser.h"
 
 namespace athena {
@@ -8,7 +7,10 @@ static const Fixity kDefaultFixity{Fixity::Left, 9};
 
 inline Literal toLiteral(Token& tok) {
 	Literal l;
-	l.d = tok.data.floating;
+	if(tok == Token::Float)
+		l.d = tok.data.floating;
+	else
+		l.d = tok.data.integer;
 	return l;
 }
 
@@ -62,8 +64,49 @@ void Parser::parseDecl() {
 
 Expr* Parser::parseExpr() {
 	/*
-	 * infixexp		→	lexp qop infixexp		(infix operator application)
-	 * 				|	varsym infixexp			(prefix operator application)
+	 * expr			→	infixexpr
+	 * 				|	infixexpr0, …, infixexprn	(statements, n ≥ 2)
+	 */
+
+	// Start a new indentation block.
+	IndentLevel level{token, lexer};
+	if(auto expr = parseInfixExpr()) {
+		if(token == Token::EndOfStmt) {
+			auto list = build<ExprList>(expr);
+			auto p = list;
+			while (token == Token::EndOfStmt) {
+				eat();
+				if((expr = parseInfixExpr())) {
+					p->next = build<ExprList>(expr);
+					p = p->next;
+				} else {
+					return (Expr*)error("Expected an expression.");
+				}
+			}
+
+			if(token != Token::EndOfBlock) {
+				error("Expected end of statement block.");
+				return nullptr;
+			}
+
+			level.end();
+			eat();
+			return build<MultiExpr>(list);
+		} else {
+			ASSERT(token == Token::EndOfBlock);
+			level.end();
+			eat();
+			return expr;
+		}
+	} else {
+		return (Expr*)error("Expected an expression.");
+	}
+}
+
+Expr* Parser::parseInfixExpr() {
+	/*
+	 * infixexp		→	lexp qop infixexp			(infix operator application)
+	 * 				|	varsym infixexp				(prefix operator application)
 	 *				|	lexp
 	 */
 
@@ -83,7 +126,7 @@ Expr* Parser::parseExpr() {
 		if(auto op = tryParse(&Parser::parseQop)) {
 			// Binary operator.
 			if(auto rhs = parseExpr()) {
-				return build<InfixExpr>(op, *lhs, *rhs);
+				return build<InfixExpr>(op(), *lhs, *rhs);
 			} else {
 				return (Expr*)error("Expected a right-hand side for a binary operator.");
 			}
@@ -97,7 +140,64 @@ Expr* Parser::parseExpr() {
 }
 
 Expr* Parser::parseLeftExpr() {
-	return parseCallExpr();
+	/*
+	 * lexp		→	\ apat1 … apatn -> exp					(lambda abstraction, n ≥ 1)
+	 *			|	let decls [in exp]						(let expression)
+	 *			|	var decls [in exp]						(var expression)
+	 *			|	if exp [;] then exp [;] else exp	    (conditional)
+	 *			|	case exp of { alts }					(case expression)
+	 *			|	do { stmts }							(do expression)
+	 *			|	fexp
+	 */
+	if(token == Token::kwLet) {
+		eat();
+		return parseVarDecl(true);
+	} else if(token == Token::kwVar) {
+		eat();
+		return parseVarDecl(false);
+	} else if(token == Token::kwCase) {
+		eat();
+		if(auto exp = parseExpr()) {
+			if(token == Token::kwOf) {
+				eat();
+				// TODO: Parse alts.
+			} else {
+				error("Expected 'of' after case-expression.");
+			}
+		} else {
+			error("Expected an expression after 'case'.");
+		}
+	} else if(token == Token::kwIf) {
+		eat();
+		if(auto cond = parseExpr()) {
+			// Allow statement ends within an if-expression to allow then/else with the same indentation as if.
+			if(token == Token::EndOfStmt) eat();
+
+			if(token == Token::kwThen) {
+				eat();
+				if(auto then = parseExpr()) {
+					// else is optional.
+					Expr* otherwise = nullptr;
+
+					if(token == Token::EndOfStmt) eat();
+					if(token == Token::kwElse) {
+						eat();
+						otherwise = parseExpr();
+					}
+
+					return build<IfExpr>(*cond, *then, otherwise);
+				}
+			} else {
+				error("Expected 'then' after if-expression.");
+			}
+		} else {
+			error("Expected an expression after 'if'.");
+		}
+	} else {
+		return parseCallExpr();
+	}
+
+	return nullptr;
 }
 
 Expr* Parser::parseCallExpr() {
@@ -160,6 +260,69 @@ Expr* Parser::parseLiteral() {
 	} else {
 		return (Expr*)error("Expected a literal value.");
 	}
+}
+
+Expr* Parser::parseVarDecl(bool constant) {
+	// Parse one or more declarations, separated as statements.
+	IndentLevel level(token, lexer);
+
+	if(auto expr = parseDeclExpr(constant)) {
+		if(token == Token::EndOfStmt) {
+			auto list = build<ExprList>(expr);
+			auto p = list;
+			while(token == Token::EndOfStmt) {
+				eat();
+				if((expr = parseDeclExpr(constant))) {
+					p->next = build<ExprList>(expr);
+					p = p->next;
+				} else {
+					error("Expected declaration after 'var' or 'let'.");
+					return nullptr;
+				}
+			}
+
+			if(token != Token::EndOfBlock) {
+				error("Expected end of statement block.");
+				return nullptr;
+			}
+
+			level.end();
+			eat();
+			return build<MultiExpr>(list);
+		} else {
+			ASSERT(token == Token::EndOfBlock);
+			level.end();
+			eat();
+			return expr;
+		}
+	} else {
+		error("Expected declaration after 'var' or 'let'.");
+		return nullptr;
+	}
+}
+
+Expr* Parser::parseDeclExpr(bool constant) {
+	/*
+	 * declexpr		→	varid = expr
+	 */
+	if(token == Token::VarID) {
+		auto id = token.data.id;
+		eat();
+		if(token == Token::opEquals) {
+			eat();
+			if(auto expr = parseExpr()) {
+				return build<DeclExpr>(id, *expr, constant);
+			} else {
+				error("Expected expression.");
+			}
+		} else {
+			error("Expected '=' after a declaration.");
+		}
+	} else {
+		error("Expected identifier.");
+	}
+
+	return nullptr;
 }
 
 void Parser::parseFixity() {
