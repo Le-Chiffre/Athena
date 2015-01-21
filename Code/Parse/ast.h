@@ -73,12 +73,14 @@ struct Literal {
 
 struct Expr {
 	enum Type {
+		Multi,
 		Lit,
 		Var,
 		App,
 		Infix,
 		Prefix,
-        If
+        If,
+		Decl
 	} type;
 
 	Expr(Type t) : type(t) {}
@@ -86,6 +88,11 @@ struct Expr {
 
 typedef const Expr& ExprRef;
 typedef ASTList<Expr*> ExprList;
+
+struct MultiExpr : Expr {
+	MultiExpr(ExprList* exprs) : Expr(Multi), exprs(exprs) {}
+	ExprList* exprs;
+};
 
 struct LitExpr : Expr {
 	LitExpr(Literal lit) : Expr(Lit), literal(lit) {}
@@ -122,6 +129,12 @@ struct IfExpr : Expr {
     const Expr* otherwise;
 };
 
+struct DeclExpr : Expr {
+	DeclExpr(Id name, ExprRef content, bool constant) : Expr(Decl), name(name), content(content), constant(constant) {}
+	Id name;
+	ExprRef content;
+	bool constant;
+};
 
 
 struct Decl {
@@ -148,6 +161,10 @@ struct Module {
 	Core::Array<Decl*> declarations{32};
 	Core::NumberMap<Fixity, Id> operators{16};
 };
+
+struct CompileContext;
+
+String toString(ExprRef e, CompileContext& c);
 
 }} // namespace athena::ast
 
