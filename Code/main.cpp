@@ -25,6 +25,9 @@ void CreateAddFunc(llvm::LLVMContext& context, llvm::Module* module)
 	auto add = llvm::BasicBlock::Create(context, "", addFunc);
 	builder.SetInsertPoint(add);
 
+//	builder.CreateAlloca(<#(llvm::Type *)Ty#>, <#(llvm::Value *)ArraySize#>, <#(llvm::Twine const &)Name#>)
+//	builder.CreateStore(<#(llvm::Value *)Val#>, <#(llvm::Value *)Ptr#>, <#(bool)isVolatile#>)
+
 	//builder.CreateAdd(addFunc->)
 }
 
@@ -34,16 +37,27 @@ void CoreMain(Core::ArgList& args)
 	athena::ast::CompileContext context;
 
 	auto test = R"s(
-let x = 5
-    y = 6
-x + y
+f :: z =
+    let x = 5
+        y = 6
+    x + y + z
+
+g = f 5
+
+h = if g > 0
+    then 0
+    else 1
+
+loop_test =
+    var i = 0
+    while i < 10 do ++i
+    i = 20
 )s";
 
-	athena::ast::Parser p(context, test);
-	auto expr = p.parseExpr();
-	if(expr) {
-		Core::Terminal << athena::ast::toString(*expr, context);
-	}
+	athena::ast::Module module;
+	athena::ast::Parser p(context, module, test);
+	p.parseModule();
+	Core::Terminal << athena::ast::toString(module, context);
 
 	Core::Terminal.WaitForInput();
 
