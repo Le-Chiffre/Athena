@@ -1046,7 +1046,7 @@ parseT:
 	if(!*p)
 	{
 		tok.kind = Token::Special;
-		if(mIdent) tok.type = Token::EndOfBlock;
+		if(mBlockCount) tok.type = Token::EndOfBlock;
 		else tok.type = Token::EndOfFile;
 	}
 

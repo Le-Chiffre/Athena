@@ -127,6 +127,7 @@ private:
 		string += "DeclExpr ";
 		auto name = context.Find(e.name).name;
 		string.Append(name.ptr, name.length);
+		if(e.constant) string += " <const> ";
 		makeLevel();
 		toString(e.content, true);
 		removeLevel();

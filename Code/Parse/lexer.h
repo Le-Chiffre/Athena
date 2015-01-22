@@ -377,6 +377,7 @@ private:
 
 	Token* mToken; //The token currently being parsed.
 	uint mIdent = 0; //The current indentation level.
+	uint mBlockCount = 0; // The current number of indentation blocks.
 	const char* mText; //The full source code.
 	const char* mP; //The current source pointer.
 	const char* mL; //The first character of the current line.
@@ -391,10 +392,13 @@ private:
 struct IndentLevel {
 	IndentLevel(Token& start, Lexer& lexer) : lexer(lexer), previous(lexer.mIdent) {
 		lexer.mIdent = start.sourceColumn;
+		lexer.mBlockCount++;
 	}
 
 	void end() {
 		lexer.mIdent = previous;
+		ASSERT(lexer.mBlockCount > 0);
+		lexer.mBlockCount--;
 	}
 
 	Lexer& lexer;
@@ -408,6 +412,7 @@ struct SaveLexer {
 		l(lexer.mL),
 		line(lexer.mLine),
 		indent(lexer.mIdent),
+		blocks(lexer.mBlockCount),
 		tabs(lexer.mTabs),
 		newItem(lexer.mNewItem) {}
 
@@ -418,6 +423,7 @@ struct SaveLexer {
 		lexer.mIdent = indent;
 		lexer.mNewItem = newItem;
 		lexer.mTabs = tabs;
+		lexer.mBlockCount = blocks;
 	}
 
 	Lexer& lexer;
@@ -425,6 +431,7 @@ struct SaveLexer {
 	const char* l;
 	uint line;
 	uint indent;
+	uint blocks;
 	uint tabs;
 	bool newItem;
 };
