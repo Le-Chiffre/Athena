@@ -15,12 +15,15 @@ struct Scope;
 struct Function;
 struct Expr;
 struct Alt;
+struct Type;
 
 typedef Scope& ScopeRef;
 typedef Function& FuncRef;
+typedef const Type& TypeRef;
 
 typedef Core::Array<Variable*> VarList;
 typedef Core::Array<Function*> FunList;
+typedef Core::Array<Type*> TypeList;
 typedef ast::ASTList<Scope*> ScopeList;
 typedef ast::ASTList<Alt*> AltList;
 
@@ -59,10 +62,11 @@ struct Function : Scope {
 };
 
 struct Variable {
-	Variable(Id name, ScopeRef scope) : name(name), scope(scope) {}
-
+	Variable(Id name, TypeRef type, ScopeRef scope, bool constant) : name(name), type(type), scope(scope), constant(constant) {}
 	Id name;
+	TypeRef type;
 	ScopeRef scope;
+	bool constant;
 };
 
 struct Alt {
@@ -71,21 +75,66 @@ struct Alt {
     Expr* result;
 };
 
-struct Expr {
-	enum Type {
-		Lit,
-		Var,
-		App,
-		AppI,
-		AppP,
-        Case
-	} type;
+enum class PrimitiveType {
+	I64,
+	I32,
+	I16,
+	I8,
+	U64,
+	U32,
+	U16,
+	U8,
 
-	Expr(Type t) : type(t) {}
+	FirstFloat,
+	F64 = (uint)FirstFloat,
+	F32,
+	F16,
+
+	TypeCount
 };
 
-typedef const Expr& ExprRef;
-typedef ast::ASTList<Expr*> ExprList;
+struct Type {
+	enum Kind {
+		Unknown,
+		Unit,
+		Prim,
+		Agg,
+		Var,
+		Array,
+		Map
+	} kind;
+
+	Type(Kind kind) : kind(kind) {}
+};
+
+struct PrimType : Type {
+	PrimType(PrimitiveType type) : Type(Prim), type(type) {}
+	PrimitiveType type;
+};
+
+struct AggType : Type {
+	struct Element {
+		Element(Id name, TypeRef type) : name(name), type(type) {}
+		Id name;
+		TypeRef type;
+	};
+
+	typedef Core::Array<Element> ElementList;
+
+	AggType() : Type(Agg) {}
+	ElementList elements;
+};
+
+struct ArrayType : Type {
+	ArrayType(TypeRef type) : Type(Array), type(type) {}
+	TypeRef type;
+};
+
+struct MapType : Type {
+	MapType(TypeRef from, TypeRef to) : Type(Map), from(from), to(to) {}
+	TypeRef from;
+	TypeRef to;
+};
 
 enum class PrimitiveOp {
 	// Binary
@@ -123,38 +172,76 @@ inline bool isBinary(PrimitiveOp op) {
 	return op < PrimitiveOp::FirstUnary;
 }
 
+struct Expr {
+	enum Kind {
+		Lit,
+		Var,
+		App,
+		AppI,
+		AppP,
+		Case,
+		Decl,
+		While,
+		Assign
+	} kind;
+
+	TypeRef type;
+	Expr(Kind k, TypeRef type = Type::Unknown) : kind(k), type(type) {}
+};
+
+typedef const Expr& ExprRef;
+typedef ast::ASTList<Expr*> ExprList;
+
 struct LitExpr : Expr {
-	LitExpr(Literal lit) : Expr(Lit), literal(lit) {}
+	LitExpr(Literal lit, TypeRef type = Type::Unknown) : Expr(Lit, type), literal(lit) {}
 	Literal literal;
 };
 
 struct VarExpr : Expr {
-	VarExpr(Variable* var) : Expr(Var), var(var) {}
+	VarExpr(Variable* var, TypeRef type = Type::Unknown) : Expr(Var, type), var(var) {}
 	Variable* var;
 };
 
 struct AppExpr : Expr {
-	AppExpr(FuncRef n, ExprList* args = nullptr) : Expr(App), callee(n), args(args) {}
+	AppExpr(FuncRef n, ExprList* args = nullptr, TypeRef type = Type::Unknown) : Expr(App, type), callee(n), args(args) {}
 	FuncRef callee;
 	ExprList* args;
 };
 
 struct AppIExpr : Expr {
-	AppIExpr(const char* i, ExprList* args = nullptr) : Expr(AppI), callee(i), args(args) {}
+	AppIExpr(const char* i, ExprList* args = nullptr, TypeRef type = Type::Unknown) : Expr(AppI, type), callee(i), args(args) {}
 	const char* callee;
 	ExprList* args;
 };
 
 struct AppPExpr : Expr {
-	AppPExpr(PrimitiveOp op, ExprList* args) : Expr(AppP), args(args), op(op) {}
+	AppPExpr(PrimitiveOp op, ExprList* args, TypeRef type = Type::Unknown) : Expr(AppP, type), args(args), op(op) {}
 	ExprList* args;
 	PrimitiveOp op;
 };
 
 struct CaseExpr : Expr {
-    CaseExpr(AltList* alts, Expr* otherwise) : Expr(Case), alts(alts), otherwise(otherwise) {}
+    CaseExpr(AltList* alts, Expr* otherwise, TypeRef type = Type::Unknown) : Expr(Case, type), alts(alts), otherwise(otherwise) {}
     AltList* alts;
     Expr* otherwise;
+};
+
+struct DeclExpr : Expr {
+	DeclExpr(Variable& var, ExprRef val) : Expr(Decl, var.type), var(var), val(val) {}
+	Variable& var;
+	ExprRef val;
+};
+
+struct WhileExpr : Expr {
+	WhileExpr(ExprRef cond, ExprRef loop) : Expr(While, Type::Unit), cond(cond), loop(loop) {}
+	ExprRef cond;
+	ExprRef loop;
+};
+
+struct AssignExpr : Expr {
+	AssignExpr(Variable& var, ExprRef val) : Expr(Assign, var.type), var(var), val(val) {}
+	Variable& var;
+	ExprRef val;
 };
 
 struct Module {

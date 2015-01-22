@@ -1,3 +1,4 @@
+#include <msxml.h>
 #include "resolve.h"
 
 namespace athena {
@@ -59,6 +60,12 @@ Expr* Resolver::resolveExpression(Scope& scope, ast::ExprRef expr) {
             return resolveVar(scope, ((const ast::VarExpr&)expr).name);
         case ast::Expr::If:
             return resolveIf(scope, (const ast::IfExpr&)expr);
+		case ast::Expr::Decl:
+			return resolveDecl(scope, (const ast::DeclExpr&)expr);
+		case ast::Expr::Assign:
+			return resolveAssign(scope, (const ast::AssignExpr&)expr);
+		case ast::Expr::While:
+			return resolveWhile(scope, (const ast::WhileExpr&)expr);
 		default:
 			FatalError("Unsupported expression type.");
 	}
@@ -146,7 +153,46 @@ Expr* Resolver::resolveVar(Scope& scope, Id name) {
 Expr* Resolver::resolveIf(Scope& scope, const ast::IfExpr& expr) {
     auto alt = build<Alt>(resolveExpression(scope, expr.cond), resolveExpression(scope, expr.then));
     auto otherwise = expr.otherwise ? resolveExpression(scope, *expr.otherwise) : nullptr;
-    return build<CaseExpr>(build<AltList>(alt), otherwise);
+	// If-expressions without an else part can fail and never return a value.
+    return build<CaseExpr>(build<AltList>(alt), otherwise, otherwise ? Type::Unknown : Type::Unit);
+}
+
+Expr* Resolver::resolveDecl(Scope& scope, const ast::DeclExpr& expr) {
+	auto content = resolveExpression(scope, expr.content);
+
+	// Make sure this scope doesn't already have a variable with the same name.
+	Variable* var;
+	if((var = scope.findVar(expr.name))) {
+		error("redefinition of '%@'", var->name);
+	} else {
+		// Create the variable allocation.
+		var = build<Variable>(expr.name, content->type, scope, expr.constant);
+		scope.variables += var;
+	}
+
+	// Create the assignment.
+	return build<AssignExpr>(*var, *content);
+}
+
+Expr* Resolver::resolveAssign(Scope& scope, const ast::AssignExpr& expr) {
+	// Make sure the type can be assigned to.
+	auto target = resolveExpression(scope, expr.target);
+	if(target->kind == Expr::Var) {
+		auto value = resolveExpression(scope, expr.value);
+		if(typeCheck.compatible(*target, *value)) {
+			return build<AssignExpr>(*((VarExpr*)target)->var, *value);
+		} else {
+			error("assigning to '' from incompatible type ''");
+			//TODO: Implement Type printing.
+			//error("assigning to '%@' from incompatible type '%@'", target->type, value->type);
+		}
+	} else {
+		error("expression is not assignable");
+	}
+}
+
+Expr* Resolver::resolveWhile(Scope& scope, const ast::WhileExpr& expr) {
+	return nullptr;
 }
 
 Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, const ast::InfixExpr& expr) {
@@ -160,7 +206,18 @@ Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, const ast::Pref
 }
 	
 Variable* Resolver::resolveArgument(ScopeRef scope, Id arg) {
-	return build<Variable>(arg, scope);
+	return build<Variable>(arg, Type::Unknown, scope, true);
+}
+
+nullptr_t Resolver::error(const char* text) {
+	Core::LogError(text);
+	return nullptr;
+}
+
+template<class P, class... Ps>
+nullptr_t Resolver::error(const char* text, P first, Ps... more) {
+	Core::LogError(text, first, more...);
+	return nullptr;
 }
 
 }} // namespace athena::resolve

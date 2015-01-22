@@ -35,7 +35,7 @@ BasicBlock* Generator::genScope(resolve::Scope& scope) {
 }
 
 Value* Generator::genExpr(resolve::ExprRef expr) {
-	switch(expr.type) {
+	switch(expr.kind) {
 		case resolve::Expr::Lit:
 			return genLiteral(((resolve::LitExpr&)expr).literal);
 		case resolve::Expr::Var:
