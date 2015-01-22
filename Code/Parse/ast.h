@@ -80,7 +80,9 @@ struct Expr {
 		Infix,
 		Prefix,
         If,
-		Decl
+		Decl,
+		While,
+		Assign
 	} type;
 
 	Expr(Type t) : type(t) {}
@@ -136,6 +138,17 @@ struct DeclExpr : Expr {
 	bool constant;
 };
 
+struct WhileExpr : Expr {
+	WhileExpr(ExprRef cond, ExprRef loop) : Expr(While), cond(cond), loop(loop) {}
+	ExprRef cond;
+	ExprRef loop;
+};
+
+struct AssignExpr : Expr {
+	AssignExpr(ExprRef target, ExprRef value) : Expr(Assign), target(target), value(value) {}
+	ExprRef target;
+	ExprRef value;
+};
 
 struct Decl {
 	enum Type {
@@ -145,6 +158,7 @@ struct Decl {
 	Decl(Type t) : type(t) {}
 };
 
+typedef const Decl& DeclRef;
 typedef ASTList<Id> ArgList;
 
 struct FunDecl : Decl {
@@ -162,9 +176,13 @@ struct Module {
 	Core::NumberMap<Fixity, Id> operators{16};
 };
 
+typedef const Module& ModuleRef;
+
 struct CompileContext;
 
 String toString(ExprRef e, CompileContext& c);
+String toString(DeclRef e, CompileContext& c);
+String toString(ModuleRef m, CompileContext& c);
 
 }} // namespace athena::ast
 

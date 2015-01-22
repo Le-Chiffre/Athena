@@ -298,7 +298,7 @@ bool IsAlphaNumeric(wchar32 c)
 bool IsIdentifier(wchar32 c)
 {
 	static const bool table[] = {
-		true, /* ' */
+		false, /* ' */
 		false, /* ( */
 		false, /* ) */
 		false, /* * */
@@ -316,7 +316,7 @@ bool IsIdentifier(wchar32 c)
 		false, /* \ */
 		false, /* ] */
 		false, /* ^ */
-		false, /* _ */
+		true, /* _ */
 		false, /* ` */
 		true, true, true, true, true, true, true, true, true, true, /* a..z */
 		true, true, true, true, true, true, true, true, true, true,

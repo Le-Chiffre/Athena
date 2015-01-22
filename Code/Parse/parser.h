@@ -37,7 +37,7 @@ inline SourcePos updateStringPos(SourcePos pos, Core::StringRef string) {
 
 
 struct Parser {
-	Parser(CompileContext& context, const char* text) : lexer(context, text, &token), buffer(4*1024*1024) {lexer.Next();}
+	Parser(CompileContext& context, Module& module, const char* text) : module(module), lexer(context, text, &token), buffer(4*1024*1024) {lexer.Next();}
 
 	void parseModule();
 	void parseDecl();
@@ -74,7 +74,7 @@ struct Parser {
 		return buffer.New<T>(Core::Forward<P>(p)...);
 	}
 
-	Module* module;
+	Module& module;
 	Token token;
 	Lexer lexer;
 	Core::StaticBuffer buffer;

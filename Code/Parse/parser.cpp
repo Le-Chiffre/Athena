@@ -15,14 +15,25 @@ inline Literal toLiteral(Token& tok) {
 }
 
 void Parser::parseModule() {
-	while(token != Token::EndOfFile) {
+	IndentLevel level{token, lexer};
+	parseDecl();
+	while(token == Token::EndOfStmt) {
+		eat();
 		parseDecl();
 	}
+
+	if(token != Token::EndOfBlock) {
+		error("Expected end of statement block.");
+	}
+
+	level.end();
+	eat();
 }
 
 void Parser::parseDecl() {
 	/*
 	 * fundecl		→	var :: args = expr
+	 * 				|	var = expr
 	 * args			→	arg0 arg1 ... argn		(n ≥ 0)
 	 * arg			→	varid
 	 */
@@ -49,15 +60,24 @@ void Parser::parseDecl() {
 
 				// Parse the function body.
 				if(auto expr = parseExpr()) {
-					module->declarations += build<FunDecl>(var(), *expr, args);
+					module.declarations += build<FunDecl>(var(), *expr, args);
 				} else {
 					error("Expected a function body expression.");
 				}
 			} else {
 				error("Expected '=' after a function declaration.");
 			}
+		} else if(token == Token::opEquals) {
+			eat();
+
+			// Parse the function body.
+			if(auto expr = parseExpr()) {
+				module.declarations += build<FunDecl>(var(), *expr);
+			} else {
+				error("Expected a function body expression.");
+			}
 		} else {
-			error("Expected '::' after a function name declaration.");
+			error("Expected '::' or '=' after a function name declaration.");
 		}
 	}
 }
@@ -114,7 +134,7 @@ Expr* Parser::parseInfixExpr() {
 	if(token == Token::VarSym) {
 		auto op = token.data.id;
 		eat();
-		if(auto expr = parseExpr()) {
+		if(auto expr = parseInfixExpr()) {
 			return build<PrefixExpr>(op, *expr);
 		} else {
 			return (Expr*)error("Expected expression after a prefix operator.");
@@ -125,7 +145,7 @@ Expr* Parser::parseInfixExpr() {
 	if(auto lhs = parseLeftExpr()) {
 		if(auto op = tryParse(&Parser::parseQop)) {
 			// Binary operator.
-			if(auto rhs = parseExpr()) {
+			if(auto rhs = parseInfixExpr()) {
 				return build<InfixExpr>(op(), *lhs, *rhs);
 			} else {
 				return (Expr*)error("Expected a right-hand side for a binary operator.");
@@ -146,7 +166,9 @@ Expr* Parser::parseLeftExpr() {
 	 *			|	var decls [in exp]						(var expression)
 	 *			|	if exp [;] then exp [;] else exp	    (conditional)
 	 *			|	case exp of { alts }					(case expression)
+	 *			|	while exp do exp						(while loop)
 	 *			|	do { stmts }							(do expression)
+	 *			|	fexp = infixexp							(assignment)
 	 *			|	fexp
 	 */
 	if(token == Token::kwLet) {
@@ -157,7 +179,7 @@ Expr* Parser::parseLeftExpr() {
 		return parseVarDecl(false);
 	} else if(token == Token::kwCase) {
 		eat();
-		if(auto exp = parseExpr()) {
+		if(auto exp = parseInfixExpr()) {
 			if(token == Token::kwOf) {
 				eat();
 				// TODO: Parse alts.
@@ -169,7 +191,7 @@ Expr* Parser::parseLeftExpr() {
 		}
 	} else if(token == Token::kwIf) {
 		eat();
-		if(auto cond = parseExpr()) {
+		if(auto cond = parseInfixExpr()) {
 			// Allow statement ends within an if-expression to allow then/else with the same indentation as if.
 			if(token == Token::EndOfStmt) eat();
 
@@ -193,8 +215,35 @@ Expr* Parser::parseLeftExpr() {
 		} else {
 			error("Expected an expression after 'if'.");
 		}
+	} else if(token == Token::kwWhile) {
+		eat();
+		if(auto cond = parseInfixExpr()) {
+			if(token == Token::kwDo) {
+				eat();
+				if(auto loop = parseExpr()) {
+					return build<WhileExpr>(*cond, *loop);
+				} else {
+					error("Expected expression after 'do'");
+				}
+			} else {
+				error("Expected 'do' after while-expression.");
+			}
+		} else {
+			error("Expected expression after 'while'");
+		}
 	} else {
-		return parseCallExpr();
+		if(auto expr = parseCallExpr()) {
+			if(token == Token::opEquals) {
+				eat();
+				if(auto value = parseInfixExpr()) {
+					return build<AssignExpr>(*expr, *value);
+				} else {
+					error("Expected an expression after assignment.");
+				}
+			} else {
+				return expr;
+			}
+		}
 	}
 
 	return nullptr;
@@ -310,7 +359,7 @@ Expr* Parser::parseDeclExpr(bool constant) {
 		eat();
 		if(token == Token::opEquals) {
 			eat();
-			if(auto expr = parseExpr()) {
+			if(auto expr = parseInfixExpr()) {
 				return build<DeclExpr>(id, *expr, constant);
 			} else {
 				error("Expected expression.");
@@ -370,7 +419,7 @@ void Parser::parseFixity() {
 void Parser::addFixity(Fixity f) {
 	if(token == Token::VarSym) {
 		Fixity* pf;
-		if(module->operators.AddGet(token.data.id, pf)) {
+		if(module.operators.AddGet(token.data.id, pf)) {
 			error("This operator has already had its precedence defined.");
 		} else {
 			*pf = f;

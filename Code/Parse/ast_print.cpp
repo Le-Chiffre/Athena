@@ -18,6 +18,28 @@ struct Printer {
 			case Expr::Prefix: toString((const PrefixExpr&)expr); break;
 			case Expr::If: toString((const IfExpr&)expr); break;
 			case Expr::Decl: toString((const DeclExpr&)expr); break;
+			case Expr::While: toString((const WhileExpr&)expr); break;
+			case Expr::Assign: toString((const AssignExpr&)expr); break;
+		}
+		return string;
+	}
+
+	String toString(DeclRef decl) {
+		switch(decl.type) {
+			case Decl::Function: toString((const FunDecl&)decl); break;
+		}
+		return string;
+	}
+
+	String toString(ModuleRef mod) {
+		string += "Module ";
+		uint max = mod.declarations.Count();
+		if(max) {
+			makeLevel();
+			for(uint i = 0; i < max - 1; i++)
+				toString(*mod.declarations[i], false);
+			toString(*mod.declarations[max-1], true);
+			removeLevel();
 		}
 		return string;
 	}
@@ -133,6 +155,41 @@ private:
 		removeLevel();
 	}
 
+	void toString(const WhileExpr& e) {
+		string += "WhileExpr";
+		makeLevel();
+		toString(e.cond, false);
+		toString(e.loop, true);
+		removeLevel();
+	}
+
+	void toString(const AssignExpr& e) {
+		string += "AssignExpr ";
+		makeLevel();
+		toString(e.target, false);
+		toString(e.value, true);
+		removeLevel();
+	}
+
+	void toString(const FunDecl& e) {
+		string += "FunDecl ";
+		auto name = context.Find(e.name).name;
+		string.Append(name.ptr, name.length);
+		string += '(';
+		auto arg = e.args;
+		while(arg) {
+			name = context.Find(arg->item).name;
+			string.Append(name.ptr, name.length);
+			if(arg->next) string += ", ";
+			arg = arg->next;
+		}
+		string += ')';
+
+		makeLevel();
+		toString(e.body, true);
+		removeLevel();
+	}
+
 	void toStringIntro(bool last) {
 		string += '\n';
 		makeIndent(last);
@@ -142,6 +199,11 @@ private:
 	void toString(ExprRef expr, bool last) {
 		toStringIntro(last);
 		toString(expr);
+	}
+
+	void toString(DeclRef decl, bool last) {
+		toStringIntro(last);
+		toString(decl);
 	}
 
 	char indentStack[1024];
@@ -154,6 +216,16 @@ private:
 String toString(ExprRef e, CompileContext& c) {
 	Printer p{c};
 	return p.toString(e);
+}
+
+String toString(DeclRef d, CompileContext& c) {
+	Printer p{c};
+	return p.toString(d);
+}
+
+String toString(ModuleRef m, CompileContext& c) {
+	Printer p{c};
+	return p.toString(m);
 }
 
 }} // namespace athena::ast
