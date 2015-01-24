@@ -79,6 +79,10 @@ struct CompileContext {
 		return *res;
 	}
 
+	OpProperties* TryFindOp(ID op) {
+		return mOPs.Get(op);
+	}
+
 	Qualified& Find(ID id) {
 		auto res = mNames.Get(id);
 		ASSERT(res != nullptr);

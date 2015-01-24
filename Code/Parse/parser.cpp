@@ -233,15 +233,15 @@ Expr* Parser::parseLeftExpr() {
 	} else if(token == Token::kwWhile) {
 		eat();
 		if(auto cond = parseInfixExpr()) {
-			if(token == Token::kwDo) {
+			if(token == Token::kwIn) {
 				eat();
 				if(auto loop = parseExpr()) {
 					return build<WhileExpr>(*cond, *loop);
 				} else {
-					error("Expected expression after 'do'");
+					error("Expected expression after 'in'");
 				}
 			} else {
-				error("Expected 'do' after while-expression.");
+				error("Expected 'in' after while-expression.");
 			}
 		} else {
 			error("Expected expression after 'while'");
