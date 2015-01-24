@@ -75,23 +75,47 @@ struct Alt {
     Expr* result;
 };
 
+/// Supported primitive types. Operations on these types map directly to instructions.
+/// To support efficient code generation, they are divided in categories.
+/// Types within the same category (except Other) are often compatible with each other.
+/// Within a category they are ordered large to small.
 enum class PrimitiveType {
-	I64,
+    FirstSigned = 0x10,
+	I64 = (uint)FirstSigned,
 	I32,
 	I16,
 	I8,
-	U64,
+	
+	FirstUnsigned = 0x20,
+	U64 = (uint)FirstUnsigned,
 	U32,
 	U16,
 	U8,
 
-	FirstFloat,
+	FirstFloat = 0x40,
 	F64 = (uint)FirstFloat,
 	F32,
 	F16,
 
+    FirstOther = 0x80,
+    Bool = (uint)FirstOther,
+
 	TypeCount
 };
+
+/// Categories for the primitive types.
+/// Used to quickly determine supported operations.
+enum class PrimitiveTypeCategory {
+    Signed = 0x10,
+    Unsigned = 0x20,
+    Float = 0x40,
+    Other = 0x80
+};
+
+/// Returns the category a primitive type belongs to.
+inline PrimitiveTypeCategory category(PrimitiveType t) {
+    return (PrimitiveTypeCategory)((uint)t & 0xf0);
+}
 
 struct Type {
 	enum Kind {
@@ -103,6 +127,11 @@ struct Type {
 		Array,
 		Map
 	} kind;
+
+    bool operator == (const Type& t) const {return this == &t;}
+    bool operator != (const Type& t) const {return this != &t;}
+
+    bool isPrimitive() const {return kind == Prim;}
 
 	Type(Kind kind) : kind(kind) {}
 };
@@ -136,6 +165,10 @@ struct MapType : Type {
 	TypeRef to;
 };
 
+/// Operations that can be applied to primitive types.
+/// These should map directly to instructions on most hardware.
+/// They are divided into categories for easier code generation.
+/// Not each primitive type supports each operation.
 enum class PrimitiveOp {
 	// Binary
 	Add,
@@ -143,12 +176,16 @@ enum class PrimitiveOp {
 	Mul,
 	Div,
 	Rem,
-	Shl,
+
+    FirstBit,
+	Shl = (uint)FirstBit,
 	Shr,
 	And,
 	Or,
 	Xor,
-	CmpEq,
+
+    FirstCompare,
+	CmpEq = (uint)FirstCompare,
 	CmpNeq,
 	CmpGt,
 	CmpGeq,
@@ -164,10 +201,12 @@ enum class PrimitiveOp {
 	OpCount
 };
 
+/// Returns true if this operation takes exactly one parameter.
 inline bool isUnary(PrimitiveOp op) {
 	return op >= PrimitiveOp::FirstUnary;
 }
 
+/// Returns true if this operation takes exactly two parameters.
 inline bool isBinary(PrimitiveOp op) {
 	return op < PrimitiveOp::FirstUnary;
 }

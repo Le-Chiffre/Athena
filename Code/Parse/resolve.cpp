@@ -1,8 +1,40 @@
-#include <msxml.h>
 #include "resolve.h"
 
 namespace athena {
 namespace resolve {
+
+inline TypeRef getLiteralType(TypeManager& m, const Literal& l) {
+    switch(l.type) {
+        case Literal::Int: return m.getInt();
+        case Literal::Float: return m.getFloat();
+        case Literal::Char: return m.getU8();
+        case Literal::String: return m.getString();
+    }
+}
+
+/// Checks if the two provided types can be compared.
+inline bool cmpCompatible(PrimitiveType lhs, PrimitiveType rhs) {
+    // Types in the Other category can only be compared with themselves.
+    return category(lhs) == PrimitiveTypeCategory::Other
+            ? lhs == rhs
+            : category(lhs) == category(rhs);
+}
+
+/// Checks if bitwise operations can be performed on the provided types.
+inline bool bitCompatible(PrimitiveType lhs, PrimitiveType rhs) {
+	// Bitwise operations can only be applied to integers from the same category, or booleans.
+    auto cl = category(lhs);
+    auto cr = category(rhs);
+    return (cl == cr
+        && cl <= PrimitiveTypeCategory::Unsigned)
+        || (lhs == PrimitiveType::Bool && rhs == PrimitiveType::Bool);
+}
+
+/// Checks if arithmatic operations can be performed on the provided types.
+inline bool arithCompatible(PrimitiveType lhs, PrimitiveType rhs) {
+    // Currently the same as comparison.
+    return cmpCompatible(lhs, rhs);
+}
 
 Module* Resolver::resolve() {
 	auto module = build<Module>();
@@ -49,6 +81,8 @@ bool Resolver::resolveFunction(Function& fun, ast::FunDecl& decl) {
 
 Expr* Resolver::resolveExpression(Scope& scope, ast::ExprRef expr) {
 	switch(expr.type) {
+        case ast::Expr::Lit:
+            return resolveLiteral(scope, (const ast::LitExpr&)expr);
 		case ast::Expr::Infix:
 			return resolveInfix(scope, (const ast::InfixExpr&)expr);
 		case ast::Expr::Prefix:
@@ -72,14 +106,23 @@ Expr* Resolver::resolveExpression(Scope& scope, ast::ExprRef expr) {
 	
 	return nullptr;
 }
-	
+
+Expr* Resolver::resolveLiteral(Scope& scope, const ast::LitExpr& expr) {
+    return build<LitExpr>(expr.literal, getLiteralType(types, expr.literal));
+}
+
 Expr* Resolver::resolveInfix(Scope& scope, const ast::InfixExpr& expr) {
+    auto lhs = resolveExpression(scope, expr.lhs);
+    auto rhs = resolveExpression(scope, expr.rhs);
+
 	// Check if this can be a primitive operator.
-	for(uint i = 0; i < (uint)PrimitiveOp::FirstUnary; i++) {
-		if(expr.op == primitiveOps[i]) {
-			return resolvePrimitiveOp(scope, (PrimitiveOp)i, expr);
-		}
-	}
+    if(lhs->type.isPrimitive() && rhs->type.isPrimitive()) {
+        for(uint i = 0; i < (uint)PrimitiveOp::FirstUnary; i++) {
+            if(expr.op == primitiveOps[i]) {
+                return resolvePrimitiveOp(scope, (PrimitiveOp)i, *lhs, *rhs);
+            }
+        }
+    }
 	
 	// Otherwise, create a normal function call.
 	ast::ExprList l2{&expr.rhs};
@@ -89,10 +132,12 @@ Expr* Resolver::resolveInfix(Scope& scope, const ast::InfixExpr& expr) {
 }
 
 Expr* Resolver::resolvePrefix(Scope& scope, const ast::PrefixExpr& expr) {
+	auto dst = resolveExpression(scope, expr.dst);
+	
 	// Check if this can be a primitive operator.
 	for(auto i = (uint)PrimitiveOp::FirstUnary; i < (uint)PrimitiveOp::OpCount; i++) {
 		if(expr.op == primitiveOps[i]) {
-			return resolvePrimitiveOp(scope, (PrimitiveOp)i, expr);
+			return resolvePrimitiveOp(scope, (PrimitiveOp)i, *dst);
 		}
 	}
 	
@@ -189,24 +234,86 @@ Expr* Resolver::resolveAssign(Scope& scope, const ast::AssignExpr& expr) {
 	} else {
 		error("expression is not assignable");
 	}
-}
-
-Expr* Resolver::resolveWhile(Scope& scope, const ast::WhileExpr& expr) {
+	
 	return nullptr;
 }
 
-Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, const ast::InfixExpr& expr) {
-	auto list = build<ExprList>(resolveExpression(scope, expr.lhs), build<ExprList>(resolveExpression(scope, expr.rhs)));
-	return build<AppPExpr>(op, list);
+Expr* Resolver::resolveWhile(Scope& scope, const ast::WhileExpr& expr) {
+	auto cond = resolveExpression(scope, expr.cond);
+    if(cond->type == types.getBool()) {
+        auto loop = resolveExpression(scope, expr.loop);
+        return build<WhileExpr>(*cond, *loop);
+    } else {
+        error("while loop condition must resolve to boolean type");
+        return nullptr;
+    }
+}
+
+Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, resolve::ExprRef lhs, resolve::ExprRef rhs) {
+    auto lt = ((const PrimType&)lhs.type).type;
+    auto rt = ((const PrimType&)rhs.type).type;
+    if(auto type = getBinaryOpType(op, lt, rt)) {
+        auto list = build<ExprList>(&lhs, build<ExprList>(&rhs));
+        return build<AppPExpr>(op, list, *type);
+    } else return nullptr;
 }
 	
-Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, const ast::PrefixExpr& expr) {
-	auto list = build<ExprList>(resolveExpression(scope, expr.dst));
-	return build<AppPExpr>(op, list);
+Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, resolve::ExprRef dst) {
+    auto type = ((const PrimType&)dst.type).type;
+    if(auto rtype = getUnaryOpType(op, type)) {
+        auto list = build<ExprList>(&dst);
+        return build<AppPExpr>(op, list, *rtype);
+    } else return nullptr;
 }
 	
 Variable* Resolver::resolveArgument(ScopeRef scope, Id arg) {
 	return build<Variable>(arg, Type::Unknown, scope, true);
+}
+
+const Type* Resolver::getBinaryOpType(PrimitiveOp op, PrimitiveType lhs, PrimitiveType rhs) {
+    if(op < PrimitiveOp::FirstBit) {
+        // Arithmetic operators return the largest type.
+        if(arithCompatible(lhs, rhs)) {
+            return &types.getPrim(Core::Min(lhs, rhs));
+        } else {
+            error("arithmetic operator on incompatible primitive types");
+        }
+    } else if(op < PrimitiveOp::FirstCompare) {
+        // Bitwise operators return the largest type.
+		if(bitCompatible(lhs, rhs)) {
+            return &types.getPrim(Core::Min(lhs, rhs));
+        } else {
+            error("bitwise operator on incompatible primitive types");
+        }
+    } else if(op < PrimitiveOp::FirstUnary) {
+        // Comparison operators always return Bool.
+		if(cmpCompatible(lhs, rhs)) {
+            return &types.getBool();
+        } else {
+            error("comparison between incompatible primitive types");
+        }
+    }
+	
+	return nullptr;
+}
+
+const Type* Resolver::getUnaryOpType(PrimitiveOp op, PrimitiveType type) {
+    if(op == PrimitiveOp::Neg) {
+        if(category(type) <= PrimitiveTypeCategory::Float) {
+            return &types.getPrim(type);
+        } else {
+            error("cannot negate this primitive type");
+        }
+    } else if(op == PrimitiveOp::Not) {
+        if(type == PrimitiveType::Bool) {
+            return &types.getBool();
+        } else {
+            error("the not-operator can only be applied to booleans");
+        }
+    } else {
+        DebugError("Not a unary operator or unsupported!");
+    }
+    return nullptr;
 }
 
 nullptr_t Resolver::error(const char* text) {
