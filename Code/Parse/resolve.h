@@ -19,32 +19,37 @@ struct TypeManager {
             prims += PrimType{(PrimitiveType)i};
         }
 
-        stringType = &getArray(getU8());
+        stringType = getArray(getU8());
     }
 
-    TypeRef getPrim(PrimitiveType t) const {return prims[(uint)t];}
-    TypeRef getBool() const {return prims[(uint)PrimitiveType::Bool];}
-    TypeRef getFloat() const {return prims[(uint)PrimitiveType::F32];}
-    TypeRef getDouble() const {return prims[(uint)PrimitiveType::F64];}
-    TypeRef getInt() const {return prims[(uint)PrimitiveType::I32];}
-    TypeRef getU8() const {return prims[(uint)PrimitiveType::U8];}
-    TypeRef getString() const {return *stringType;}
+	TypeRef getUnit() const {return &unitType;}
+	TypeRef getUnknown() const {return &unknownType;}
+
+    TypeRef getPrim(PrimitiveType t) const {return &prims[(uint)t];}
+    TypeRef getBool() const {return &prims[(uint)PrimitiveType::Bool];}
+    TypeRef getFloat() const {return &prims[(uint)PrimitiveType::F32];}
+    TypeRef getDouble() const {return &prims[(uint)PrimitiveType::F64];}
+    TypeRef getInt() const {return &prims[(uint)PrimitiveType::I32];}
+    TypeRef getU8() const {return &prims[(uint)PrimitiveType::U8];}
+    TypeRef getString() const {return stringType;}
 
     TypeRef getArray(TypeRef content) {
         ArrayType* type;
-        if(!arrays.AddGet(&content, type))
+        if(!arrays.AddGet(content, type))
             new (type) ArrayType{content};
 
-        return *type;
+        return type;
     }
 
     Core::FixedArray<PrimType, (uint)PrimitiveType::TypeCount> prims;
     Core::NumberMap<ArrayType, const Type*> arrays;
     const Type* stringType;
+	const Type unitType{Type::Unit};
+	const Type unknownType{Type::Unknown};
 };
 
 struct Resolver {
-	Resolver(ast::CompileContext& context, ast::Module& source) : context(context), source(source), buffer(4*1024*1024) {}
+	Resolver(ast::CompileContext& context, ast::Module& source);
 
 	Module* resolve();
 	bool resolveFunction(Function& fun, ast::FunDecl& decl);
@@ -82,7 +87,12 @@ struct Resolver {
 		return buffer.New<T>(Core::Forward<P>(p)...);
 	}
 
+	/// Initializes the data used to recognize and resolve primitives.
+	/// This also makes sure that no primitive types and operators are redefined in the program.
+	void initPrimitives();
+
 	Id primitiveOps[(uint)PrimitiveOp::OpCount];
+	Core::NumberMap<PrimitiveOp, Id> primitiveMap;
 	ast::CompileContext& context;
 	ast::Module& source;
 	Core::StaticBuffer buffer;

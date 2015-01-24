@@ -19,7 +19,7 @@ struct Type;
 
 typedef Scope& ScopeRef;
 typedef Function& FuncRef;
-typedef const Type& TypeRef;
+typedef const Type* TypeRef;
 
 typedef Core::Array<Variable*> VarList;
 typedef Core::Array<Function*> FunList;
@@ -128,10 +128,10 @@ struct Type {
 		Map
 	} kind;
 
-    bool operator == (const Type& t) const {return this == &t;}
-    bool operator != (const Type& t) const {return this != &t;}
-
     bool isPrimitive() const {return kind == Prim;}
+	bool isKnown() const {return kind != Unknown;}
+	bool isUnit() const {return kind == Unit;}
+	bool isBool() const;
 
 	Type(Kind kind) : kind(kind) {}
 };
@@ -140,6 +140,8 @@ struct PrimType : Type {
 	PrimType(PrimitiveType type) : Type(Prim), type(type) {}
 	PrimitiveType type;
 };
+
+inline bool Type::isBool() const {return isPrimitive() && ((const PrimType*)this)->type == PrimitiveType::Bool;}
 
 struct AggType : Type {
 	struct Element {
@@ -188,7 +190,7 @@ enum class PrimitiveOp {
 	CmpEq = (uint)FirstCompare,
 	CmpNeq,
 	CmpGt,
-	CmpGeq,
+	CmpGe,
 	CmpLt,
 	CmpLe,
 
@@ -219,50 +221,59 @@ struct Expr {
 		AppI,
 		AppP,
 		Case,
+		If,
 		Decl,
 		While,
 		Assign
 	} kind;
 
 	TypeRef type;
-	Expr(Kind k, TypeRef type = Type::Unknown) : kind(k), type(type) {}
+	Expr(Kind k, TypeRef type) : kind(k), type(type) {}
 };
 
 typedef const Expr& ExprRef;
 typedef ast::ASTList<Expr*> ExprList;
 
 struct LitExpr : Expr {
-	LitExpr(Literal lit, TypeRef type = Type::Unknown) : Expr(Lit, type), literal(lit) {}
+	LitExpr(Literal lit, TypeRef type) : Expr(Lit, type), literal(lit) {}
 	Literal literal;
 };
 
 struct VarExpr : Expr {
-	VarExpr(Variable* var, TypeRef type = Type::Unknown) : Expr(Var, type), var(var) {}
+	VarExpr(Variable* var) : Expr(Var, var->type), var(var) {}
 	Variable* var;
 };
 
 struct AppExpr : Expr {
-	AppExpr(FuncRef n, ExprList* args = nullptr, TypeRef type = Type::Unknown) : Expr(App, type), callee(n), args(args) {}
+	AppExpr(FuncRef n, ExprList* args) : Expr(App, n.expression->type), callee(n), args(args) {}
 	FuncRef callee;
 	ExprList* args;
 };
 
 struct AppIExpr : Expr {
-	AppIExpr(const char* i, ExprList* args = nullptr, TypeRef type = Type::Unknown) : Expr(AppI, type), callee(i), args(args) {}
+	AppIExpr(const char* i, ExprList* args, TypeRef type) : Expr(AppI, type), callee(i), args(args) {}
 	const char* callee;
 	ExprList* args;
 };
 
 struct AppPExpr : Expr {
-	AppPExpr(PrimitiveOp op, ExprList* args, TypeRef type = Type::Unknown) : Expr(AppP, type), args(args), op(op) {}
+	AppPExpr(PrimitiveOp op, ExprList* args, TypeRef type) : Expr(AppP, type), args(args), op(op) {}
 	ExprList* args;
 	PrimitiveOp op;
 };
 
 struct CaseExpr : Expr {
-    CaseExpr(AltList* alts, Expr* otherwise, TypeRef type = Type::Unknown) : Expr(Case, type), alts(alts), otherwise(otherwise) {}
+    CaseExpr(AltList* alts, Expr* otherwise, TypeRef type) : Expr(Case, type), alts(alts), otherwise(otherwise) {}
     AltList* alts;
     Expr* otherwise;
+};
+
+struct IfExpr : Expr {
+	IfExpr(ExprRef cond, ExprRef then, const Expr* otherwise, TypeRef type, bool ret) : Expr(If, type), cond(cond), then(then), otherwise(otherwise), returnResult(ret) {}
+	ExprRef cond;
+	ExprRef then;
+	const Expr* otherwise;
+	bool returnResult;
 };
 
 struct DeclExpr : Expr {
@@ -272,7 +283,7 @@ struct DeclExpr : Expr {
 };
 
 struct WhileExpr : Expr {
-	WhileExpr(ExprRef cond, ExprRef loop) : Expr(While, Type::Unit), cond(cond), loop(loop) {}
+	WhileExpr(ExprRef cond, ExprRef loop, TypeRef type) : Expr(While, type), cond(cond), loop(loop) {}
 	ExprRef cond;
 	ExprRef loop;
 };

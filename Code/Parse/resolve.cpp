@@ -3,12 +3,33 @@
 namespace athena {
 namespace resolve {
 
+static const char* primitiveOperatorNames[] = {
+	"+", "-", "*", "/", "mod",        // Arithmetic
+	"shl", "shr", "and", "or", "xor", // Bitwise
+	"==", "!=", ">", ">=", "<", "<=", // Comparison
+	"-", "not" 						  // Unary
+};
+
+static const byte primitiveOperatorLengths[] = {
+	1, 1, 1, 1, 3,    // Arithmatic
+	3, 3, 3, 2, 3,	  // Bitwise
+	2, 2, 1, 2, 1, 2, // Comparison
+	1, 3			  // Unary
+};
+
+static const uint16 primitiveOperatorPrecedences[] = {
+	11, 11, 12, 12, 12,	// Arithmetic
+	10, 10, 7, 5, 6,	// Bitwise
+	8, 8, 9, 9, 9, 9	// Comparison
+};
+
 inline TypeRef getLiteralType(TypeManager& m, const Literal& l) {
     switch(l.type) {
         case Literal::Int: return m.getInt();
         case Literal::Float: return m.getFloat();
         case Literal::Char: return m.getU8();
         case Literal::String: return m.getString();
+		default: FatalError("Unknown literal type."); return nullptr;
     }
 }
 
@@ -36,7 +57,26 @@ inline bool arithCompatible(PrimitiveType lhs, PrimitiveType rhs) {
     return cmpCompatible(lhs, rhs);
 }
 
+Resolver::Resolver(ast::CompileContext& context, ast::Module& source) :
+	context(context), source(source), buffer(4*1024*1024) {}
+
+void Resolver::initPrimitives() {
+	// Make sure each operator exists in the context and add them to the map.
+	for(uint i = 0; i < (uint)PrimitiveOp::OpCount; i++) {
+		primitiveOps[i] = context.AddUnqualifiedName(primitiveOperatorNames[i], primitiveOperatorLengths[i]);
+		primitiveMap.Add(primitiveOps[i], (PrimitiveOp)i);
+	}
+
+	// Make sure all precedences are in the context and none have been overwritten.
+	for(uint i = 0; i < (uint)PrimitiveOp::FirstUnary; i++) {
+		if(context.TryFindOp(primitiveOps[i]))
+			error("the precedence of built-in operator %@ cannot be redefined", primitiveOperatorNames[i]);
+		context.AddOp(primitiveOps[i], primitiveOperatorPrecedences[i], ast::Assoc::Left);
+	}
+}
+
 Module* Resolver::resolve() {
+	initPrimitives();
 	auto module = build<Module>();
 	module->name = source.name;
 
@@ -115,13 +155,11 @@ Expr* Resolver::resolveInfix(Scope& scope, const ast::InfixExpr& expr) {
     auto lhs = resolveExpression(scope, expr.lhs);
     auto rhs = resolveExpression(scope, expr.rhs);
 
-	// Check if this can be a primitive operator.
-    if(lhs->type.isPrimitive() && rhs->type.isPrimitive()) {
-        for(uint i = 0; i < (uint)PrimitiveOp::FirstUnary; i++) {
-            if(expr.op == primitiveOps[i]) {
-                return resolvePrimitiveOp(scope, (PrimitiveOp)i, *lhs, *rhs);
-            }
-        }
+	// Check if this can be a primitive operation.
+    if(lhs->type->isPrimitive() && rhs->type->isPrimitive()) {
+		if(auto op = primitiveMap.Get(expr.op)) {
+			if(*op < PrimitiveOp::FirstUnary) return resolvePrimitiveOp(scope, *op, *lhs, *rhs);
+		}
     }
 	
 	// Otherwise, create a normal function call.
@@ -134,13 +172,13 @@ Expr* Resolver::resolveInfix(Scope& scope, const ast::InfixExpr& expr) {
 Expr* Resolver::resolvePrefix(Scope& scope, const ast::PrefixExpr& expr) {
 	auto dst = resolveExpression(scope, expr.dst);
 	
-	// Check if this can be a primitive operator.
-	for(auto i = (uint)PrimitiveOp::FirstUnary; i < (uint)PrimitiveOp::OpCount; i++) {
-		if(expr.op == primitiveOps[i]) {
-			return resolvePrimitiveOp(scope, (PrimitiveOp)i, *dst);
+	// Check if this can be a primitive operation.
+	if(dst->type->isPrimitive()) {
+		if(auto op = primitiveMap.Get(expr.op)) {
+			if(*op >= PrimitiveOp::FirstUnary) return resolvePrimitiveOp(scope, *op, *dst);
 		}
 	}
-	
+
 	// Otherwise, create a normal function call.
 	ast::ExprList l1{&expr.dst};
 	ast::VarExpr v{expr.op};
@@ -165,7 +203,7 @@ Expr* Resolver::resolveCall(Scope& scope, const ast::AppExpr& expr) {
                     arg = arg->next;
                 }
             }
-            return build<AppExpr>(*fun);
+            return build<AppExpr>(*fun, args);
         } else {
             // No applicable function was found.
             return nullptr;
@@ -187,7 +225,7 @@ Expr* Resolver::resolveVar(Scope& scope, Id name) {
         // Check if this is a function instead.
         if(auto fun = scope.findFun(name)) {
             // This is a function being called with zero arguments.
-            return build<AppExpr>(*fun);
+            return build<AppExpr>(*fun, nullptr);
         } else {
             // No variable or function was found; we are out of luck.
             return nullptr;
@@ -196,10 +234,31 @@ Expr* Resolver::resolveVar(Scope& scope, Id name) {
 }
 
 Expr* Resolver::resolveIf(Scope& scope, const ast::IfExpr& expr) {
-    auto alt = build<Alt>(resolveExpression(scope, expr.cond), resolveExpression(scope, expr.then));
+	auto cond = *resolveExpression(scope, expr.cond);
+	auto then = *resolveExpression(scope, expr.then);
     auto otherwise = expr.otherwise ? resolveExpression(scope, *expr.otherwise) : nullptr;
-	// If-expressions without an else part can fail and never return a value.
-    return build<CaseExpr>(build<AltList>(alt), otherwise, otherwise ? Type::Unknown : Type::Unit);
+	bool useResult = false;
+
+	// Find the type of the expression.
+	// If-expressions without an else-part can fail and never return a value.
+	// If there is an else-part then both branches must return the same type.
+	auto type = types.getUnit();
+	if(otherwise) {
+		if(then.type->isKnown() && otherwise->type->isKnown()) {
+			if(then.type == otherwise->type) {
+				type = then.type;
+				useResult = true;
+			} else {
+				// TODO: Only generate this error if the result is actually used.
+				error("the then and else branches of an if-expression must return the same type");
+				return nullptr;
+			}
+		} else {
+			type = types.getUnknown();
+		}
+	}
+
+    return build<IfExpr>(cond, then, otherwise, type, useResult);
 }
 
 Expr* Resolver::resolveDecl(Scope& scope, const ast::DeclExpr& expr) {
@@ -242,7 +301,7 @@ Expr* Resolver::resolveWhile(Scope& scope, const ast::WhileExpr& expr) {
 	auto cond = resolveExpression(scope, expr.cond);
     if(cond->type == types.getBool()) {
         auto loop = resolveExpression(scope, expr.loop);
-        return build<WhileExpr>(*cond, *loop);
+        return build<WhileExpr>(*cond, *loop, types.getUnit());
     } else {
         error("while loop condition must resolve to boolean type");
         return nullptr;
@@ -250,45 +309,45 @@ Expr* Resolver::resolveWhile(Scope& scope, const ast::WhileExpr& expr) {
 }
 
 Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, resolve::ExprRef lhs, resolve::ExprRef rhs) {
-    auto lt = ((const PrimType&)lhs.type).type;
-    auto rt = ((const PrimType&)rhs.type).type;
+    auto lt = ((const PrimType*)lhs.type)->type;
+    auto rt = ((const PrimType*)rhs.type)->type;
     if(auto type = getBinaryOpType(op, lt, rt)) {
         auto list = build<ExprList>(&lhs, build<ExprList>(&rhs));
-        return build<AppPExpr>(op, list, *type);
+        return build<AppPExpr>(op, list, type);
     } else return nullptr;
 }
 	
 Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, resolve::ExprRef dst) {
-    auto type = ((const PrimType&)dst.type).type;
+    auto type = ((const PrimType*)dst.type)->type;
     if(auto rtype = getUnaryOpType(op, type)) {
         auto list = build<ExprList>(&dst);
-        return build<AppPExpr>(op, list, *rtype);
+        return build<AppPExpr>(op, list, rtype);
     } else return nullptr;
 }
 	
 Variable* Resolver::resolveArgument(ScopeRef scope, Id arg) {
-	return build<Variable>(arg, Type::Unknown, scope, true);
+	return build<Variable>(arg, types.getUnknown(), scope, true);
 }
 
 const Type* Resolver::getBinaryOpType(PrimitiveOp op, PrimitiveType lhs, PrimitiveType rhs) {
     if(op < PrimitiveOp::FirstBit) {
         // Arithmetic operators return the largest type.
         if(arithCompatible(lhs, rhs)) {
-            return &types.getPrim(Core::Min(lhs, rhs));
+            return types.getPrim(Core::Min(lhs, rhs));
         } else {
             error("arithmetic operator on incompatible primitive types");
         }
     } else if(op < PrimitiveOp::FirstCompare) {
         // Bitwise operators return the largest type.
 		if(bitCompatible(lhs, rhs)) {
-            return &types.getPrim(Core::Min(lhs, rhs));
+            return types.getPrim(Core::Min(lhs, rhs));
         } else {
             error("bitwise operator on incompatible primitive types");
         }
     } else if(op < PrimitiveOp::FirstUnary) {
         // Comparison operators always return Bool.
 		if(cmpCompatible(lhs, rhs)) {
-            return &types.getBool();
+            return types.getBool();
         } else {
             error("comparison between incompatible primitive types");
         }
@@ -299,16 +358,18 @@ const Type* Resolver::getBinaryOpType(PrimitiveOp op, PrimitiveType lhs, Primiti
 
 const Type* Resolver::getUnaryOpType(PrimitiveOp op, PrimitiveType type) {
     if(op == PrimitiveOp::Neg) {
+		// Returns the same type.
         if(category(type) <= PrimitiveTypeCategory::Float) {
-            return &types.getPrim(type);
+            return types.getPrim(type);
         } else {
             error("cannot negate this primitive type");
         }
     } else if(op == PrimitiveOp::Not) {
-        if(type == PrimitiveType::Bool) {
-            return &types.getBool();
+		// Returns the same type.
+        if(category(type) <= PrimitiveTypeCategory::Unsigned || type == PrimitiveType::Bool) {
+            return types.getPrim(type);
         } else {
-            error("the not-operator can only be applied to booleans");
+            error("the not-operation can only be applied to booleans and integers");
         }
     } else {
         DebugError("Not a unary operator or unsupported!");
