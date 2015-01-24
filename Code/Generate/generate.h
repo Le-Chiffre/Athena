@@ -14,8 +14,7 @@ llvm::StringRef toRef(ast::String str) {
 }
 
 struct Generator {
-	Generator(ast::CompileContext& ccontext, llvm::LLVMContext& context, llvm::Module& target) :
-		context(context), module(target), builder(context), ccontext(ccontext) {}
+	Generator(ast::CompileContext& ccontext, llvm::LLVMContext& context, llvm::Module& target);
 
 	llvm::Function* genFunction(resolve::Function& function);
 	llvm::BasicBlock* genScope(resolve::Scope& scope);
@@ -24,15 +23,30 @@ struct Generator {
 
 	llvm::Value* genCall(resolve::Function& function, resolve::ExprList* args);
 	llvm::Value* genPrimitiveCall(resolve::PrimitiveOp op, resolve::ExprList* args);
-	llvm::Value* genUnaryOp(resolve::PrimitiveOp op, llvm::Value* in);
-	llvm::Value* genBinaryOp(resolve::PrimitiveOp op, llvm::Value* lhs, llvm::Value* rhs);
+	llvm::Value* genUnaryOp(resolve::PrimitiveOp op, resolve::PrimType type, llvm::Value* in);
+	llvm::Value* genBinaryOp(resolve::PrimitiveOp op, llvm::Value* lhs, llvm::Value* rhs, resolve::PrimType lt, resolve::PrimType rt);
     llvm::Value* genCase(resolve::CaseExpr& casee);
+	llvm::Value* genIf(resolve::IfExpr& ife);
+
+	llvm::Function* getFunction() {
+		return builder.GetInsertBlock()->getParent();
+	}
+
+	llvm::Type* getType(resolve::TypeRef type) {
+		llvm::Type** t;
+		if(!typeMap.AddGet(type, t))
+			*t = genLlvmType(type);
+		return *t;
+	}
 
 private:
+	llvm::Type* genLlvmType(resolve::TypeRef type);
+
 	llvm::LLVMContext& context;
 	llvm::Module& module;
 	llvm::IRBuilder<> builder;
 	ast::CompileContext& ccontext;
+	Core::NumberMap<llvm::Type*, resolve::TypeRef> typeMap;
 };
 
 }} // namespace athena::gen
