@@ -53,7 +53,7 @@ Value* Generator::genExpr(resolve::ExprRef expr) {
 }
 
 Value* Generator::genLiteral(resolve::Literal& literal) {
-	return ConstantFP::get(context, APFloat(literal.d));
+	return ConstantFP::get(context, APFloat(literal.f));
 }
 
 llvm::Value* Generator::genCall(resolve::Function& function, resolve::ExprList* args) {

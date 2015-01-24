@@ -90,8 +90,23 @@ private:
 		string += "LitExpr ";
 
 		char buffer[32];
-		Core::NumberToString(e.literal.d, buffer, 32);
-		string += &buffer[0];
+		switch(e.literal.type) {
+			case Literal::Int:
+				Core::NumberToString(e.literal.i, buffer, 32);
+				string += &buffer[0];
+				break;
+			case Literal::Float:
+				Core::NumberToString(e.literal.f, buffer, 32);
+				string += &buffer[0];
+				break;
+			case Literal::Char:
+				string += e.literal.c;
+				break;
+			case Literal::String:
+				auto name = context.Find(e.literal.s).name;
+				string.Append(name.ptr, name.length);
+				break;
+		}
 	}
 
 	void toString(const VarExpr& e) {

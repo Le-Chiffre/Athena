@@ -7,10 +7,25 @@ static const Fixity kDefaultFixity{Fixity::Left, 9};
 
 inline Literal toLiteral(Token& tok) {
 	Literal l;
-	if(tok == Token::Float)
-		l.d = tok.data.floating;
-	else
-		l.d = tok.data.integer;
+    switch(tok.type) {
+        case Token::Integer:
+            l.i = tok.data.integer;
+            l.type = Literal::Int;
+            break;
+        case Token::Float:
+            l.f = tok.data.floating;
+            l.type = Literal::Float;
+            break;
+        case Token::Char:
+            l.c = tok.data.character;
+            l.type = Literal::Char;
+            break;
+        case Token::String:
+            l.s = tok.data.id;
+            l.type = Literal::String;
+            break;
+        default: FatalError("Invalid literal type.");
+    }
 	return l;
 }
 

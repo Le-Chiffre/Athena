@@ -68,7 +68,21 @@ struct Fixity {
 };
 
 struct Literal {
-	double d;
+    enum Type {
+        Float,
+        Int,
+        Char,
+        String
+    };
+
+    union {
+        double f;
+        uint64 i;
+        wchar32 c;
+        Id s;
+    };
+
+    Type type;
 };
 
 struct Expr {
