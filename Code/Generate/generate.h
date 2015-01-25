@@ -3,7 +3,7 @@
 
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/IRBuilder.h>
-#include "../Parse/resolve_ast.h"
+#include "../Resolve/resolve_ast.h"
 #include "../Parse/lexer.h"
 
 namespace athena {

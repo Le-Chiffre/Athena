@@ -1,7 +1,7 @@
-#ifndef Athena_Parser_resolve__ast_h
-#define Athena_Parser_resolve__ast_h
+#ifndef Athena_Resolve_resolve__ast_h
+#define Athena_Resolve_resolve__ast_h
 
-#include "ast.h"
+#include "../Parse/ast.h"
 
 namespace athena {
 namespace resolve {
@@ -20,16 +20,26 @@ struct Type;
 typedef Scope& ScopeRef;
 typedef Function& FuncRef;
 typedef const Type* TypeRef;
+typedef const Expr& ExprRef;
 
+typedef ast::ASTList<const Expr*> ExprList;
 typedef Core::Array<Variable*> VarList;
 typedef Core::Array<Function*> FunList;
 typedef Core::Array<Type*> TypeList;
 typedef ast::ASTList<Scope*> ScopeList;
 typedef ast::ASTList<Alt*> AltList;
 
+struct Typedef {
+	Id name;
+	TypeRef type;
+};
+
 struct Scope {
     Variable* findVar(Id name);
     Function* findFun(Id name);
+
+	// The base name of this scope (determines type visibility).
+	Id name;
 
 	// The function containing this scope, or null if it is a function or global scope.
 	Function* function;
@@ -159,18 +169,21 @@ struct PtrType : Type {
 	TypeRef type;
 };
 
+struct Field {
+	Field(Id name, TypeRef type, ExprRef content, bool constant) : name(name), type(type), content(content), constant(constant) {}
+
+	Id name;
+	TypeRef type;
+	ExprRef content;
+	bool constant;
+};
+
+typedef Core::Array<Field> FieldList;
 
 struct AggType : Type {
-	struct Element {
-		Element(Id name, TypeRef type) : name(name), type(type) {}
-		Id name;
-		TypeRef type;
-	};
-
-	typedef Core::Array<Element> ElementList;
-
 	AggType() : Type(Agg) {}
-	ElementList elements;
+	Id name;
+	FieldList fields;
 };
 
 struct ArrayType : Type {
@@ -249,9 +262,6 @@ struct Expr {
 	Expr(Kind k, TypeRef type) : kind(k), type(type) {}
 };
 
-typedef const Expr& ExprRef;
-typedef ast::ASTList<const Expr*> ExprList;
-
 struct LitExpr : Expr {
 	LitExpr(Literal lit, TypeRef type) : Expr(Lit, type), literal(lit) {}
 	Literal literal;
@@ -319,9 +329,11 @@ struct CoerceExpr : Expr {
 
 struct Module {
 	Id name;
-	Core::Array<Function*> functions{32};
+	Core::Array<Function*> functions;
+	Core::NumberMap<Function*, Id> functionMap{32};
+	Core::NumberMap<Type*, Id> typeMap{32};
 };
 
 }} // namespace athena::resolve
 
-#endif // Athena_Parser_resolve__ast_h
+#endif // Athena_Resolve_resolve__ast_h

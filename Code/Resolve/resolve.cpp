@@ -1,4 +1,3 @@
-#include <msxml.h>
 #include "resolve.h"
 
 namespace athena {
@@ -90,17 +89,33 @@ Module* Resolver::resolve() {
 
     // Perform the declaration pass.
     for(auto decl : source.declarations) {
-        if(decl->kind == ast::Decl::Function) {
-            module->functions += build<Function>(((ast::FunDecl*)decl)->name);
-        }
+		switch(decl->kind) {
+			case ast::Decl::Function:
+				module->functions += build<Function>(((ast::FunDecl*)decl)->name);
+				break;
+			case ast::Decl::Type:
+				break;
+			case ast::Decl::Data:
+				break;
+		}
     }
 
     // Perform the resolve pass.
-    uint i = 0;
+    uint f = 0;
+	uint t = 0;
+	uint d = 0;
 	for(auto decl : source.declarations) {
-		if(decl->kind == ast::Decl::Function) {
-			resolveFunction(*module->functions[i], *(ast::FunDecl*)decl);
-            i++;
+		switch(decl->kind) {
+			case ast::Decl::Function:
+				resolveFunction(*module->functions[f], *(ast::FunDecl*)decl);
+				f++;
+				break;
+			case ast::Decl::Type:
+				t++;
+				break;
+			case ast::Decl::Data:
+				d++;
+				break;
 		}
 	}
 	
@@ -145,6 +160,10 @@ Expr* Resolver::resolveExpression(Scope& scope, ast::ExprRef expr) {
 			return resolveExpression(scope, ((ast::NestedExpr*)expr)->expr);
 		case ast::Expr::Coerce:
 			return resolveCoerce(scope, *(ast::CoerceExpr*)expr);
+		case ast::Expr::Field:
+			return resolveField(scope, *(ast::FieldExpr*)expr);
+		case ast::Expr::Construct:
+			return resolveConstruct(scope, *(ast::ConstructExpr*)expr);
 		default:
 			FatalError("Unsupported expression type.");
 	}
@@ -355,6 +374,14 @@ Expr* Resolver::resolveWhile(Scope& scope, ast::WhileExpr& expr) {
 
 Expr* Resolver::resolveCoerce(Scope& scope, ast::CoerceExpr& expr) {
 	return implicitCoerce(*resolveExpression(scope, expr.target), resolveType(scope, expr.kind));
+}
+
+Expr* Resolver::resolveField(Scope& scope, ast::FieldExpr& expr) {
+	return nullptr;
+}
+
+Expr* Resolver::resolveConstruct(Scope& scope, ast::ConstructExpr& expr) {
+	return nullptr;
 }
 
 Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, resolve::ExprRef lhs, resolve::ExprRef rhs) {

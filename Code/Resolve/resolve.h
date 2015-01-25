@@ -1,7 +1,7 @@
-#ifndef Athena_Parser_resolve_h
-#define Athena_Parser_resolve_h
+#ifndef Athena_Resolve_resolve_h
+#define Athena_Resolve_resolve_h
 
-#include "parser.h"
+#include "../Parse/parser.h"
 #include "resolve_ast.h"
 
 namespace athena {
@@ -75,6 +75,8 @@ struct Resolver {
 	Expr* resolveAssign(Scope& scope, ast::AssignExpr& expr);
 	Expr* resolveWhile(Scope& scope, ast::WhileExpr& expr);
 	Expr* resolveCoerce(Scope& scope, ast::CoerceExpr& expr);
+	Expr* resolveField(Scope& scope, ast::FieldExpr& expr);
+	Expr* resolveConstruct(Scope& scope, ast::ConstructExpr& expr);
 
     /// Resolves a binary operation on two primitive types.
     /// *lhs* and *rhs* must be primitives.
@@ -131,4 +133,4 @@ struct Resolver {
 
 }} // namespace athena::resolve
 
-#endif // Athena_Parser_resolve_h
+#endif // Athena_Resolve_resolve_h
