@@ -121,14 +121,21 @@ struct Type {
 	enum Kind {
 		Unknown,
 		Unit,
-		Prim,
 		Agg,
 		Var,
 		Array,
-		Map
+		Map,
+
+		// These are often checked for together, so we let them share a single bit.
+		Prim = 0x10,
+		Ptr = 0x11,
+
+		// When adding new types, make sure no other types have bit 4 set.
 	} kind;
 
+	bool isPointer() const {return kind == Ptr;}
     bool isPrimitive() const {return kind == Prim;}
+	bool isPtrOrPrim() const {return ((uint)kind & 0x10) != 0;}
 	bool isKnown() const {return kind != Unknown;}
 	bool isUnit() const {return kind == Unit;}
 	bool isBool() const;
@@ -136,12 +143,22 @@ struct Type {
 	Type(Kind kind) : kind(kind) {}
 };
 
+/// A primitive type, where a primitive is a "native" type that represents a raw number in some form.
+/// Note that pointers are separate types, because they contain additional information about what they point to.
 struct PrimType : Type {
 	PrimType(PrimitiveType type) : Type(Prim), type(type) {}
 	PrimitiveType type;
 };
 
 inline bool Type::isBool() const {return isPrimitive() && ((const PrimType*)this)->type == PrimitiveType::Bool;}
+
+/// A pointer type representing a memory address to some data type.
+/// Pointers must have a concrete type; pointers to the unit type are not supported.
+struct PtrType : Type {
+	PtrType(TypeRef type) : Type(Ptr), type(type) {}
+	TypeRef type;
+};
+
 
 struct AggType : Type {
 	struct Element {

@@ -152,66 +152,98 @@ Expr* Resolver::resolveLiteral(Scope& scope, const ast::LitExpr& expr) {
 }
 
 Expr* Resolver::resolveInfix(Scope& scope, const ast::InfixExpr& expr) {
-    auto lhs = resolveExpression(scope, expr.lhs);
-    auto rhs = resolveExpression(scope, expr.rhs);
-
-	// Check if this can be a primitive operation.
-    if(lhs->type->isPrimitive() && rhs->type->isPrimitive()) {
-		if(auto op = primitiveMap.Get(expr.op)) {
-			if(*op < PrimitiveOp::FirstUnary) return resolvePrimitiveOp(scope, *op, *lhs, *rhs);
-		}
-    }
-	
-	// Otherwise, create a normal function call.
-	ast::ExprList l2{&expr.rhs};
-	ast::ExprList l1{&expr.lhs, &l2};
-	ast::VarExpr v{expr.op};
-	return resolveCall(scope, {v, &l1});
+	// TODO: Reorder based on precedence.
+	ast::VarExpr var(expr.op);
+	return resolveBinaryCall(scope, var, expr.lhs, expr.rhs);
 }
 
 Expr* Resolver::resolvePrefix(Scope& scope, const ast::PrefixExpr& expr) {
-	auto dst = resolveExpression(scope, expr.dst);
-	
+	ast::VarExpr var(expr.op);
+	return resolveUnaryCall(scope, var, expr.dst);
+}
+
+Expr* Resolver::resolveBinaryCall(Scope& scope, ast::ExprRef function, ast::ExprRef lhs, ast::ExprRef rhs) {
+	auto lt = resolveExpression(scope, lhs);
+	auto rt = resolveExpression(scope, rhs);
+
 	// Check if this can be a primitive operation.
-	if(dst->type->isPrimitive()) {
-		if(auto op = primitiveMap.Get(expr.op)) {
-			if(*op >= PrimitiveOp::FirstUnary) return resolvePrimitiveOp(scope, *op, *dst);
+	// Note that primitive operations can be both functions and operators.
+	if((lt->type->isPrimitive() && rt->type->isPrimitive()) || (lt->type->isPointer() && rt->type->isPointer())) {
+		if(auto op = tryPrimitiveOp(function)) {
+			// This means that built-in binary operators cannot be overloaded for any pointer or primitive type.
+			if(*op < PrimitiveOp::FirstUnary)
+				return resolvePrimitiveOp(scope, *op, *lt, *rt);
 		}
 	}
 
 	// Otherwise, create a normal function call.
-	ast::ExprList l1{&expr.dst};
-	ast::VarExpr v{expr.op};
-	return resolveCall(scope, {v, &l1});
+	auto args = build<ExprList>(lt, build<ExprList>(rt));
+	if(auto func = findFunction(scope, function, args)) {
+		return build<AppExpr>(*func, args);
+	} else {
+		// No need for an error; this is done by findFunction.
+		return nullptr;
+	}
+}
+
+Expr* Resolver::resolveUnaryCall(Scope& scope, ast::ExprRef function, ast::ExprRef dst) {
+	auto target = resolveExpression(scope, dst);
+
+	// Check if this can be a primitive operation.
+	// Note that primitive operations can be both functions and operators.
+	if(target->type->isPtrOrPrim()) {
+		if(auto op = tryPrimitiveOp(function)) {
+			// This means that built-in unary operators cannot be overloaded for any pointer or primitive type.
+			if(*op >= PrimitiveOp::FirstUnary)
+				return resolvePrimitiveOp(scope, *op, *target);
+		}
+	}
+
+	// Otherwise, create a normal function call.
+	auto args = build<ExprList>(target);
+	if(auto func = findFunction(scope, function, args)) {
+		return build<AppExpr>(*func, args);
+	} else {
+		// No need for an error; this is done by findFunction.
+		return nullptr;
+	}
 }
 	
 Expr* Resolver::resolveCall(Scope& scope, const ast::AppExpr& expr) {
-    // Resolve the name of the function being called.
-    if(expr.callee.type == ast::Expr::Var) {
-        // Find the function being called, or give an error.
-        if(auto fun = scope.findFun(((const ast::VarExpr&)expr.callee).name)) {
-            // Resolve each argument.
-            ExprList* args = nullptr;
-            if(expr.args) {
-                auto arg = expr.args;
-                args = build<ExprList>(resolveExpression(scope, *arg->item));
-                auto a = args;
-                arg = arg->next;
-                while(arg) {
-                    a->next = build<ExprList>(resolveExpression(scope, *arg->item));
-                    a = a->next;
-                    arg = arg->next;
-                }
-            }
-            return build<AppExpr>(*fun, args);
-        } else {
-            // No applicable function was found.
-            return nullptr;
-        }
-    } else {
-        // This isn't a callable type.
-        return nullptr;
-    }
+	// Special case for calls with one or two parameters - these can map to builtin operations.
+	if(auto lhs = expr.args) {
+		if(auto rhs = expr.args->next) {
+			if(!rhs->next) {
+				// Two arguments.
+				resolveBinaryCall(scope, expr.callee, *lhs->item, *rhs->item);
+			}
+		} else {
+			// Single argument.
+			resolveUnaryCall(scope, expr.callee, *lhs->item);
+		}
+	}
+
+	// Create a list of function arguments.
+	ExprList* args = nullptr;
+	if(expr.args) {
+		auto arg = expr.args;
+		args = build<ExprList>(resolveExpression(scope, *arg->item));
+		auto a = args;
+		arg = arg->next;
+		while(arg) {
+			a->next = build<ExprList>(resolveExpression(scope, *arg->item));
+			a = a->next;
+			arg = arg->next;
+		}
+	}
+
+	// Find the function to call.
+	if(auto fun = findFunction(scope, expr.callee, args)) {
+		return build<AppExpr>(*fun, args);
+	}
+
+	// No need for errors - each failure above this would print an error.
+	return nullptr;
 }
 
 Expr* Resolver::resolveVar(Scope& scope, Id name) {
@@ -225,9 +257,11 @@ Expr* Resolver::resolveVar(Scope& scope, Id name) {
         // Check if this is a function instead.
         if(auto fun = scope.findFun(name)) {
             // This is a function being called with zero arguments.
+			// TODO: Create a closure if the function actually takes more arguments.
             return build<AppExpr>(*fun, nullptr);
         } else {
             // No variable or function was found; we are out of luck.
+			error("could not find a function or variable named '%@'", context.Find(name).name);
             return nullptr;
         }
     }
@@ -309,20 +343,48 @@ Expr* Resolver::resolveWhile(Scope& scope, const ast::WhileExpr& expr) {
 }
 
 Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, resolve::ExprRef lhs, resolve::ExprRef rhs) {
-    auto lt = ((const PrimType*)lhs.type)->type;
-    auto rt = ((const PrimType*)rhs.type)->type;
-    if(auto type = getBinaryOpType(op, lt, rt)) {
-        auto list = build<ExprList>(&lhs, build<ExprList>(&rhs));
-        return build<AppPExpr>(op, list, type);
-    } else return nullptr;
+	// This is either a pointer or primitive.
+	if(lhs.type->isPointer()) {
+		auto lt = (const PtrType*)lhs.type;
+		if(rhs.type->isPointer()) {
+			auto rt = (const PtrType*)lhs.type;
+			if(auto type = getPtrOpType(op, lt, rt)) {
+				auto list = build<ExprList>(&lhs, build<ExprList>(&rhs));
+				return build<AppPExpr>(op, list, type);
+			}
+		} else {
+			auto rt = ((const PrimType*)rhs.type)->type;
+			if(auto type = getPtrOpType(op, lt, rt)) {
+				auto list = build<ExprList>(&lhs, build<ExprList>(&rhs));
+				return build<AppPExpr>(op, list, type);
+			}
+		}
+	} else if(rhs.type->isPointer()) {
+		error("This built-in operator cannot be applied to a primitive and a pointer");
+	} else {
+		auto lt = ((const PrimType*)lhs.type)->type;
+		auto rt = ((const PrimType*)rhs.type)->type;
+		if(auto type = getBinaryOpType(op, lt, rt)) {
+			auto list = build<ExprList>(&lhs, build<ExprList>(&rhs));
+			return build<AppPExpr>(op, list, type);
+		}
+	}
+	return nullptr;
 }
 	
 Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, resolve::ExprRef dst) {
-    auto type = ((const PrimType*)dst.type)->type;
-    if(auto rtype = getUnaryOpType(op, type)) {
-        auto list = build<ExprList>(&dst);
-        return build<AppPExpr>(op, list, rtype);
-    } else return nullptr;
+	// The type is either a pointer or primitive.
+	if(dst.type->isPointer()) {
+		// Currently no unary operators are defined for pointers.
+		error("This built-in operator cannot be applied to pointer types");
+	} else {
+		auto type = ((const PrimType*)dst.type)->type;
+		if(auto rtype = getUnaryOpType(op, type)) {
+			auto list = build<ExprList>(&dst);
+			return build<AppPExpr>(op, list, rtype);
+		}
+	}
+	return nullptr;
 }
 	
 Variable* Resolver::resolveArgument(ScopeRef scope, Id arg) {
@@ -356,6 +418,39 @@ const Type* Resolver::getBinaryOpType(PrimitiveOp op, PrimitiveType lhs, Primiti
 	return nullptr;
 }
 
+const Type* Resolver::getPtrOpType(PrimitiveOp op, const PtrType* ptr, PrimitiveType prim) {
+	// Only addition and subtraction are defined.
+	if(prim < PrimitiveType::FirstFloat) {
+		if(op == PrimitiveOp::Add || op == PrimitiveOp::Sub) {
+			return ptr;
+		} else {
+			error("unsupported operation on pointer and integer type");
+		}
+	} else {
+		error("this primitive type cannot be applied to a pointer");
+	}
+
+	return nullptr;
+}
+
+const Type* Resolver::getPtrOpType(PrimitiveOp op, const PtrType* lhs, const PtrType* rhs) {
+	// Supported ptr-ptr operations: comparison and difference (for the same pointer types).
+	if(lhs == rhs) {
+		if(op >= PrimitiveOp::FirstCompare && op < PrimitiveOp::FirstUnary) {
+			return types.getBool();
+		} else if(op == PrimitiveOp::Sub) {
+			// TODO: Return int_ptr instead.
+			return types.getInt();
+		} else {
+			error("unsupported operation on two pointer types");
+		}
+	} else {
+		error("cannot apply operator on differing pointer types");
+	}
+
+	return nullptr;
+}
+
 const Type* Resolver::getUnaryOpType(PrimitiveOp op, PrimitiveType type) {
     if(op == PrimitiveOp::Neg) {
 		// Returns the same type.
@@ -375,6 +470,30 @@ const Type* Resolver::getUnaryOpType(PrimitiveOp op, PrimitiveType type) {
         DebugError("Not a unary operator or unsupported!");
     }
     return nullptr;
+}
+
+PrimitiveOp* Resolver::tryPrimitiveOp(ast::ExprRef callee) {
+	if(callee.isVar()) {
+		return primitiveMap.Get(((const ast::VarExpr&)callee).name);
+	} else {
+		return nullptr;
+	}
+}
+
+Function* Resolver::findFunction(ScopeRef scope, ast::ExprRef callee, ExprList* args) {
+	if(callee.isVar()) {
+		auto name = ((const ast::VarExpr&)callee).name;
+		if(auto fun = scope.findFun(name)) {
+			// TODO: Create closure type if the function takes more parameters.
+			return fun;
+		} else {
+			error("no function named '%@' found", context.Find(name).name);
+		}
+	} else {
+		error("not a callable type");
+	}
+
+	return nullptr;
 }
 
 nullptr_t Resolver::error(const char* text) {

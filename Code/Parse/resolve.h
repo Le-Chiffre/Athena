@@ -41,8 +41,17 @@ struct TypeManager {
         return type;
     }
 
+	TypeRef getPtr(TypeRef content) {
+		PtrType* type;
+		if(!ptrs.AddGet(content, type))
+			new (type) PtrType{content};
+
+		return type;
+	}
+
     Core::FixedArray<PrimType, (uint)PrimitiveType::TypeCount> prims;
-    Core::NumberMap<ArrayType, const Type*> arrays;
+    Core::NumberMap<ArrayType, TypeRef> arrays;
+	Core::NumberMap<PtrType, TypeRef> ptrs;
     const Type* stringType;
 	const Type unitType{Type::Unit};
 	const Type unknownType{Type::Unknown};
@@ -57,6 +66,8 @@ struct Resolver {
     Expr* resolveLiteral(Scope& scope, const ast::LitExpr& expr);
 	Expr* resolveInfix(Scope& scope, const ast::InfixExpr& expr);
 	Expr* resolvePrefix(Scope& scope, const ast::PrefixExpr& expr);
+	Expr* resolveBinaryCall(Scope& scope, ast::ExprRef function, ast::ExprRef lhs, ast::ExprRef rhs);
+	Expr* resolveUnaryCall(Scope& scope, ast::ExprRef function, ast::ExprRef dst);
 	Expr* resolveCall(Scope& scope, const ast::AppExpr& expr);
     Expr* resolveVar(Scope& scope, Id var);
     Expr* resolveIf(Scope& scope, const ast::IfExpr& expr);
@@ -75,7 +86,15 @@ struct Resolver {
 	Variable* resolveArgument(ScopeRef scope, Id arg);
 
     const Type* getBinaryOpType(PrimitiveOp, PrimitiveType, PrimitiveType);
+	const Type* getPtrOpType(PrimitiveOp, const PtrType*, PrimitiveType);
+	const Type* getPtrOpType(PrimitiveOp, const PtrType*, const PtrType*);
     const Type* getUnaryOpType(PrimitiveOp, PrimitiveType);
+
+	/// Checks if the provided callee expression can contain a primitive operator.
+	PrimitiveOp* tryPrimitiveOp(ast::ExprRef callee);
+
+	/// Tries to find a function from the provided expression that takes the provided parameters.
+	Function* findFunction(ScopeRef scope, ast::ExprRef, ExprList* args);
 
 	nullptr_t error(const char*);
 
