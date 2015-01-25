@@ -8,7 +8,7 @@ namespace ast {
 struct Printer {
 	Printer(CompileContext& context) : context(context) {}
 
-	String toString(ExprRef expr) {
+	String toString(const Expr& expr) {
 		switch(expr.type) {
 			case Expr::Multi: toString((const MultiExpr&)expr); break;
 			case Expr::Lit: toString((const LitExpr&)expr); break;
@@ -20,6 +20,7 @@ struct Printer {
 			case Expr::Decl: toString((const DeclExpr&)expr); break;
 			case Expr::While: toString((const WhileExpr&)expr); break;
 			case Expr::Assign: toString((const AssignExpr&)expr); break;
+			case Expr::Nested: toString((const NestedExpr&)expr); break;
 		}
 		return string;
 	}
@@ -118,7 +119,7 @@ private:
 	void toString(const AppExpr& e) {
 		string += "AppExpr ";
 		makeLevel();
-		toString(e.callee, false);
+		toString(*e.callee, false);
 		auto arg = e.args;
 		while(arg) {
 			if(arg->next) toString(*arg->item, false);
@@ -133,8 +134,8 @@ private:
 		auto name = context.Find(e.op).name;
 		string.Append(name.ptr, name.length);
 		makeLevel();
-		toString(e.lhs,  false);
-		toString(e.rhs, true);
+		toString(*e.lhs,  false);
+		toString(*e.rhs, true);
 		removeLevel();
 	}
 
@@ -143,19 +144,19 @@ private:
 		auto name = context.Find(e.op).name;
 		string.Append(name.ptr, name.length);
 		makeLevel();
-		toString(e.dst, true);
+		toString(*e.dst, true);
 		removeLevel();
 	}
 
 	void toString(const IfExpr& e) {
 		string += "IfExpr ";
 		makeLevel();
-		toString(e.cond, false);
+		toString(*e.cond, false);
 		if(e.otherwise) {
-			toString(e.then, false);
+			toString(*e.then, false);
 			toString(*e.otherwise, true);
 		} else {
-			toString(e.then, true);
+			toString(*e.then, true);
 		}
 		removeLevel();
 	}
@@ -166,23 +167,30 @@ private:
 		string.Append(name.ptr, name.length);
 		if(e.constant) string += " <const> ";
 		makeLevel();
-		toString(e.content, true);
+		toString(*e.content, true);
 		removeLevel();
 	}
 
 	void toString(const WhileExpr& e) {
 		string += "WhileExpr";
 		makeLevel();
-		toString(e.cond, false);
-		toString(e.loop, true);
+		toString(*e.cond, false);
+		toString(*e.loop, true);
 		removeLevel();
 	}
 
 	void toString(const AssignExpr& e) {
 		string += "AssignExpr ";
 		makeLevel();
-		toString(e.target, false);
-		toString(e.value, true);
+		toString(*e.target, false);
+		toString(*e.value, true);
+		removeLevel();
+	}
+
+	void toString(const NestedExpr& e) {
+		string += "NestedExpr ";
+		makeLevel();
+		toString(*e.expr, true);
 		removeLevel();
 	}
 
@@ -201,7 +209,7 @@ private:
 		string += ')';
 
 		makeLevel();
-		toString(e.body, true);
+		toString(*e.body, true);
 		removeLevel();
 	}
 
@@ -211,7 +219,7 @@ private:
 		string.Append(indentStack, indentStart);
 	}
 
-	void toString(ExprRef expr, bool last) {
+	void toString(const Expr& expr, bool last) {
 		toStringIntro(last);
 		toString(expr);
 	}
@@ -228,7 +236,7 @@ private:
 	Core::String string;
 };
 
-String toString(ExprRef e, CompileContext& c) {
+String toString(const Expr& e, CompileContext& c) {
 	Printer p{c};
 	return p.toString(e);
 }

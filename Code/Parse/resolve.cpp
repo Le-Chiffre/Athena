@@ -120,26 +120,28 @@ bool Resolver::resolveFunction(Function& fun, ast::FunDecl& decl) {
 }
 
 Expr* Resolver::resolveExpression(Scope& scope, ast::ExprRef expr) {
-	switch(expr.type) {
+	switch(expr->type) {
         case ast::Expr::Lit:
-            return resolveLiteral(scope, (const ast::LitExpr&)expr);
+            return resolveLiteral(scope, *(ast::LitExpr*)expr);
 		case ast::Expr::Infix:
-			return resolveInfix(scope, (const ast::InfixExpr&)expr);
+			return resolveInfix(scope, *(ast::InfixExpr*)expr);
 		case ast::Expr::Prefix:
-			return resolvePrefix(scope, (const ast::PrefixExpr&)expr);
+			return resolvePrefix(scope, *(ast::PrefixExpr*)expr);
 		case ast::Expr::App:
-			return resolveCall(scope, (const ast::AppExpr&)expr);
+			return resolveCall(scope, *(ast::AppExpr*)expr);
         case ast::Expr::Var:
             // This can be either a variable or a function call without parameters.
-            return resolveVar(scope, ((const ast::VarExpr&)expr).name);
+            return resolveVar(scope, ((ast::VarExpr*)expr)->name);
         case ast::Expr::If:
-            return resolveIf(scope, (const ast::IfExpr&)expr);
+            return resolveIf(scope, *(ast::IfExpr*)expr);
 		case ast::Expr::Decl:
-			return resolveDecl(scope, (const ast::DeclExpr&)expr);
+			return resolveDecl(scope, *(ast::DeclExpr*)expr);
 		case ast::Expr::Assign:
-			return resolveAssign(scope, (const ast::AssignExpr&)expr);
+			return resolveAssign(scope, *(ast::AssignExpr*)expr);
 		case ast::Expr::While:
-			return resolveWhile(scope, (const ast::WhileExpr&)expr);
+			return resolveWhile(scope, *(ast::WhileExpr*)expr);
+		case ast::Expr::Nested:
+			return resolveExpression(scope, ((ast::NestedExpr*)expr)->expr);
 		default:
 			FatalError("Unsupported expression type.");
 	}
@@ -147,19 +149,19 @@ Expr* Resolver::resolveExpression(Scope& scope, ast::ExprRef expr) {
 	return nullptr;
 }
 
-Expr* Resolver::resolveLiteral(Scope& scope, const ast::LitExpr& expr) {
+Expr* Resolver::resolveLiteral(Scope& scope, ast::LitExpr& expr) {
     return build<LitExpr>(expr.literal, getLiteralType(types, expr.literal));
 }
 
-Expr* Resolver::resolveInfix(Scope& scope, const ast::InfixExpr& expr) {
-	// TODO: Reorder based on precedence.
-	ast::VarExpr var(expr.op);
-	return resolveBinaryCall(scope, var, expr.lhs, expr.rhs);
+Expr* Resolver::resolveInfix(Scope& scope, ast::InfixExpr& expr) {
+	auto& e = reorder(expr);
+	ast::VarExpr var(e.op);
+	return resolveBinaryCall(scope, &var, e.lhs, e.rhs);
 }
 
-Expr* Resolver::resolvePrefix(Scope& scope, const ast::PrefixExpr& expr) {
+Expr* Resolver::resolvePrefix(Scope& scope, ast::PrefixExpr& expr) {
 	ast::VarExpr var(expr.op);
-	return resolveUnaryCall(scope, var, expr.dst);
+	return resolveUnaryCall(scope, &var, expr.dst);
 }
 
 Expr* Resolver::resolveBinaryCall(Scope& scope, ast::ExprRef function, ast::ExprRef lhs, ast::ExprRef rhs) {
@@ -209,17 +211,17 @@ Expr* Resolver::resolveUnaryCall(Scope& scope, ast::ExprRef function, ast::ExprR
 	}
 }
 	
-Expr* Resolver::resolveCall(Scope& scope, const ast::AppExpr& expr) {
+Expr* Resolver::resolveCall(Scope& scope, ast::AppExpr& expr) {
 	// Special case for calls with one or two parameters - these can map to builtin operations.
 	if(auto lhs = expr.args) {
 		if(auto rhs = expr.args->next) {
 			if(!rhs->next) {
 				// Two arguments.
-				resolveBinaryCall(scope, expr.callee, *lhs->item, *rhs->item);
+				resolveBinaryCall(scope, expr.callee, lhs->item, rhs->item);
 			}
 		} else {
 			// Single argument.
-			resolveUnaryCall(scope, expr.callee, *lhs->item);
+			resolveUnaryCall(scope, expr.callee, lhs->item);
 		}
 	}
 
@@ -227,11 +229,11 @@ Expr* Resolver::resolveCall(Scope& scope, const ast::AppExpr& expr) {
 	ExprList* args = nullptr;
 	if(expr.args) {
 		auto arg = expr.args;
-		args = build<ExprList>(resolveExpression(scope, *arg->item));
+		args = build<ExprList>(resolveExpression(scope, arg->item));
 		auto a = args;
 		arg = arg->next;
 		while(arg) {
-			a->next = build<ExprList>(resolveExpression(scope, *arg->item));
+			a->next = build<ExprList>(resolveExpression(scope, arg->item));
 			a = a->next;
 			arg = arg->next;
 		}
@@ -267,10 +269,10 @@ Expr* Resolver::resolveVar(Scope& scope, Id name) {
     }
 }
 
-Expr* Resolver::resolveIf(Scope& scope, const ast::IfExpr& expr) {
+Expr* Resolver::resolveIf(Scope& scope, ast::IfExpr& expr) {
 	auto cond = *resolveExpression(scope, expr.cond);
 	auto then = *resolveExpression(scope, expr.then);
-    auto otherwise = expr.otherwise ? resolveExpression(scope, *expr.otherwise) : nullptr;
+    auto otherwise = expr.otherwise ? resolveExpression(scope, expr.otherwise) : nullptr;
 	bool useResult = false;
 
 	// Find the type of the expression.
@@ -295,7 +297,7 @@ Expr* Resolver::resolveIf(Scope& scope, const ast::IfExpr& expr) {
     return build<IfExpr>(cond, then, otherwise, type, useResult);
 }
 
-Expr* Resolver::resolveDecl(Scope& scope, const ast::DeclExpr& expr) {
+Expr* Resolver::resolveDecl(Scope& scope, ast::DeclExpr& expr) {
 	auto content = resolveExpression(scope, expr.content);
 
 	// Make sure this scope doesn't already have a variable with the same name.
@@ -312,7 +314,7 @@ Expr* Resolver::resolveDecl(Scope& scope, const ast::DeclExpr& expr) {
 	return build<AssignExpr>(*var, *content);
 }
 
-Expr* Resolver::resolveAssign(Scope& scope, const ast::AssignExpr& expr) {
+Expr* Resolver::resolveAssign(Scope& scope, ast::AssignExpr& expr) {
 	// Make sure the type can be assigned to.
 	auto target = resolveExpression(scope, expr.target);
 	if(target->kind == Expr::Var) {
@@ -331,7 +333,7 @@ Expr* Resolver::resolveAssign(Scope& scope, const ast::AssignExpr& expr) {
 	return nullptr;
 }
 
-Expr* Resolver::resolveWhile(Scope& scope, const ast::WhileExpr& expr) {
+Expr* Resolver::resolveWhile(Scope& scope, ast::WhileExpr& expr) {
 	auto cond = resolveExpression(scope, expr.cond);
     if(cond->type == types.getBool()) {
         auto loop = resolveExpression(scope, expr.loop);
@@ -473,7 +475,7 @@ const Type* Resolver::getUnaryOpType(PrimitiveOp op, PrimitiveType type) {
 }
 
 PrimitiveOp* Resolver::tryPrimitiveOp(ast::ExprRef callee) {
-	if(callee.isVar()) {
+	if(callee->isVar()) {
 		return primitiveMap.Get(((const ast::VarExpr&)callee).name);
 	} else {
 		return nullptr;
@@ -481,7 +483,7 @@ PrimitiveOp* Resolver::tryPrimitiveOp(ast::ExprRef callee) {
 }
 
 Function* Resolver::findFunction(ScopeRef scope, ast::ExprRef callee, ExprList* args) {
-	if(callee.isVar()) {
+	if(callee->isVar()) {
 		auto name = ((const ast::VarExpr&)callee).name;
 		if(auto fun = scope.findFun(name)) {
 			// TODO: Create closure type if the function takes more parameters.
@@ -494,6 +496,33 @@ Function* Resolver::findFunction(ScopeRef scope, ast::ExprRef callee, ExprList* 
 	}
 
 	return nullptr;
+}
+
+ast::InfixExpr& Resolver::reorder(ast::InfixExpr& expr) {
+	auto e = &expr;
+	auto res = e;
+	uint lowest = context.FindOp(e->op).precedence;
+
+	while(e->rhs->isInfix()) {
+		auto rhs = (ast::InfixExpr*)e->rhs;
+		auto first = context.FindOp(e->op);
+		auto second = context.FindOp(rhs->op);
+
+		// Reorder if needed.
+		if(first.precedence > second.precedence ||
+		  (first.precedence == second.precedence &&
+		  (first.associativity == ast::Assoc::Left || second.associativity == ast::Assoc::Left))) {
+			e->rhs = rhs->lhs;
+			rhs->lhs = e;
+			if(second.precedence < lowest) {
+				res = rhs;
+				lowest = second.precedence;
+			}
+		}
+
+		e = rhs;
+	}
+	return *res;
 }
 
 nullptr_t Resolver::error(const char* text) {

@@ -63,17 +63,17 @@ struct Resolver {
 	Module* resolve();
 	bool resolveFunction(Function& fun, ast::FunDecl& decl);
 	Expr* resolveExpression(Scope& scope, ast::ExprRef expr);
-    Expr* resolveLiteral(Scope& scope, const ast::LitExpr& expr);
-	Expr* resolveInfix(Scope& scope, const ast::InfixExpr& expr);
-	Expr* resolvePrefix(Scope& scope, const ast::PrefixExpr& expr);
+    Expr* resolveLiteral(Scope& scope, ast::LitExpr& expr);
+	Expr* resolveInfix(Scope& scope, ast::InfixExpr& expr);
+	Expr* resolvePrefix(Scope& scope, ast::PrefixExpr& expr);
 	Expr* resolveBinaryCall(Scope& scope, ast::ExprRef function, ast::ExprRef lhs, ast::ExprRef rhs);
 	Expr* resolveUnaryCall(Scope& scope, ast::ExprRef function, ast::ExprRef dst);
-	Expr* resolveCall(Scope& scope, const ast::AppExpr& expr);
+	Expr* resolveCall(Scope& scope, ast::AppExpr& expr);
     Expr* resolveVar(Scope& scope, Id var);
-    Expr* resolveIf(Scope& scope, const ast::IfExpr& expr);
-	Expr* resolveDecl(Scope& scope, const ast::DeclExpr& expr);
-	Expr* resolveAssign(Scope& scope, const ast::AssignExpr& expr);
-	Expr* resolveWhile(Scope& scope, const ast::WhileExpr& expr);
+    Expr* resolveIf(Scope& scope, ast::IfExpr& expr);
+	Expr* resolveDecl(Scope& scope, ast::DeclExpr& expr);
+	Expr* resolveAssign(Scope& scope, ast::AssignExpr& expr);
+	Expr* resolveWhile(Scope& scope, ast::WhileExpr& expr);
 
     /// Resolves a binary operation on two primitive types.
     /// *lhs* and *rhs* must be primitives.
@@ -95,6 +95,9 @@ struct Resolver {
 
 	/// Tries to find a function from the provided expression that takes the provided parameters.
 	Function* findFunction(ScopeRef scope, ast::ExprRef, ExprList* args);
+
+	/// Reorders the provided chain of infix operators according to the operator precedence table.
+	ast::InfixExpr& reorder(ast::InfixExpr& expr);
 
 	nullptr_t error(const char*);
 

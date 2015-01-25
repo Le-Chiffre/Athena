@@ -249,7 +249,7 @@ struct Expr {
 };
 
 typedef const Expr& ExprRef;
-typedef ast::ASTList<Expr*> ExprList;
+typedef ast::ASTList<const Expr*> ExprList;
 
 struct LitExpr : Expr {
 	LitExpr(Literal lit, TypeRef type) : Expr(Lit, type), literal(lit) {}

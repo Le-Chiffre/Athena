@@ -75,7 +75,7 @@ void Parser::parseDecl() {
 
 				// Parse the function body.
 				if(auto expr = parseExpr()) {
-					module.declarations += build<FunDecl>(var(), *expr, args);
+					module.declarations += build<FunDecl>(var(), expr, args);
 				} else {
 					error("Expected a function body expression.");
 				}
@@ -87,7 +87,7 @@ void Parser::parseDecl() {
 
 			// Parse the function body.
 			if(auto expr = parseExpr()) {
-				module.declarations += build<FunDecl>(var(), *expr);
+				module.declarations += build<FunDecl>(var(), expr);
 			} else {
 				error("Expected a function body expression.");
 			}
@@ -150,7 +150,7 @@ Expr* Parser::parseInfixExpr() {
 		auto op = token.data.id;
 		eat();
 		if(auto expr = parseInfixExpr()) {
-			return build<PrefixExpr>(op, *expr);
+			return build<PrefixExpr>(op, expr);
 		} else {
 			return (Expr*)error("Expected expression after a prefix operator.");
 		}
@@ -161,7 +161,7 @@ Expr* Parser::parseInfixExpr() {
 		if(auto op = tryParse(&Parser::parseQop)) {
 			// Binary operator.
 			if(auto rhs = parseInfixExpr()) {
-				return build<InfixExpr>(op(), *lhs, *rhs);
+				return build<InfixExpr>(op(), lhs, rhs);
 			} else {
 				return (Expr*)error("Expected a right-hand side for a binary operator.");
 			}
@@ -222,7 +222,7 @@ Expr* Parser::parseLeftExpr() {
 						otherwise = parseExpr();
 					}
 
-					return build<IfExpr>(*cond, *then, otherwise);
+					return build<IfExpr>(cond, then, otherwise);
 				}
 			} else {
 				error("Expected 'then' after if-expression.");
@@ -236,7 +236,7 @@ Expr* Parser::parseLeftExpr() {
 			if(token == Token::kwIn) {
 				eat();
 				if(auto loop = parseExpr()) {
-					return build<WhileExpr>(*cond, *loop);
+					return build<WhileExpr>(cond, loop);
 				} else {
 					error("Expected expression after 'in'");
 				}
@@ -251,7 +251,7 @@ Expr* Parser::parseLeftExpr() {
 			if(token == Token::opEquals) {
 				eat();
 				if(auto value = parseInfixExpr()) {
-					return build<AssignExpr>(*expr, *value);
+					return build<AssignExpr>(expr, value);
 				} else {
 					error("Expected an expression after assignment.");
 				}
@@ -280,7 +280,7 @@ Expr* Parser::parseCallExpr() {
 				p = l;
 			}
 
-			return build<AppExpr>(*callee, list);
+			return build<AppExpr>(callee, list);
 		} else {
 			return callee;
 		}
@@ -302,7 +302,8 @@ Expr* Parser::parseAppExpr() {
 		if(auto exp = parseExpr()) {
 			if(token == Token::ParenR) {
 				eat();
-				return exp;
+				// Parenthesized expressions have a separate type to preserve ordering constraints.
+				return build<NestedExpr>(exp);
 			} else {
 				return (Expr*)error("Expected ')' after '(' and an expression.");
 			}
@@ -375,7 +376,7 @@ Expr* Parser::parseDeclExpr(bool constant) {
 		if(token == Token::opEquals) {
 			eat();
 			if(auto expr = parseInfixExpr()) {
-				return build<DeclExpr>(id, *expr, constant);
+				return build<DeclExpr>(id, expr, constant);
 			} else {
 				error("Expected expression.");
 			}

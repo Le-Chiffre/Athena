@@ -75,8 +75,10 @@ struct CompileContext {
 	 */
 	OpProperties FindOp(ID op) {
 		auto res = mOPs.Get(op);
-		ASSERT(res != nullptr);
-		return *res;
+		if(res)
+			return *res;
+		else
+			return {9, Assoc::Left};
 	}
 
 	OpProperties* TryFindOp(ID op) {

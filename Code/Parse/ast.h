@@ -15,7 +15,7 @@ template<class T>
 struct ASTList
 {
 	ASTList<T>* next = nullptr;
-	const T item;
+	T item;
 
 	ASTList(const T& i) : item(i) {}
 	ASTList(const T& i, ASTList<T>* n) : item(i), next(n) {}
@@ -36,10 +36,10 @@ template<class T>
 struct ASTList<T*>
 {
 	ASTList<T*>* next = nullptr;
-	const T* item;
+	T* item;
 
-	ASTList(const T* i) : item(i) {}
-	ASTList(const T* i, ASTList<T*>* n) : next(n), item(i) {}
+	ASTList(T* i) : item(i) {}
+	ASTList(T* i, ASTList<T*>* n) : next(n), item(i) {}
 
 	struct It {
 		const ASTList<T*>* curr;
@@ -85,6 +85,12 @@ struct Literal {
     Type type;
 };
 
+struct Type {
+	enum Kind {
+
+	};
+};
+
 struct Expr {
 	enum Type {
 		Multi,
@@ -96,18 +102,28 @@ struct Expr {
         If,
 		Decl,
 		While,
-		Assign
+		Assign,
+		Nested
 	} type;
 
 	Expr(Type t) : type(t) {}
+	bool isVar() const {return type == Var;}
+	bool isInfix() const {return type == Infix;}
 };
 
-typedef const Expr& ExprRef;
+typedef Expr* ExprRef;
 typedef ASTList<Expr*> ExprList;
 
 struct MultiExpr : Expr {
 	MultiExpr(ExprList* exprs) : Expr(Multi), exprs(exprs) {}
 	ExprList* exprs;
+};
+
+// This is used to represent parenthesized expressions.
+// We need to keep all ordering information for the reordering pass later.
+struct NestedExpr : Expr {
+	NestedExpr(ExprRef expr) : Expr(Nested), expr(expr) {}
+	ExprRef expr;
 };
 
 struct LitExpr : Expr {
@@ -139,10 +155,10 @@ struct PrefixExpr : Expr {
 };
 
 struct IfExpr : Expr {
-    IfExpr(ExprRef cond, ExprRef then, const Expr* otherwise) : Expr(If), cond(cond), then(then), otherwise(otherwise) {}
+    IfExpr(ExprRef cond, ExprRef then, Expr* otherwise) : Expr(If), cond(cond), then(then), otherwise(otherwise) {}
     ExprRef cond;
     ExprRef then;
-    const Expr* otherwise;
+    Expr* otherwise;
 };
 
 struct DeclExpr : Expr {
