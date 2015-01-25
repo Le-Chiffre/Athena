@@ -79,12 +79,19 @@ llvm::Value* Generator::genCall(resolve::Function& function, resolve::ExprList* 
 llvm::Value* Generator::genPrimitiveCall(resolve::PrimitiveOp op, resolve::ExprList* args) {
 	if(resolve::isBinary(op)) {
 		ASSERT(args && args->next && !args->next->next);
-		return genBinaryOp(
-				op,
-				genExpr(*args->item),
-				genExpr(*args->next->item),
-				*(const resolve::PrimType*)args->item->type,
-				*(const resolve::PrimType*)args->next->item->type);
+		auto lhs = args->item;
+		auto rhs = args->next->item;
+		auto le = genExpr(*lhs);
+		auto re = genExpr(*rhs);
+		if(lhs->type->isPointer()) {
+			if(rhs->type->isPointer()) {
+				return genPtrOp(op, le, re, *(const resolve::PtrType*)lhs->type);
+			} else {
+				return genPtrOp(op, le, re, *(const resolve::PtrType*)lhs->type, *(const resolve::PrimType*)rhs->type);
+			}
+		} else {
+			return genBinaryOp(op, le, re, *(const resolve::PrimType*)lhs->type, *(const resolve::PrimType*)rhs->type);
+		}
 	} else if(resolve::isUnary(op)) {
 		ASSERT(args && !args->next);
 		return genUnaryOp(op, *(const resolve::PrimType*)args->item->type, genExpr(*args->item));
@@ -194,6 +201,36 @@ llvm::Value* Generator::genBinaryOp(resolve::PrimitiveOp op, llvm::Value* lhs, l
 
 	FatalError("Unsupported primitive operator provided.");
 	return nullptr;
+}
+
+llvm::Value* Generator::genPtrOp(resolve::PrimitiveOp op, llvm::Value* lhs, llvm::Value* rhs, resolve::PtrType type) {
+	ASSERT(op == resolve::PrimitiveOp::Sub || (op >= resolve::PrimitiveOp::FirstCompare && op < resolve::PrimitiveOp::FirstUnary));
+	switch(op) {
+		case resolve::PrimitiveOp::Sub:
+			return builder.CreatePtrDiff(lhs, rhs);
+		case resolve::PrimitiveOp::CmpEq:
+			return builder.CreateICmpEQ(lhs, rhs);
+		case resolve::PrimitiveOp::CmpNeq:
+			return builder.CreateICmpNE(lhs, rhs);
+		case resolve::PrimitiveOp::CmpGt:
+			return builder.CreateICmpUGT(lhs, rhs);
+		case resolve::PrimitiveOp::CmpLt:
+			return builder.CreateICmpULT(lhs, rhs);
+		case resolve::PrimitiveOp::CmpGe:
+			return builder.CreateICmpUGE(lhs, rhs);
+		case resolve::PrimitiveOp::CmpLe:
+			return builder.CreateICmpULE(lhs, rhs);
+		default: ;
+	}
+	return nullptr;
+}
+
+llvm::Value* Generator::genPtrOp(resolve::PrimitiveOp op, llvm::Value* lhs, llvm::Value* rhs, resolve::PtrType lt, resolve::PrimType rt) {
+	ASSERT(op == resolve::PrimitiveOp::Sub || op == resolve::PrimitiveOp::Add);
+	if(op == resolve::PrimitiveOp::Sub) {
+		rhs = builder.CreateNeg(rhs);
+	}
+	return builder.CreateGEP(lhs, rhs);
 }
 
 llvm::Value* Generator::genCase(resolve::CaseExpr& casee) {

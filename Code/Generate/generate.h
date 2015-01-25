@@ -25,6 +25,8 @@ struct Generator {
 	llvm::Value* genPrimitiveCall(resolve::PrimitiveOp op, resolve::ExprList* args);
 	llvm::Value* genUnaryOp(resolve::PrimitiveOp op, resolve::PrimType type, llvm::Value* in);
 	llvm::Value* genBinaryOp(resolve::PrimitiveOp op, llvm::Value* lhs, llvm::Value* rhs, resolve::PrimType lt, resolve::PrimType rt);
+	llvm::Value* genPtrOp(resolve::PrimitiveOp op, llvm::Value* lhs, llvm::Value* rhs, resolve::PtrType type);
+	llvm::Value* genPtrOp(resolve::PrimitiveOp op, llvm::Value* lhs, llvm::Value* rhs, resolve::PtrType lt, resolve::PrimType rt);
     llvm::Value* genCase(resolve::CaseExpr& casee);
 	llvm::Value* genIf(resolve::IfExpr& ife);
 
