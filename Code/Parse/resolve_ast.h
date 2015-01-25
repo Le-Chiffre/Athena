@@ -313,9 +313,8 @@ struct AssignExpr : Expr {
 };
 
 struct CoerceExpr : Expr {
-	CoerceExpr(ExprRef src, TypeRef dst) : Expr(Coerce, dst), src(src), dst(dst) {}
+	CoerceExpr(ExprRef src, TypeRef dst) : Expr(Coerce, dst), src(src) {}
 	ExprRef src;
-	TypeRef dst;
 };
 
 struct Module {

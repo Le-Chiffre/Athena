@@ -29,6 +29,7 @@ struct Generator {
 	llvm::Value* genPtrOp(resolve::PrimitiveOp op, llvm::Value* lhs, llvm::Value* rhs, resolve::PtrType lt, resolve::PrimType rt);
     llvm::Value* genCase(resolve::CaseExpr& casee);
 	llvm::Value* genIf(resolve::IfExpr& ife);
+	llvm::Value* genCoerce(resolve::CoerceExpr& coerce);
 
 	llvm::Function* getFunction() {
 		return builder.GetInsertBlock()->getParent();

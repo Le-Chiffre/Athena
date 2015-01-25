@@ -51,6 +51,8 @@ Value* Generator::genExpr(resolve::ExprRef expr) {
             return genCase((resolve::CaseExpr&)expr);
 		case resolve::Expr::If:
 			return genIf((resolve::IfExpr&)expr);
+		case resolve::Expr::Coerce:
+			return genCoerce((resolve::CoerceExpr&)expr);
         default:
             FatalError("Unsupported expression type.");
             return nullptr;
@@ -276,8 +278,85 @@ llvm::Value* Generator::genIf(resolve::IfExpr& ife) {
 		phi->addIncoming(elseValue, elseBlock);
 		return phi;
 	} else {
+		// TODO: Return some kind of empty value.
 		return nullptr;
 	}
+}
+
+llvm::Value* Generator::genCoerce(resolve::CoerceExpr& coerce) {
+	auto src = coerce.src.type;
+	auto dst = coerce.type;
+	auto llSrc = getType(src);
+	auto llDst = getType(dst);
+	auto expr = genExpr(coerce.src);
+
+	if(src == dst) return expr;
+
+	if(src->isPointer() && dst->isPointer()) {
+		// Pointer typecast.
+		return builder.CreateBitCast(expr, llDst);
+	} else if(dst->isPrimitive()) {
+		auto d_typ = ((const resolve::PrimType*)coerce.type)->type;
+
+		if(src->isPointer()) {
+			// Pointer to integer conversion.
+			ASSERT(d_typ < resolve::PrimitiveType::FirstFloat);
+			return builder.CreatePtrToInt(expr, llDst);
+		}
+
+		if(src->isPrimitive()) {
+			// Primitive to primitive conversion.
+			auto s_typ = ((const resolve::PrimType*)coerce.src.type)->type;
+			if(d_typ < resolve::PrimitiveType::FirstFloat) {
+				if(s_typ < resolve::PrimitiveType::FirstFloat)
+					// Integer-to-integer cast.
+					return builder.CreateIntCast(expr, llDst, s_typ < resolve::PrimitiveType::FirstUnsigned);
+
+				if(s_typ < resolve::PrimitiveType::FirstOther) {
+					// Float-to-integer cast.
+					if(d_typ < resolve::PrimitiveType::FirstUnsigned) {
+						return builder.CreateFPToSI(expr, llDst);
+					} else {
+						return builder.CreateFPToUI(expr, llDst);
+					}
+				}
+
+				if(s_typ == resolve::PrimitiveType::Bool) {
+					// Bool-to-integer cast.
+					return builder.CreateZExt(expr, llDst);
+				}
+			} else if(d_typ < resolve::PrimitiveType::FirstOther) {
+				if(s_typ < resolve::PrimitiveType::FirstUnsigned) {
+					// Signed-to-float cast.
+					return builder.CreateSIToFP(expr, llDst);
+				} else if(s_typ < resolve::PrimitiveType::FirstFloat) {
+					// Unsigned-to-float cast.
+					return builder.CreateUIToFP(expr, llDst);
+				} else if(s_typ < resolve::PrimitiveType::FirstOther) {
+					// Float-to-float cast.
+					return builder.CreateFPCast(expr, llDst);
+				} else {
+					// Bool-to-float cast.
+					return builder.CreateSelect(expr, ConstantFP::get(llSrc, 1.f), ConstantFP::get(context, APFloat(0.f)));
+				}
+			} else if(d_typ == resolve::PrimitiveType::Bool) {
+				if(s_typ < resolve::PrimitiveType::FirstFloat) {
+					// Integer-to-Bool cast.
+					return builder.CreateICmpNE(expr, ConstantInt::get(llSrc, 0));
+				} else if(s_typ < resolve::PrimitiveType::FirstOther) {
+					// Float-to-Bool cast.
+					return builder.CreateFCmpONE(expr, ConstantFP::get(llSrc, 0.f));
+				}
+			}
+		}
+	} else if(dst->isPointer()) {
+		// Integer to pointer conversion.
+		auto s_typ = ((const resolve::PrimType*)coerce.src.type)->type;
+		ASSERT(s_typ < resolve::PrimitiveType::FirstFloat);
+	}
+
+	FatalError("Invalid coercion between types.");
+	return nullptr;
 }
 
 llvm::Type* Generator::genLlvmType(resolve::TypeRef type) {
@@ -301,6 +380,9 @@ llvm::Type* Generator::genLlvmType(resolve::TypeRef type) {
 			case resolve::PrimitiveType::Bool: return builder.getInt1Ty();
 			default: FatalError("Unsupported primitive type."); return nullptr;
 		}
+	} else if(type->isPointer()) {
+		auto llType = getType(((const resolve::PtrType*)type)->type);
+		return PointerType::getUnqual(llType);
 	}
 
 	FatalError("Unsupported type.");
