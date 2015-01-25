@@ -241,7 +241,8 @@ struct Expr {
 		If,
 		Decl,
 		While,
-		Assign
+		Assign,
+		Coerce
 	} kind;
 
 	TypeRef type;
@@ -309,6 +310,12 @@ struct AssignExpr : Expr {
 	AssignExpr(Variable& var, ExprRef val) : Expr(Assign, var.type), var(var), val(val) {}
 	Variable& var;
 	ExprRef val;
+};
+
+struct CoerceExpr : Expr {
+	CoerceExpr(ExprRef src, TypeRef dst) : Expr(Coerce, dst), src(src), dst(dst) {}
+	ExprRef src;
+	TypeRef dst;
 };
 
 struct Module {

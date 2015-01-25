@@ -21,6 +21,7 @@ struct Printer {
 			case Expr::While: toString((const WhileExpr&)expr); break;
 			case Expr::Assign: toString((const AssignExpr&)expr); break;
 			case Expr::Nested: toString((const NestedExpr&)expr); break;
+			case Expr::Coerce: toString((const CoerceExpr&)expr); break;
 		}
 		return string;
 	}
@@ -194,6 +195,16 @@ private:
 		removeLevel();
 	}
 
+	void toString(const CoerceExpr& e) {
+		string += "CoerceExpr ";
+		string += '(';
+		toString(e.kind);
+		string += ')';
+		makeLevel();
+		toString(*e.target, true);
+		removeLevel();
+	}
+
 	void toString(const FunDecl& e) {
 		string += "FunDecl ";
 		auto name = context.Find(e.name).name;
@@ -227,6 +238,10 @@ private:
 	void toString(DeclRef decl, bool last) {
 		toStringIntro(last);
 		toString(decl);
+	}
+
+	void toString(TypeRef type) {
+
 	}
 
 	char indentStack[1024];

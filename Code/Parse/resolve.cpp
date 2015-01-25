@@ -1,3 +1,4 @@
+#include <msxml.h>
 #include "resolve.h"
 
 namespace athena {
@@ -142,6 +143,8 @@ Expr* Resolver::resolveExpression(Scope& scope, ast::ExprRef expr) {
 			return resolveWhile(scope, *(ast::WhileExpr*)expr);
 		case ast::Expr::Nested:
 			return resolveExpression(scope, ((ast::NestedExpr*)expr)->expr);
+		case ast::Expr::Coerce:
+			return resolveCoerce(scope, *(ast::CoerceExpr*)expr);
 		default:
 			FatalError("Unsupported expression type.");
 	}
@@ -319,13 +322,19 @@ Expr* Resolver::resolveAssign(Scope& scope, ast::AssignExpr& expr) {
 	auto target = resolveExpression(scope, expr.target);
 	if(target->kind == Expr::Var) {
 		auto value = resolveExpression(scope, expr.value);
-		if(typeCheck.compatible(*target, *value)) {
-			return build<AssignExpr>(*((VarExpr*)target)->var, *value);
-		} else {
-			error("assigning to '' from incompatible type ''");
-			//TODO: Implement Type printing.
-			//error("assigning to '%@' from incompatible type '%@'", target->type, value->type);
+
+		// Perform an implicit conversion if needed.
+		if(target->type != value->type) {
+			value = implicitCoerce(*value, target->type);
+			if(!value) {
+				error("assigning to '' from incompatible type ''");
+				//TODO: Implement Type printing.
+				//error("assigning to '%@' from incompatible type '%@'", target->type, value->type);
+				return nullptr;
+			}
 		}
+
+		return build<AssignExpr>(*((VarExpr*)target)->var, *value);
 	} else {
 		error("expression is not assignable");
 	}
@@ -342,6 +351,10 @@ Expr* Resolver::resolveWhile(Scope& scope, ast::WhileExpr& expr) {
         error("while loop condition must resolve to boolean type");
         return nullptr;
     }
+}
+
+Expr* Resolver::resolveCoerce(Scope& scope, ast::CoerceExpr& expr) {
+	return implicitCoerce(*resolveExpression(scope, expr.target), resolveType(scope, expr.kind));
 }
 
 Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, resolve::ExprRef lhs, resolve::ExprRef rhs) {
@@ -391,6 +404,10 @@ Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, resolve::ExprRe
 	
 Variable* Resolver::resolveArgument(ScopeRef scope, Id arg) {
 	return build<Variable>(arg, types.getUnknown(), scope, true);
+}
+
+TypeRef Resolver::resolveType(ScopeRef scope, ast::TypeRef type) {
+	return nullptr;
 }
 
 const Type* Resolver::getBinaryOpType(PrimitiveOp op, PrimitiveType lhs, PrimitiveType rhs) {
@@ -480,6 +497,40 @@ PrimitiveOp* Resolver::tryPrimitiveOp(ast::ExprRef callee) {
 	} else {
 		return nullptr;
 	}
+}
+
+CoerceExpr* Resolver::implicitCoerce(ExprRef src, TypeRef dst) {
+	// Only primitive types can be implicitly converted:
+	//  - floating point types can be converted to a larger type.
+	//  - integer types can be converted to a larger type.
+	//  - pointer types can be converted to Bool.
+	//  - Bool can be converted to an integer type.
+	// Special case: literals can be converted into any type of the same category.
+	if(src.type->isPrimitive() && dst->isPrimitive()) {
+		auto s = ((PrimType*)src.type)->type;
+		auto d = ((PrimType*)dst)->type;
+		if(category(s) == category(d) && (src.kind == Expr::Lit || d >= s)) {
+			return build<CoerceExpr>(src, dst);
+		} else {
+			error("a primitive type can only be implicitly converted to a larger type");
+		}
+	} else if(src.type->isPointer()) {
+		if(dst->isBool()) {
+			return build<CoerceExpr>(src, dst);
+		} else {
+			error("pointer types can only be implicitly converted to Bool");
+		}
+	} else if(src.type->isBool() && dst->isPrimitive()) {
+		if(((PrimType*)dst)->type < PrimitiveType::FirstFloat) {
+			return build<CoerceExpr>(src, dst);
+		} else {
+			error("booleans can only be implicitly converted to integer types");
+		}
+	} else {
+		error("only primitive types or pointers can be implicitly converted");
+	}
+
+	return nullptr;
 }
 
 Function* Resolver::findFunction(ScopeRef scope, ast::ExprRef callee, ExprList* args) {

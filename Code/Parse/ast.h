@@ -91,6 +91,8 @@ struct Type {
 	};
 };
 
+typedef const Type* TypeRef;
+
 struct Expr {
 	enum Type {
 		Multi,
@@ -103,7 +105,8 @@ struct Expr {
 		Decl,
 		While,
 		Assign,
-		Nested
+		Nested,
+		Coerce
 	} type;
 
 	Expr(Type t) : type(t) {}
@@ -178,6 +181,12 @@ struct AssignExpr : Expr {
 	AssignExpr(ExprRef target, ExprRef value) : Expr(Assign), target(target), value(value) {}
 	ExprRef target;
 	ExprRef value;
+};
+
+struct CoerceExpr : Expr {
+	CoerceExpr(ExprRef target, TypeRef kind) : Expr(Coerce), target(target), kind(kind) {}
+	ExprRef target;
+	TypeRef kind;
 };
 
 struct Decl {

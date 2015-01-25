@@ -74,6 +74,7 @@ struct Resolver {
 	Expr* resolveDecl(Scope& scope, ast::DeclExpr& expr);
 	Expr* resolveAssign(Scope& scope, ast::AssignExpr& expr);
 	Expr* resolveWhile(Scope& scope, ast::WhileExpr& expr);
+	Expr* resolveCoerce(Scope& scope, ast::CoerceExpr& expr);
 
     /// Resolves a binary operation on two primitive types.
     /// *lhs* and *rhs* must be primitives.
@@ -85,6 +86,9 @@ struct Resolver {
 
 	Variable* resolveArgument(ScopeRef scope, Id arg);
 
+	/// Retrieves or creates a concrete type.
+	TypeRef resolveType(ScopeRef scope, ast::TypeRef type);
+
     const Type* getBinaryOpType(PrimitiveOp, PrimitiveType, PrimitiveType);
 	const Type* getPtrOpType(PrimitiveOp, const PtrType*, PrimitiveType);
 	const Type* getPtrOpType(PrimitiveOp, const PtrType*, const PtrType*);
@@ -92,6 +96,9 @@ struct Resolver {
 
 	/// Checks if the provided callee expression can contain a primitive operator.
 	PrimitiveOp* tryPrimitiveOp(ast::ExprRef callee);
+
+	/// Checks if the provided type can be implicitly converted to the target type.
+	CoerceExpr* implicitCoerce(ExprRef src, TypeRef dst);
 
 	/// Tries to find a function from the provided expression that takes the provided parameters.
 	Function* findFunction(ScopeRef scope, ast::ExprRef, ExprList* args);
