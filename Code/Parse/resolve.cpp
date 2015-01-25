@@ -90,7 +90,7 @@ Module* Resolver::resolve() {
 
     // Perform the declaration pass.
     for(auto decl : source.declarations) {
-        if(decl->type == ast::Decl::Function) {
+        if(decl->kind == ast::Decl::Function) {
             module->functions += build<Function>(((ast::FunDecl*)decl)->name);
         }
     }
@@ -98,7 +98,7 @@ Module* Resolver::resolve() {
     // Perform the resolve pass.
     uint i = 0;
 	for(auto decl : source.declarations) {
-		if(decl->type == ast::Decl::Function) {
+		if(decl->kind == ast::Decl::Function) {
 			resolveFunction(*module->functions[i], *(ast::FunDecl*)decl);
             i++;
 		}

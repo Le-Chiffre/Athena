@@ -22,13 +22,17 @@ struct Printer {
 			case Expr::Assign: toString((const AssignExpr&)expr); break;
 			case Expr::Nested: toString((const NestedExpr&)expr); break;
 			case Expr::Coerce: toString((const CoerceExpr&)expr); break;
+			case Expr::Field: toString((const FieldExpr&)expr); break;
+			case Expr::Construct: toString((const ConstructExpr&)expr); break;
 		}
 		return string;
 	}
 
 	String toString(DeclRef decl) {
-		switch(decl.type) {
+		switch(decl.kind) {
 			case Decl::Function: toString((const FunDecl&)decl); break;
+			case Decl::Type: toString((const TypeDecl&)decl); break;
+			case Decl::Data: toString((const DataDecl&)decl); break;
 		}
 		return string;
 	}
@@ -205,6 +209,34 @@ private:
 		removeLevel();
 	}
 
+	void toString(const FieldExpr& e) {
+		string += "FieldExpr ";
+		auto name = context.Find(e.var).name;
+		string.Append(name.ptr, name.length);
+		makeLevel();
+		auto arg = e.args;
+		toString(*e.target, arg == nullptr);
+		while(arg) {
+			if(arg->next) toString(*arg->item, false);
+			else toString(*arg->item, true);
+			arg = arg->next;
+		}
+		removeLevel();
+	}
+
+	void toString(const ConstructExpr& e) {
+		string += "ConstructExpr ";
+		toString(e.kind);
+		makeLevel();
+		auto arg = e.args;
+		while(arg) {
+			if(arg->next) toString(*arg->item, false);
+			else toString(*arg->item, true);
+			arg = arg->next;
+		}
+		removeLevel();
+	}
+
 	void toString(const FunDecl& e) {
 		string += "FunDecl ";
 		auto name = context.Find(e.name).name;
@@ -224,6 +256,45 @@ private:
 		removeLevel();
 	}
 
+	void toString(const TypeDecl& e) {
+		string += "TypeDecl ";
+		auto name = context.Find(e.name).name;
+		string.Append(name.ptr, name.length);
+		string += " = ";
+		toString(e.target);
+	}
+
+	void toString(const DataDecl& e) {
+		string += "DataDecl ";
+		auto name = context.Find(e.name).name;
+		string.Append(name.ptr, name.length);
+		makeLevel();
+		auto field = e.fields;
+		while(field) {
+			if(field->next) toString(*field->item, false);
+			else toString(*field->item, true);
+			field = field->next;
+		}
+		removeLevel();
+	}
+
+	void toString(const Field& f, bool last) {
+		toStringIntro(last);
+
+		string += "Field ";
+		auto name = context.Find(f.name).name;
+		string.Append(name.ptr, name.length);
+		string += ' ';
+		if(f.constant) string += "<const> ";
+		if(f.type) {
+			toString(f.type);
+		} else {
+			makeLevel();
+			toString(*f.content, true);
+			removeLevel();
+		}
+	}
+
 	void toStringIntro(bool last) {
 		string += '\n';
 		makeIndent(last);
@@ -241,7 +312,13 @@ private:
 	}
 
 	void toString(TypeRef type) {
-
+		string += "type: ";
+		if(type->kind == Type::Unit) {
+			string += "()";
+		} else {
+			auto name = context.Find(type->con).name;
+			string.Append(name.ptr, name.length);
+		}
 	}
 
 	char indentStack[1024];

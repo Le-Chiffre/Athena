@@ -47,12 +47,19 @@ void Parser::parseModule() {
 
 void Parser::parseDecl() {
 	/*
+	 * decl			→	fundecl
+	 * 				|	typedecl
+	 * 				|	datadecl
 	 * fundecl		→	var :: args = expr
 	 * 				|	var = expr
 	 * args			→	arg0 arg1 ... argn		(n ≥ 0)
 	 * arg			→	varid
 	 */
-	if(auto var = tryParse(&Parser::parseVar)) {
+	if(token == Token::kwType) {
+		parseTypeDecl();
+	} else if(token == Token::kwData) {
+		parseDataDecl();
+	} else if(auto var = tryParse(&Parser::parseVar)) {
 		if(token == Token::opColonColon) {
 			eat();
 
@@ -97,10 +104,85 @@ void Parser::parseDecl() {
 	}
 }
 
+void Parser::parseDataDecl() {
+	/*
+	 * datadecl		→	data varid = fields
+	 * fields		→	field0, ..., fieldn 	(n >= 0)
+	 * field		→	var varid = expr
+	 * 				|	var varid : type
+	 * 				|	let varid = expr
+	 * 				|	let varid : type
+	 */
+	if(token == Token::kwData) {
+		eat();
+		if(token == Token::ConID) {
+			auto id = token.data.id;
+			eat();
+			if(token == Token::opEquals) {
+				eat();
+				IndentLevel level{token, lexer};
+				if(token == Token::kwLet || token == Token::kwVar) {
+					auto list = build<FieldList>(parseField());
+					auto p = list;
+					while(token == Token::EndOfStmt) {
+						eat();
+						p->next = build<FieldList>(parseField());
+						p = p->next;
+					}
+
+					level.end();
+					if(token == Token::EndOfBlock) {
+						eat();
+						module.declarations += build<DataDecl>(id, list);
+					} else {
+						error("Expected end of block.");
+					}
+				} else {
+					// TODO: Parse methods.
+					error("Expected field declaration.");
+				}
+			} else {
+				error("Expected '=' after 'data name'");
+			}
+		} else {
+			error("Expected identifier after 'data'.");
+		}
+	} else {
+		error("Expected 'data'.");
+	}
+}
+
+void Parser::parseTypeDecl() {
+	/*
+	 * typedecl		→	type varid = type
+	 */
+	if(token == Token::kwType) {
+		eat();
+		if(token == Token::ConID) {
+			auto id = token.data.id;
+			eat();
+			if(token == Token::opEquals) {
+				eat();
+				if(auto type = parseType()) {
+					module.declarations += build<TypeDecl>(id, type);
+				} else {
+					error("expected type after 'type t ='.");
+				}
+			} else {
+				error("expected type after 'type t'.");
+			}
+		} else {
+			error("expected identifier after 'type'.");
+		}
+	} else {
+		error("expected 'type'.");
+	}
+}
+
 Expr* Parser::parseExpr() {
 	/*
-	 * expr			→	infixexpr
-	 * 				|	infixexpr0, …, infixexprn	(statements, n ≥ 2)
+	 * expr			→	typedexpr
+	 * 				|	typedexpr0, …, typedexprn	(statements, n ≥ 2)
 	 */
 
 	// Start a new indentation block.
@@ -119,13 +201,8 @@ Expr* Parser::parseExpr() {
 				}
 			}
 
-			if(token != Token::EndOfBlock) {
-				error("Expected end of statement block.");
-				return nullptr;
-			}
-
 			level.end();
-			eat();
+			if(token == Token::EndOfBlock) eat();
 			return build<MultiExpr>(list);
 		} else {
 			ASSERT(token == Token::EndOfBlock);
@@ -135,6 +212,27 @@ Expr* Parser::parseExpr() {
 		}
 	} else {
 		return (Expr*)error("Expected an expression.");
+	}
+}
+
+Expr* Parser::parseTypedExpr() {
+	/*
+	 * typedexpr	→	infixexpr : type
+	 *				|	infixexpr
+	 */
+
+	auto expr = parseInfixExpr();
+	if(!expr) return nullptr;
+
+	if(token == Token::opColon) {
+		eat();
+		if(auto type = parseType()) {
+			return build<CoerceExpr>(expr, type);
+		} else {
+			return nullptr;
+		}
+	} else {
+		return expr;
 	}
 }
 
@@ -490,6 +588,65 @@ Maybe<Id> Parser::parseQop() {
 	}
 
 	return Nothing;
+}
+
+Type* Parser::parseType() {
+	if(token == Token::ParenL) {
+		eat();
+		if(token == Token::ParenR) {
+			eat();
+			return build<Type>(Type::Unit);
+		} else {
+			error("Expected ')' after '(' in type.");
+		}
+	} else if(token == Token::ConID) {
+		auto id = token.data.id;
+		eat();
+		return build<Type>(Type::Con, id);
+	} else {
+		error("Expected a type.");
+	}
+
+	return nullptr;
+}
+
+Field* Parser::parseField() {
+	bool constant;
+	if(token == Token::kwLet) {
+		constant = true;
+	} else if(token == Token::kwVar) {
+		constant = false;
+	} else {
+		error("expected 'let' or 'var'.");
+		return nullptr;
+	}
+
+	eat();
+	if(token == Token::VarID) {
+		auto id = token.data.id;
+		Expr* content = nullptr;
+		Type* type = nullptr;
+		eat();
+		if(token == Token::opEquals) {
+			eat();
+			content = parseExpr();
+		} else if(token == Token::opColon) {
+			eat();
+			type = parseType();
+		} else {
+			error("expected ':' or '=' after a field name.");
+		}
+
+		if(content || type) {
+			return build<Field>(id, type, content, constant);
+		} else {
+			error("expected a type or field initializer.");
+		}
+	} else {
+		error("expected a field name.");
+	}
+
+	return nullptr;
 }
 
 nullptr_t Parser::error(const char* text) {

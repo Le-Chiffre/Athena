@@ -87,8 +87,13 @@ struct Literal {
 
 struct Type {
 	enum Kind {
+		Unit,
+		Con
+	} kind;
+	Id con;
 
-	};
+	Type(Kind k) : kind(k) {}
+	Type(Kind k, Id con) : kind(k), con(con) {}
 };
 
 typedef const Type* TypeRef;
@@ -106,7 +111,9 @@ struct Expr {
 		While,
 		Assign,
 		Nested,
-		Coerce
+		Coerce,
+		Field,
+		Construct
 	} type;
 
 	Expr(Type t) : type(t) {}
@@ -189,12 +196,27 @@ struct CoerceExpr : Expr {
 	TypeRef kind;
 };
 
-struct Decl {
-	enum Type {
-		Function
-	} type;
+struct FieldExpr : Expr {
+	FieldExpr(ExprRef target, Id var, ExprList* args) : Expr(Field), target(target), var(var), args(args) {}
+	ExprRef target;
+	Id var;
+	ExprList* args;
+};
 
-	Decl(Type t) : type(t) {}
+struct ConstructExpr : Expr {
+	ConstructExpr(TypeRef kind, ExprList* args) : Expr(Construct), kind(kind), args(args) {}
+	TypeRef kind;
+	ExprList* args;
+};
+
+struct Decl {
+	enum Kind {
+		Function,
+		Type,
+		Data
+	} kind;
+
+	Decl(Kind t) : kind(t) {}
 };
 
 typedef const Decl& DeclRef;
@@ -207,6 +229,31 @@ struct FunDecl : Decl {
 	ExprRef body;
 };
 
+struct TypeDecl : Decl {
+	TypeDecl(Id name, TypeRef target) : Decl(Type), name(name), target(target) {}
+	Id name;
+	TypeRef target;
+};
+
+struct Field {
+	Field(Id name, TypeRef type, ExprRef content, bool constant) : name(name), type(type), content(content), constant(constant) {}
+
+	Id name;
+
+	// One of these must be set.
+	TypeRef type;
+	ExprRef content;
+
+	bool constant;
+};
+
+typedef ASTList<const Field*> FieldList;
+
+struct DataDecl : Decl {
+	DataDecl(Id name, FieldList* fields) : Decl(Data), fields(fields), name(name) {}
+	FieldList* fields;
+	Id name;
+};
 
 
 struct Module {

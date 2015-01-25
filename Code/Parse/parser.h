@@ -41,8 +41,11 @@ struct Parser {
 
 	void parseModule();
 	void parseDecl();
+	void parseDataDecl();
+	void parseTypeDecl();
 
 	Expr* parseExpr();
+	Expr* parseTypedExpr();
 	Expr* parseInfixExpr();
 	Expr* parseLeftExpr();
 	Expr* parseCallExpr();
@@ -53,6 +56,9 @@ struct Parser {
 	void  parseFixity();
 	Maybe<Id> parseVar();
 	Maybe<Id> parseQop();
+
+	Type* parseType();
+	Field* parseField();
 
 	void addFixity(Fixity f);
 	nullptr_t error(const char* text);
