@@ -21,10 +21,12 @@ set(SOURCE_FILES
     Parse/lexer.cpp
     Parse/parser.h
     Parse/parser.cpp
-    Parse/resolve_ast.cpp
-    Parse/resolve_ast.h
-    Parse/resolve.h
-    Parse/resolve.cpp
+    Resolve/resolve_ast.cpp
+    Resolve/resolve_ast.h
+    Resolve/resolve.h
+    Resolve/resolve.cpp
+    Resolve/mangle.h
+    Resolve/mangle.cpp
 
     Generate/generate.cpp
     Generate/generate.h
