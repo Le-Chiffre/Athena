@@ -29,6 +29,13 @@ inline Literal toLiteral(Token& tok) {
 	return l;
 }
 
+inline Literal toStringLiteral(Id name) {
+	Literal l;
+	l.s = name;
+	l.type = Literal::String;
+	return l;
+}
+
 void Parser::parseModule() {
 	IndentLevel level{token, lexer};
 	parseDecl();
@@ -187,13 +194,13 @@ Expr* Parser::parseExpr() {
 
 	// Start a new indentation block.
 	IndentLevel level{token, lexer};
-	if(auto expr = parseInfixExpr()) {
+	if(auto expr = parseTypedExpr()) {
 		if(token == Token::EndOfStmt) {
 			auto list = build<ExprList>(expr);
 			auto p = list;
 			while (token == Token::EndOfStmt) {
 				eat();
-				if((expr = parseInfixExpr())) {
+				if((expr = parseTypedExpr())) {
 					p->next = build<ExprList>(expr);
 					p = p->next;
 				} else {
@@ -389,7 +396,27 @@ Expr* Parser::parseCallExpr() {
 
 Expr* Parser::parseAppExpr() {
 	/*
-	 * aexp		→	qvar			(variable or function without args)
+	 * aexp		→	bexp
+	 * 			|	bexp.bexp		(method call syntax)
+	 */
+	auto e = parseBaseExpr();
+	if(!e) return nullptr;
+
+	if(token == Token::opDot) {
+		eat();
+		auto app = parseBaseExpr();
+		if(!app) return nullptr;
+
+		return build<FieldExpr>(app, e);
+	} else {
+		return e;
+	}
+}
+
+Expr* Parser::parseBaseExpr() {
+	/*
+	 * bexp		→	qvar			(variable or function without args)
+	 * 			|	qcon			(object construction)
 	 *			|	literal
 	 *			|	( exp )			(parenthesized expression)
 	 */
@@ -408,6 +435,10 @@ Expr* Parser::parseAppExpr() {
 		} else {
 			return (Expr*)error("Expected expression after '('.");
 		}
+	} else if(token == Token::ConID) {
+		auto name = token.data.id;
+		eat();
+		return build<ConstructExpr>(name);
 	} else if(auto var = tryParse(&Parser::parseVar)) {
 		return build<VarExpr>(var());
 	} else {
@@ -416,12 +447,46 @@ Expr* Parser::parseAppExpr() {
 }
 
 Expr* Parser::parseLiteral() {
-	if(token == Token::Literal) {
+	ASSERT(token == Token::Literal);
+	if(token == Token::String) {
+		return parseStringLiteral();
+	} else {
 		auto expr = build<LitExpr>(toLiteral(token));
 		eat();
 		return expr;
+	}
+}
+
+Expr* Parser::parseStringLiteral() {
+	ASSERT(token == Token::String);
+	auto string = token.data.id;
+	eat();
+
+	// Check if the string contains formatting.
+	if(token == Token::StartOfFormat) {
+		// Parse one or more formatting expressions.
+		// The first one consists of just the first string chunk.
+		FormatList list{FormatChunk{string, nullptr}};
+		auto p = &list;
+		while(token == Token::StartOfFormat) {
+			eat();
+			auto expr = parseInfixExpr();
+			if(!expr)
+				return nullptr;
+
+			if(token != Token::EndOfFormat)
+				return (Expr*)error("Expected end of string format after this expression.");
+
+			eat();
+			ASSERT(token == Token::String);
+			p->next = build<FormatList>(FormatChunk{token.data.id, expr});
+			p = p->next;
+			eat();
+		}
+
+		return build<FormatExpr>(list);
 	} else {
-		return (Expr*)error("Expected a literal value.");
+		return build<LitExpr>(toStringLiteral(string));
 	}
 }
 
@@ -453,9 +518,8 @@ Expr* Parser::parseVarDecl(bool constant) {
 			eat();
 			return build<MultiExpr>(list);
 		} else {
-			ASSERT(token == Token::EndOfBlock);
 			level.end();
-			eat();
+			if(token == Token::EndOfBlock) eat();
 			return expr;
 		}
 	} else {
@@ -599,14 +663,24 @@ Type* Parser::parseType() {
 		} else {
 			error("Expected ')' after '(' in type.");
 		}
+	} else if(token == Token::VarSym) {
+		auto name = lexer.GetContext().Find(token.data.id).name;
+		if(name.length == 1 && name.ptr[0] == kPointerSigil) {
+			eat();
+			if(auto type = parseType()) {
+				type->kind = Type::Ptr;
+				return type;
+			} else {
+				return nullptr;
+			}
+		}
 	} else if(token == Token::ConID) {
 		auto id = token.data.id;
 		eat();
 		return build<Type>(Type::Con, id);
-	} else {
-		error("Expected a type.");
 	}
 
+	error("Expected a type.");
 	return nullptr;
 }
 

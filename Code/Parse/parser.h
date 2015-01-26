@@ -37,6 +37,8 @@ inline SourcePos updateStringPos(SourcePos pos, Core::StringRef string) {
 
 
 struct Parser {
+	static const char kPointerSigil = '*';
+
 	Parser(CompileContext& context, Module& module, const char* text) : module(module), lexer(context, text, &token), buffer(4*1024*1024) {lexer.Next();}
 
 	void parseModule();
@@ -50,7 +52,14 @@ struct Parser {
 	Expr* parseLeftExpr();
 	Expr* parseCallExpr();
 	Expr* parseAppExpr();
+	Expr* parseBaseExpr();
+
+	/// Parses a literal token. The caller should ensure that the token is a literal.
 	Expr* parseLiteral();
+
+	/// Parses a string literal token. The caller should ensure that the token is a string literal.
+	Expr* parseStringLiteral();
+
 	Expr* parseVarDecl(bool constant);
 	Expr* parseDeclExpr(bool constant);
 	void  parseFixity();
