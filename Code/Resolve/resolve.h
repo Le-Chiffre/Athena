@@ -86,7 +86,7 @@ struct Resolver {
     /// *dst* must be a primitive.
 	Expr* resolvePrimitiveOp(Scope& scope, PrimitiveOp op, resolve::ExprRef dst);
 
-	Variable* resolveArgument(ScopeRef scope, Id arg);
+	Variable* resolveArgument(ScopeRef scope, ast::Arg& arg);
 
 	/// Retrieves or creates a concrete type.
 	TypeRef resolveType(ScopeRef scope, ast::TypeRef type);

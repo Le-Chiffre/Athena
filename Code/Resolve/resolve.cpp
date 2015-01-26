@@ -487,8 +487,9 @@ Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, resolve::ExprRe
 	return nullptr;
 }
 	
-Variable* Resolver::resolveArgument(ScopeRef scope, Id arg) {
-	return build<Variable>(arg, types.getUnknown(), scope, true);
+Variable* Resolver::resolveArgument(ScopeRef scope, ast::Arg& arg) {
+	auto type = arg.type ? resolveType(scope, arg.type) : types.getUnknown();
+	return build<Variable>(arg.name, type, scope, arg.constant);
 }
 
 TypeRef Resolver::resolveType(ScopeRef scope, ast::TypeRef type) {

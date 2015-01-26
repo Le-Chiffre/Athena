@@ -73,11 +73,11 @@ void Parser::parseDecl() {
 			// Parse zero or more arguments.
 			ArgList* args = nullptr;
 			if(token == Token::VarID) {
-				args = build<ArgList>(token.data.id);
+				args = build<ArgList>(Arg{token.data.id, nullptr, true});
 				auto p = args;
 				eat();
 				while(token == Token::VarID) {
-					p = build<ArgList>(token.data.id);
+					p = build<ArgList>(Arg{token.data.id, nullptr, true});
 					eat();
 					args->next = p;
 					args = p;
@@ -89,7 +89,7 @@ void Parser::parseDecl() {
 
 				// Parse the function body.
 				if(auto expr = parseExpr()) {
-					module.declarations += build<FunDecl>(var(), expr, args);
+					module.declarations += build<FunDecl>(var(), expr, args, nullptr);
 				} else {
 					error("Expected a function body expression.");
 				}
@@ -101,7 +101,7 @@ void Parser::parseDecl() {
 
 			// Parse the function body.
 			if(auto expr = parseExpr()) {
-				module.declarations += build<FunDecl>(var(), expr);
+				module.declarations += build<FunDecl>(var(), expr, nullptr, nullptr);
 			} else {
 				error("Expected a function body expression.");
 			}

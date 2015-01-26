@@ -239,12 +239,20 @@ struct Decl {
 };
 
 typedef const Decl& DeclRef;
-typedef ASTList<Id> ArgList;
+
+struct Arg {
+	Id name;
+	TypeRef type;
+	bool constant;
+};
+
+typedef ASTList<Arg> ArgList;
 
 struct FunDecl : Decl {
-	FunDecl(Id name, ExprRef body, ArgList* args = nullptr) : Decl(Function), name(name), args(args), body(body) {}
+	FunDecl(Id name, ExprRef body, ArgList* args, TypeRef ret) : Decl(Function), name(name), args(args), ret(ret), body(body) {}
 	Id name;
 	ArgList* args;
+	TypeRef ret; // If the function explicitly defines one.
 	ExprRef body;
 };
 

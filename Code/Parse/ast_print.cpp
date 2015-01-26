@@ -249,7 +249,7 @@ private:
 		string += '(';
 		auto arg = e.args;
 		while(arg) {
-			name = context.Find(arg->item).name;
+			name = context.Find(arg->item.name).name;
 			string.Append(name.ptr, name.length);
 			if(arg->next) string += ", ";
 			arg = arg->next;
