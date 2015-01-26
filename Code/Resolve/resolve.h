@@ -50,6 +50,7 @@ struct TypeManager {
 	}
 
     Core::FixedArray<PrimType, (uint)PrimitiveType::TypeCount> prims;
+	Core::NumberMap<TypeRef, Id> primMap; // Maps from ast type name to type.
     Core::NumberMap<ArrayType, TypeRef> arrays;
 	Core::NumberMap<PtrType, TypeRef> ptrs;
     const Type* stringType;

@@ -23,6 +23,18 @@ static const uint16 primitiveOperatorPrecedences[] = {
 	8, 8, 9, 9, 9, 9	// Comparison
 };
 
+static const char* primitiveTypeNames[] = {
+	"I64", "I32", "I16", "I8",
+	"U64", "U32", "U16", "U8",
+	"F64", "F32", "F16", "Bool"
+};
+
+static const byte primitiveTypeLengths[] = {
+	3, 3, 3, 2,
+	3, 3, 3, 2,
+	3, 3, 3, 4
+};
+
 inline TypeRef getLiteralType(TypeManager& m, const Literal& l) {
     switch(l.type) {
         case Literal::Int: return m.getInt();
@@ -72,6 +84,12 @@ void Resolver::initPrimitives() {
 		if(context.TryFindOp(primitiveOps[i]))
 			error("the precedence of built-in operator %@ cannot be redefined", primitiveOperatorNames[i]);
 		context.AddOp(primitiveOps[i], primitiveOperatorPrecedences[i], ast::Assoc::Left);
+	}
+
+	// Make sure each primitive type exists in the context, and add them to the map.
+	for(uint i = 0; i < (uint)PrimitiveType::TypeCount; i++) {
+		auto id = context.AddUnqualifiedName(primitiveTypeNames[i], primitiveOperatorLengths[i]);
+		types.primMap.Add(id, types.getPrim((PrimitiveType)i));
 	}
 }
 
@@ -493,7 +511,20 @@ Variable* Resolver::resolveArgument(ScopeRef scope, ast::Arg& arg) {
 }
 
 TypeRef Resolver::resolveType(ScopeRef scope, ast::TypeRef type) {
-	return nullptr;
+	// Check if this is a primitive type.
+	if(type->kind == ast::Type::Unit) {
+		return types.getUnit();
+	} else if(type->kind == ast::Type::Ptr) {
+		ast::Type t{ast::Type::Con, type->con};
+		return types.getPtr(resolveType(scope, &t));
+	} else {
+		// Check if this is a primitive type.
+		if(auto t = types.primMap.Get(type->con)) {
+			return *t;
+		} else {
+			return types.getUnknown();
+		}
+	}
 }
 
 const Type* Resolver::getBinaryOpType(PrimitiveOp op, PrimitiveType lhs, PrimitiveType rhs) {
