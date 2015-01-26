@@ -320,7 +320,19 @@ Expr* Resolver::resolveIf(Scope& scope, ast::IfExpr& expr) {
 }
 
 Expr* Resolver::resolveDecl(Scope& scope, ast::DeclExpr& expr) {
-	auto content = resolveExpression(scope, expr.content);
+	// If the caller knows the type of this variable, it must be the same as the assigned content.
+	// If no content is provided, the variable will be unusable until it is explicitly assigned.
+	Expr* content = nullptr;
+	TypeRef type;
+	if(expr.content) {
+		content = resolveExpression(scope, expr.content);
+		type = content->type;
+	} else {
+		type = types.getUnknown();
+		if(expr.constant) {
+			error("constant variables must be initialized at their declaration");
+		}
+	}
 
 	// Make sure this scope doesn't already have a variable with the same name.
 	Variable* var;
@@ -328,12 +340,17 @@ Expr* Resolver::resolveDecl(Scope& scope, ast::DeclExpr& expr) {
 		error("redefinition of '%@'", var->name);
 	} else {
 		// Create the variable allocation.
-		var = build<Variable>(expr.name, content->type, scope, expr.constant);
+		var = build<Variable>(expr.name, type, scope, expr.constant);
 		scope.variables += var;
 	}
 
-	// Create the assignment.
-	return build<AssignExpr>(*var, *content);
+	// If the variable was assigned, we return the assignment expression.
+	// Otherwise, just return a dummy expression.
+	// This will ensure a compilation error if the declaration is used directly.
+	if(content)
+		return build<AssignExpr>(*var, *content);
+	else
+		return build<EmptyDeclExpr>(*var);
 }
 
 Expr* Resolver::resolveAssign(Scope& scope, ast::AssignExpr& expr) {
@@ -354,6 +371,9 @@ Expr* Resolver::resolveAssign(Scope& scope, ast::AssignExpr& expr) {
 		}
 
 		return build<AssignExpr>(*((VarExpr*)target)->var, *value);
+	} else if(target->kind == Expr::Field) {
+		// TODO: Assign to field.
+		return &emptyExpr;
 	} else {
 		error("expression is not assignable");
 	}
@@ -373,6 +393,44 @@ Expr* Resolver::resolveWhile(Scope& scope, ast::WhileExpr& expr) {
 }
 
 Expr* Resolver::resolveCoerce(Scope& scope, ast::CoerceExpr& expr) {
+	// Note that the coercion expression on AST level is different from resolved coercions.
+	// The functionality of a coercion depends on what it is applied to:
+	//  - Coercing an int or float literal will convert the value to any compatible type, even if that type is smaller.
+	//    This conversion should be done on compile time and exists to make it possible to initialize small data types.
+	//    "let i = 0: U8" would fail to compile without literal coercion.
+	//  - Coercing a declaration assigns a definite type to the declared variable.
+	//    "var x: Float" makes sure that x will be of type Float when it is initialized later.
+	//  - Coercing a call-expression tells the compiler the resulting type of the call.
+	//    This is useful when the type of a function call could not be resolved otherwise,
+	//    such as a generic function whose return type is independent from its arguments.
+	//    explicitly coercing such a call will allow it to be compiled.
+	//    This use case is actually quite common and used for casting: "let x = 12345678, y = truncate x: U8"
+	//    If the function is not generic, an implicit conversion is applied.
+	//  - Finally, for any other use case other than the ones above, coercion acts like an implicit conversion.
+	//    This means that in order to convert to some incompatible type, you still have to convert explicitly.
+	if(expr.target->isLiteral()) {
+		// Perform a literal coercion. This discards the coerce-expression.
+		return literalCoerce(((ast::LitExpr*)expr.target)->literal, resolveType(scope, expr.kind));
+	} else if(expr.target->isDecl()) {
+		// Perform a declaration coercion.
+		// This type of coercion is only valid if the declaration is still empty (has no type).
+		// Otherwise, it is treated as a normal coercion of an existing variable.
+		// Note that this works with code like "var x = 1: U8", since the coercion is applied to the literal.
+		// This particular branch only executes for code like "var x: U8".
+		auto decl = (EmptyDeclExpr*)resolveDecl(scope, *(ast::DeclExpr*)expr.target);
+		ASSERT(decl->kind == Expr::EmptyDecl);
+		ASSERT(!decl->type->isKnown());
+
+		// Set the type of the referenced variable.
+		decl->type = resolveType(scope, expr.kind);
+		decl->var.type = decl->type;
+		return decl;
+	} else if(expr.target->isCall()) {
+		// TODO: Generic function stuff.
+		// For now, just do the default.
+	}
+
+	// Perform an implicit coercion as the default.
 	return implicitCoerce(*resolveExpression(scope, expr.target), resolveType(scope, expr.kind));
 }
 
@@ -558,6 +616,39 @@ CoerceExpr* Resolver::implicitCoerce(ExprRef src, TypeRef dst) {
 	}
 
 	return nullptr;
+}
+
+LitExpr* Resolver::literalCoerce(const ast::Literal& lit, TypeRef dst) {
+	// Literal conversion rules:
+	//  - Integer and Float literals can be converted to any other integer or float
+	//    (warnings are issued if the value would not fit).
+	Literal literal = lit;
+	if(dst->isPrimitive()) {
+		auto ptype = ((const PrimType*)dst)->type;
+		if(lit.type == ast::Literal::Int) {
+			if(ptype < PrimitiveType::FirstFloat) {
+				// No need to change the literal.
+			} else if(ptype < PrimitiveType::FirstOther) {
+				literal.f = lit.i;
+				literal.type = ast::Literal::Float;
+			}
+		} else if(lit.type == ast::Literal::Float) {
+			if(ptype < PrimitiveType::FirstFloat) {
+				literal.i = lit.f;
+				literal.type = ast::Literal::Int;
+			} else if(ptype < PrimitiveType::FirstOther) {
+				// No need to change the literal.
+			}
+		} else {
+			error("cannot convert this literal to the target type");
+		}
+	} else {
+		error("literals can only be converted to primitive types");
+	}
+
+	// We always return a valid value to simplify the resolver.
+	// If an error occurred the code generator will not be invoked.
+	return build<LitExpr>(literal, dst);
 }
 
 Function* Resolver::findFunction(ScopeRef scope, ast::ExprRef callee, ExprList* args) {

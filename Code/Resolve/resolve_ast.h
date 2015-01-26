@@ -252,11 +252,19 @@ struct Expr {
 		AppP,
 		Case,
 		If,
-		Decl,
 		While,
 		Assign,
-		Coerce
+		Coerce,
+		Field,
+
+		// The following expressions are only used while resolving or for error handling.
+		// They are removed before the resolve stage finishes.
+		FirstTemporary,
+		EmptyDecl = FirstTemporary,
+		Empty
 	} kind;
+
+	bool isTemp() const {return kind < FirstTemporary;}
 
 	TypeRef type;
 	Expr(Kind k, TypeRef type) : kind(k), type(type) {}
@@ -304,12 +312,6 @@ struct IfExpr : Expr {
 	bool returnResult;
 };
 
-struct DeclExpr : Expr {
-	DeclExpr(Variable& var, ExprRef val) : Expr(Decl, var.type), var(var), val(val) {}
-	Variable& var;
-	ExprRef val;
-};
-
 struct WhileExpr : Expr {
 	WhileExpr(ExprRef cond, ExprRef loop, TypeRef type) : Expr(While, type), cond(cond), loop(loop) {}
 	ExprRef cond;
@@ -325,6 +327,23 @@ struct AssignExpr : Expr {
 struct CoerceExpr : Expr {
 	CoerceExpr(ExprRef src, TypeRef dst) : Expr(Coerce, dst), src(src) {}
 	ExprRef src;
+};
+
+struct FieldExpr : Expr {
+	FieldExpr(AggType* type, ::athena::resolve::Field* field) : Expr(Field, field->type), type(type), field(field) {}
+	AggType* type;
+	::athena::resolve::Field* field;
+};
+
+/// A temporary expression that represents an unfinished declaration.
+struct EmptyDeclExpr : Expr {
+	EmptyDeclExpr(Variable& var) : Expr(EmptyDecl, var.type), var(var) {}
+	Variable& var;
+};
+
+/// A temporary expression that represents a non-existent value, such as a compilation error.
+struct EmptyExpr : Expr {
+	EmptyExpr(TypeRef type) : Expr(Empty, type) {}
 };
 
 struct Module {

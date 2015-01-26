@@ -102,6 +102,10 @@ struct Resolver {
 	/// Checks if the provided type can be implicitly converted to the target type.
 	CoerceExpr* implicitCoerce(ExprRef src, TypeRef dst);
 
+	/// Checks if the provided literal type can be converted to the target type.
+	/// This is more flexible than an implicit coercion and done on compile time.
+	LitExpr* literalCoerce(const ast::Literal& lit, TypeRef dst);
+
 	/// Tries to find a function from the provided expression that takes the provided parameters.
 	Function* findFunction(ScopeRef scope, ast::ExprRef, ExprList* args);
 
@@ -129,6 +133,7 @@ struct Resolver {
 	Core::StaticBuffer buffer;
 	TypeCheck typeCheck;
     TypeManager types;
+	EmptyExpr emptyExpr{types.getUnit()};
 };
 
 }} // namespace athena::resolve
