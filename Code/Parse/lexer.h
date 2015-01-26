@@ -160,6 +160,8 @@ struct Token {
 		Comment,
 		Whitespace,
 		EndOfBlock,
+		StartOfFormat,
+		EndOfFormat,
 		
 		/* Special symbols */
 		ParenL = '(',
@@ -215,6 +217,7 @@ struct Token {
 		kw_,
 		
 		/* Reserved operators */
+		opDot,
 		opDotDot,
 		opColon,
 		opColonColon,
@@ -380,6 +383,8 @@ private:
 	friend struct IndentLevel;
 
 	static const uint kTabWidth = 4;
+	static const char kFormatStart = '{';
+	static const char kFormatEnd = '}';
 
 	Token* mToken; //The token currently being parsed.
 	uint mIdent = 0; //The current indentation level.
@@ -391,6 +396,7 @@ private:
 	uint mLine = 0; //The current source line.
 	uint mTabs = 0; // The number of tabs processed on the current line.
 	bool mNewItem = false; //Indicates that a new item was started by the previous token.
+	uint8 mFormatting = 0; // Indicates that we are currently inside a formatting string literal.
 	Diagnostics mDiag;
 	CompileContext& mContext;
 };
@@ -420,6 +426,7 @@ struct SaveLexer {
 		indent(lexer.mIdent),
 		blocks(lexer.mBlockCount),
 		tabs(lexer.mTabs),
+		formatting(lexer.mFormatting),
 		newItem(lexer.mNewItem) {}
 
 	void restore() {
@@ -430,6 +437,7 @@ struct SaveLexer {
 		lexer.mNewItem = newItem;
 		lexer.mTabs = tabs;
 		lexer.mBlockCount = blocks;
+		lexer.mFormatting = formatting;
 	}
 
 	Lexer& lexer;
@@ -439,6 +447,7 @@ struct SaveLexer {
 	uint indent;
 	uint blocks;
 	uint tabs;
+	uint8 formatting;
 	bool newItem;
 };
 

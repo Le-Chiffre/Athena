@@ -1,6 +1,7 @@
 
 #include "ast.h"
 #include "lexer.h"
+#include "parser.h"
 
 namespace athena {
 namespace ast {
@@ -24,6 +25,7 @@ struct Printer {
 			case Expr::Coerce: toString((const CoerceExpr&)expr); break;
 			case Expr::Field: toString((const FieldExpr&)expr); break;
 			case Expr::Construct: toString((const ConstructExpr&)expr); break;
+			case Expr::Format: toString((const FormatExpr&)expr); break;
 		}
 		return string;
 	}
@@ -109,8 +111,10 @@ private:
 				string += e.literal.c;
 				break;
 			case Literal::String:
+				string += '"';
 				auto name = context.Find(e.literal.s).name;
 				string.Append(name.ptr, name.length);
+				string += '"';
 				break;
 		}
 	}
@@ -211,28 +215,25 @@ private:
 
 	void toString(const FieldExpr& e) {
 		string += "FieldExpr ";
-		auto name = context.Find(e.var).name;
-		string.Append(name.ptr, name.length);
 		makeLevel();
-		auto arg = e.args;
-		toString(*e.target, arg == nullptr);
-		while(arg) {
-			if(arg->next) toString(*arg->item, false);
-			else toString(*arg->item, true);
-			arg = arg->next;
-		}
+		toString(*e.field, false);
+		toString(*e.target, true);
 		removeLevel();
 	}
 
 	void toString(const ConstructExpr& e) {
 		string += "ConstructExpr ";
-		toString(e.kind);
+		auto name = context.Find(e.name).name;
+		string.Append(name.ptr, name.length);
+	}
+
+	void toString(const FormatExpr& e) {
+		string += "FormatExpr ";
 		makeLevel();
-		auto arg = e.args;
-		while(arg) {
-			if(arg->next) toString(*arg->item, false);
-			else toString(*arg->item, true);
-			arg = arg->next;
+		auto chunk = &e.format;
+		while(chunk) {
+			toString(chunk->item, !chunk->next);
+			chunk = chunk->next;
 		}
 		removeLevel();
 	}
@@ -295,6 +296,20 @@ private:
 		}
 	}
 
+	void toString(const FormatChunk& f, bool last) {
+		auto name = context.Find(f.string).name;
+		if(f.format) {
+			toString(*f.format, name.length ? false : last);
+		}
+
+		if(name.length) {
+			toStringIntro(last);
+			string += "LitExpr \"";
+			string.Append(name.ptr, name.length);
+			string += '"';
+		}
+	}
+
 	void toStringIntro(bool last) {
 		string += '\n';
 		makeIndent(last);
@@ -316,6 +331,9 @@ private:
 		if(type->kind == Type::Unit) {
 			string += "()";
 		} else {
+			if(type->kind == Type::Ptr)
+				string += Parser::kPointerSigil;
+
 			auto name = context.Find(type->con).name;
 			string.Append(name.ptr, name.length);
 		}

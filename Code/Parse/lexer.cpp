@@ -602,6 +602,11 @@ String Lexer::ParseStringLiteral()
 			} else {
 				chars += ParseEscapedLiteral();
 			}
+		} else if(*mP == kFormatStart) {
+			// Start a string format sequence.
+			mFormatting = 1;
+			mP++;
+			break;
 		} else {
 			if(*mP == '\"') {
 				//Terminate the string.
@@ -659,6 +664,10 @@ wchar32 Lexer::ParseEscapedLiteral()
 	char c = *mP++;
 	switch(c)
 	{
+		case '{':
+			// The left brace is used to start a formatting sequence.
+			// Escaping it will print a normal brace.
+			return '{';
 		case 'a':
 			return '\a';
 		case 'b':
@@ -781,6 +790,9 @@ void Lexer::ParseSymbol()
 		if(*p == ':') {
 			//Single colon.
 			tok.type = Token::opColon;
+		} else if(*p == '.') {
+			// Single dot.
+			tok.type = Token::opDot;
 		} else if(*p == '=') {
 			//This is the reserved Equals operator.
 			tok.type = Token::opEquals;
@@ -1035,12 +1047,20 @@ void Lexer::ParseToken()
 parseT:
 	//This needs to be reset manually.
 	mQualifier.qualifier = nullptr;
-	
-	//Skip any whitespace and comments.
-	SkipWhitespace();
-	
-	tok.sourceColumn = (uint)(p - mL) + mTabs * (kTabWidth - 1);
-	tok.sourceLine = mLine;
+
+	// Check if we are inside a string literal.
+	if(mFormatting == 3) {
+		tok.sourceColumn = (uint)(p - mL) + mTabs * (kTabWidth - 1);
+		tok.sourceLine = mLine;
+		mFormatting = 0;
+		goto stringLit;
+	} else {
+		//Skip any whitespace and comments.
+		SkipWhitespace();
+
+		tok.sourceColumn = (uint)(p - mL) + mTabs * (kTabWidth - 1);
+		tok.sourceLine = mLine;
+	}
 
 	//Check for the end of the file.
 	if(!*p)
@@ -1065,6 +1085,24 @@ parseT:
 		tok.type = Token::EndOfBlock;
 		tok.kind = Token::Special;
 	}
+
+	// Check for start of string formatting.
+	else if(mFormatting == 1)
+	{
+		tok.kind = Token::Special;
+		tok.type = Token::StartOfFormat;
+		mFormatting = 2;
+	}
+
+		// Check for end of string formatting.
+	else if(mFormatting == 2 && *p == kFormatEnd)
+	{
+		// Issue a format end and make sure the next token is parsed as a string literal.
+		// Don't skip the character - ParseStringLiteral skips one at the beginning.
+		tok.kind = Token::Special;
+		tok.type = Token::EndOfFormat;
+		mFormatting = 3;
+	}
 	
 	//Check for integral literals.
 	else if(IsDigit(*p))
@@ -1083,6 +1121,7 @@ parseT:
 	//Check for string literals.
 	else if(*p == '\"')
 	{
+stringLit:
 		//Since string literals can span multiple lines, this may update mLocation.line.
 		tok.type = Token::String;
 		tok.kind = Token::Literal;

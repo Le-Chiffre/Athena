@@ -17,6 +17,7 @@ struct ASTList
 	ASTList<T>* next = nullptr;
 	T item;
 
+	ASTList() {}
 	ASTList(const T& i) : item(i) {}
 	ASTList(const T& i, ASTList<T>* n) : item(i), next(n) {}
 
@@ -88,7 +89,8 @@ struct Literal {
 struct Type {
 	enum Kind {
 		Unit,
-		Con
+		Con,
+		Ptr
 	} kind;
 	Id con;
 
@@ -113,7 +115,8 @@ struct Expr {
 		Nested,
 		Coerce,
 		Field,
-		Construct
+		Construct,
+		Format
 	} type;
 
 	Expr(Type t) : type(t) {}
@@ -197,16 +200,29 @@ struct CoerceExpr : Expr {
 };
 
 struct FieldExpr : Expr {
-	FieldExpr(ExprRef target, Id var, ExprList* args) : Expr(Field), target(target), var(var), args(args) {}
-	ExprRef target;
-	Id var;
-	ExprList* args;
+	FieldExpr(ExprRef target, ExprRef field) : Expr(Field), target(target), field(field) {}
+	ExprRef target; // Either a var, literal or a complex expression.
+	ExprRef field;  // Field to apply to.
 };
 
 struct ConstructExpr : Expr {
-	ConstructExpr(TypeRef kind, ExprList* args) : Expr(Construct), kind(kind), args(args) {}
-	TypeRef kind;
-	ExprList* args;
+	ConstructExpr(Id name) : Expr(Construct), name(name) {}
+	Id name;
+};
+
+/// Formatted strings are divided into chunks.
+/// Each chunk consists of a string part and an expression to format and insert after it.
+/// The expression may be null if this chunk is the first one in a literal.
+struct FormatChunk {
+	Id string;
+	Expr* format;
+};
+
+typedef ASTList<FormatChunk> FormatList;
+
+struct FormatExpr : Expr {
+	FormatExpr(const FormatList& format) : Expr(Format), format(format) {}
+	FormatList format;
 };
 
 struct Decl {
