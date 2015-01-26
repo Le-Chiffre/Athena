@@ -122,6 +122,9 @@ struct Expr {
 	Expr(Type t) : type(t) {}
 	bool isVar() const {return type == Var;}
 	bool isInfix() const {return type == Infix;}
+	bool isLiteral() const {return type == Lit;}
+	bool isCall() const {return type == App;}
+	bool isDecl() const {return type == Decl;}
 };
 
 typedef Expr* ExprRef;

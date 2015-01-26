@@ -175,9 +175,13 @@ private:
 		auto name = context.Find(e.name).name;
 		string.Append(name.ptr, name.length);
 		if(e.constant) string += " <const> ";
-		makeLevel();
-		toString(*e.content, true);
-		removeLevel();
+		if(e.content) {
+			makeLevel();
+			toString(*e.content, true);
+			removeLevel();
+		} else {
+			string += " <empty> ";
+		}
 	}
 
 	void toString(const WhileExpr& e) {

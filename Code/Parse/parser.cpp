@@ -543,7 +543,7 @@ Expr* Parser::parseDeclExpr(bool constant) {
 				error("Expected expression.");
 			}
 		} else {
-			error("Expected '=' after a declaration.");
+			return build<DeclExpr>(id, nullptr, constant);
 		}
 	} else {
 		error("Expected identifier.");
