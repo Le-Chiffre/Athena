@@ -685,7 +685,7 @@ LitExpr* Resolver::literalCoerce(const ast::Literal& lit, TypeRef dst) {
 
 Function* Resolver::findFunction(ScopeRef scope, ast::ExprRef callee, ExprList* args) {
 	if(callee->isVar()) {
-		auto name = ((const ast::VarExpr&)callee).name;
+		auto name = ((const ast::VarExpr*)callee)->name;
 		if(auto fun = scope.findFun(name)) {
 			// TODO: Create closure type if the function takes more parameters.
 			return fun;

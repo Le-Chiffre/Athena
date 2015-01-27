@@ -12,6 +12,7 @@
 #include <llvm/ExecutionEngine/Interpreter.h>
 #include <core.h>
 #include <Terminal.h>
+#include <File.h>
 #include "Parse/parser.h"
 
 void CreateAddFunc(llvm::LLVMContext& context, llvm::Module* module)
@@ -37,27 +38,31 @@ void CoreMain(Core::ArgList& args)
 	athena::ast::CompileContext context;
 
 	auto test = R"s(
-f :: z =
-    let x = 5
-        y = 6
-    x + y + z
+main =
+	let path = Path "hello.txt"
+		display = path.display
+	File.open path >>= readToString >>= print "{display} contains {str}"
+	let x = "Time taken: {let time = timer.tick} ms ({1000/time} fps)."
+(+) :: a b = a `add` b
 
-g = f 5
+cast :: a = truncate a : *I8
 
-h = if g > 0
-    then 0
-    else 1
+gg = var i : Int
+	 i.x = 0
 
-loop_test =
-    var i = 0
-    while i < 10 do ++i
-    i = 20
+data X =
+	var a : Y
+	var b : Z
+	let c = 0
 )s";
 
 	athena::ast::Module module;
 	athena::ast::Parser p(context, module, test);
 	p.parseModule();
-	Core::Terminal << athena::ast::toString(module, context);
+	Core::File f;
+	f.Open("ast.txt", {false, true}, Core::FileCreate::CreateAlways);
+	auto str = athena::ast::toString(module, context);
+	f.Write({str.ptr, str.length});
 
 	Core::Terminal.WaitForInput();
 
