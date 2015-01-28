@@ -78,6 +78,9 @@ struct Resolver {
 	Expr* resolveCoerce(Scope& scope, ast::CoerceExpr& expr);
 	Expr* resolveField(Scope& scope, ast::FieldExpr& expr);
 	Expr* resolveConstruct(Scope& scope, ast::ConstructExpr& expr);
+	
+	void resolveAlias(Scope& scope, AliasType* type);
+    void resolveAggregate(Scope& scope, AggType* type);
 
     /// Resolves a binary operation on two primitive types.
     /// *lhs* and *rhs* must be primitives.
@@ -88,6 +91,7 @@ struct Resolver {
 	Expr* resolvePrimitiveOp(Scope& scope, PrimitiveOp op, resolve::ExprRef dst);
 
 	Variable* resolveArgument(ScopeRef scope, ast::Arg& arg);
+    Field resolveField(ScopeRef scope, ast::Field& field);
 
 	/// Retrieves or creates a concrete type.
 	TypeRef resolveType(ScopeRef scope, ast::TypeRef type);

@@ -88,7 +88,7 @@ void Resolver::initPrimitives() {
 
 	// Make sure each primitive type exists in the context, and add them to the map.
 	for(uint i = 0; i < (uint)PrimitiveType::TypeCount; i++) {
-		auto id = context.AddUnqualifiedName(primitiveTypeNames[i], primitiveOperatorLengths[i]);
+		auto id = context.AddUnqualifiedName(primitiveTypeNames[i], primitiveTypeLengths[i]);
 		types.primMap.Add(id, types.getPrim((PrimitiveType)i));
 	}
 }
@@ -107,37 +107,81 @@ Module* Resolver::resolve() {
 
     // Perform the declaration pass.
     for(auto decl : source.declarations) {
-		switch(decl->kind) {
-			case ast::Decl::Function:
-				module->functions += build<Function>(((ast::FunDecl*)decl)->name);
-				break;
-			case ast::Decl::Type:
-				break;
-			case ast::Decl::Data:
-				break;
-		}
-    }
-
-    // Perform the resolve pass.
-    uint f = 0;
-	uint t = 0;
-	uint d = 0;
-	for(auto decl : source.declarations) {
-		switch(decl->kind) {
-			case ast::Decl::Function:
-				resolveFunction(*module->functions[f], *(ast::FunDecl*)decl);
-				f++;
-				break;
-			case ast::Decl::Type:
-				t++;
-				break;
-			case ast::Decl::Data:
-				d++;
-				break;
+		if(decl->kind == ast::Decl::Function) {
+			// Create a linked list of functions with the same name.
+			auto name = ((ast::FunDecl*)decl)->name;
+			Function** f;
+			if(!module->functions.AddGet(name, f)) *f = nullptr;
+			auto fun = *f;
+			*f = build<Function>(name, (ast::FunDecl*)decl);
+			(*f)->sibling = fun;
+		} else {
+			// Type names have to be unique - give an error and ignore any repeated definitions.
+			Id name;
+			if(decl->kind == ast::Decl::Type) {
+				name = ((ast::TypeDecl*)decl)->name;
+			} else {
+				ASSERT(decl->kind == ast::Decl::Data);
+				name = ((ast::DataDecl*)decl)->name;
+			}
+			
+			Type** type;
+			if(module->types.AddGet(name, type)) {
+				// This type was already declared in this scope.
+				// Ignore the type that was defined last.
+				error("redefinition of '%@'", context.Find(name).name);
+			} else {
+				// Insert the unresolved type.
+				if(decl->kind == ast::Decl::Type) {
+					*type = build<AliasType>(name, (ast::TypeDecl*)decl);
+				} else {
+					*type = build<AggType>(name, (ast::DataDecl*)decl);
+				}
+			}
 		}
 	}
+
+    // Perform the resolve pass. All defined names in this scope are now available.
+	// Symbols may be resolved lazily when used by other symbols,
+	// so we just skip those that are already defined.
+	module->types.Iterate([=](Id name, Type* t) {
+		if(t->kind == Type::Alias) {
+            auto a = (AliasType*)t;
+            if(a->astDecl) {
+                resolveAlias(*module, a);
+            }
+        } else if(t->kind == Type::Agg) {
+            auto a = (AggType*)t;
+            if(a->astDecl) {
+                resolveAggregate(*module, a);
+            }
+        }
+	});
+
+    module->functions.Iterate([=](Id name, Function* f) {
+        if(f->astDecl) resolveFunction(*f, *f->astDecl);
+    });
 	
 	return module;
+}
+
+void Resolver::resolveAlias(Scope& scope, AliasType* type) {
+    ASSERT(type->astDecl);
+    type->type = resolveType(scope, type->astDecl->target);
+    type->astDecl = nullptr;
+}
+
+void Resolver::resolveAggregate(Scope& scope, AggType* type) {
+    ASSERT(type->astDecl);
+
+    // A type can have no fields (this is used a lot in variant types).
+    if(type->astDecl->fields) {
+        for(auto i : *type->astDecl->fields) {
+            type->fields += resolveField(scope, i);
+        }
+    }
+
+    type->astDecl = nullptr;
 }
 
 bool Resolver::resolveFunction(Function& fun, ast::FunDecl& decl) {
@@ -508,6 +552,20 @@ Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, resolve::ExprRe
 Variable* Resolver::resolveArgument(ScopeRef scope, ast::Arg& arg) {
 	auto type = arg.type ? resolveType(scope, arg.type) : types.getUnknown();
 	return build<Variable>(arg.name, type, scope, arg.constant);
+}
+
+Field Resolver::resolveField(ScopeRef scope, ast::Field& field) {
+	ASSERT(field.type || field.content);
+	TypeRef type = nullptr;
+	Expr* content = nullptr;
+	
+	if(field.type)
+		type = resolveType(scope, field.type);
+	if(field.content)
+		content = resolveExpression(scope, field.content);
+	
+	// TODO: Typecheck here if both are set.
+	return {field.name, type, *content, field.constant};
 }
 
 TypeRef Resolver::resolveType(ScopeRef scope, ast::TypeRef type) {

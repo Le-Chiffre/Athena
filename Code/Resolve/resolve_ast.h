@@ -28,24 +28,16 @@ typedef Core::Array<Function*> FunList;
 typedef Core::Array<Type*> TypeList;
 typedef ast::ASTList<Scope*> ScopeList;
 typedef ast::ASTList<Alt*> AltList;
-
-struct Typedef {
-	Id name;
-	TypeRef type;
-};
+typedef Core::NumberMap<Type*, Id> TypeMap;
+typedef Core::NumberMap<Function*, Id> FunMap;
 
 struct Scope {
     Variable* findVar(Id name);
     Function* findFun(Id name);
+    Type* findType(Id name);
 
 	// The base name of this scope (determines type visibility).
 	Id name;
-
-	// The function containing this scope, or null if it is a function or global scope.
-	Function* function;
-
-	// Any expressions this scope contains.
-	Expr* expression;
 
 	// The parent scope, or null if it is a global scope.
 	Scope* parent;
@@ -57,18 +49,45 @@ struct Scope {
 	VarList variables;
 
     // The functions that were declared in this scope.
-    FunList functions;
+	FunMap functions{32};
+
+    // The types that were declared in this scope.
+    TypeMap types{32};
 };
 
-struct Function : Scope {
-    Function(Id name) : name(name) {}
+typedef Scope Module;
 
-	// The mangled name of this function.
+struct Function : Scope {
+	Function(Id name, ast::FunDecl* decl) : name(name), astDecl(decl) {}
+
+	// The base name of this function.
 	Id name;
+	
+	// The source declaration of this function in the AST.
+	// This will be set as long as the function has not been resolved.
+	// Any function where this is set after resolving is either unused or an error.
+	ast::FunDecl* astDecl = nullptr;
+	
+	/*
+	 * The following fields are invalid as long as the function has not been resolved.
+	 */
+	
+	// The mangled name of this function.
+	Id mangledName = 0;
 
 	// The arguments this function takes.
 	// Each argument also exists in the list of variables.
 	VarList arguments;
+	
+	// The variables that were declared in the function.
+	// This also includes the arguments.
+	VarList variables;
+	
+	// Any expressions this function consists of.
+	Expr* expression = nullptr;
+	
+	// The next function overload with this name.
+	Function* sibling = nullptr;
 };
 
 struct Variable {
@@ -130,6 +149,7 @@ inline PrimitiveTypeCategory category(PrimitiveType t) {
 struct Type {
 	enum Kind {
 		Unknown,
+        Alias,
 		Unit,
 		Agg,
 		Var,
@@ -148,6 +168,7 @@ struct Type {
 	bool isPtrOrPrim() const {return ((uint)kind & 0x10) != 0;}
 	bool isKnown() const {return kind != Unknown;}
 	bool isUnit() const {return kind == Unit;}
+    bool isAlias() const {return kind == Alias;}
 	bool isBool() const;
 
 	Type(Kind kind) : kind(kind) {}
@@ -181,9 +202,10 @@ struct Field {
 typedef Core::Array<Field> FieldList;
 
 struct AggType : Type {
-	AggType() : Type(Agg) {}
+	AggType(Id name, ast::DataDecl* astDecl) : Type(Agg), name(name), astDecl(astDecl) {}
 	Id name;
 	FieldList fields;
+	ast::DataDecl* astDecl;
 };
 
 struct ArrayType : Type {
@@ -195,6 +217,13 @@ struct MapType : Type {
 	MapType(TypeRef from, TypeRef to) : Type(Map), from(from), to(to) {}
 	TypeRef from;
 	TypeRef to;
+};
+
+struct AliasType : Type {
+    AliasType(Id name, ast::TypeDecl* astDecl) : Type(Alias), name(name), astDecl(astDecl) {}
+	Id name;
+    TypeRef type = nullptr;
+	ast::TypeDecl* astDecl;
 };
 
 /// Operations that can be applied to primitive types.
@@ -344,13 +373,6 @@ struct EmptyDeclExpr : Expr {
 /// A temporary expression that represents a non-existent value, such as a compilation error.
 struct EmptyExpr : Expr {
 	EmptyExpr(TypeRef type) : Expr(Empty, type) {}
-};
-
-struct Module {
-	Id name;
-	Core::Array<Function*> functions;
-	Core::NumberMap<Function*, Id> functionMap{32};
-	Core::NumberMap<Type*, Id> typeMap{32};
 };
 
 }} // namespace athena::resolve

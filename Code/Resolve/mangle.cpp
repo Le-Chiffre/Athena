@@ -21,16 +21,16 @@ void Mangler::mangleQualifier(ast::Qualified* qualified) {
 	auto q = qualified->qualifier;
 	while(q) {
 		char buffer[32];
-		Core::NumberToString(q->name.length, buffer, 32);
+		Core::NumberToString((uint)q->name.length, buffer, 32);
 		string += &buffer[0];
-		string.Append(q->name.ptr, q->name.length);
+		string.Append(q->name.ptr, (uint)q->name.length);
 		q = q->qualifier;
 	}
 
 	char buffer[32];
-	Core::NumberToString(name.length, buffer, 32);
+	Core::NumberToString((uint)name.length, buffer, 32);
 	string += &buffer[0];
-	string.Append(name.ptr, name.length);
+	string.Append(name.ptr, (uint)name.length);
 	string += 'E';
 }
 
