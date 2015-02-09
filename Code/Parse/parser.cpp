@@ -67,7 +67,7 @@ void Parser::parseDecl() {
 	} else if(token == Token::kwData) {
 		parseDataDecl();
 	} else if(auto var = tryParse(&Parser::parseVar)) {
-		if(token == Token::opColonColon) {
+		if(token == Token::opColon) {
 			eat();
 
 			// Parse zero or more arguments.
@@ -105,8 +105,18 @@ void Parser::parseDecl() {
 			} else {
 				error("Expected a function body expression.");
 			}
-		} else {
-			error("Expected '::' or '=' after a function name declaration.");
+		} else if(token == Token::BraceL) {
+            // Parse the function arguments as a tuple.
+            auto type = parseTupleType();
+
+            // Parse the function body.
+            if(auto expr = parseExpr()) {
+                module.declarations += build<FunDecl>(var(), expr, nullptr, nullptr);
+            } else {
+                error("Expected a function body expression.");
+            }
+        } else {
+			error("Expected ':' or '=' after a function name declaration.");
 		}
 	}
 }
@@ -678,11 +688,92 @@ Type* Parser::parseType() {
 		auto id = token.data.id;
 		eat();
 		return build<Type>(Type::Con, id);
-	}
+	} else if(token == Token::BraceL) {
+        return parseTupleType();
+    }
 
 	error("Expected a type.");
 	return nullptr;
 }
+
+Type* Parser::parseTupleType() {
+    /*
+     * tuptype  →   { tupfield1, ..., tupfieldn }       (n ≥ 1)
+     */
+
+	if(token == Token::BraceL) {
+		eat();
+        if(auto f = parseTupleField()) {
+            auto list = build<TupleFieldList>(f());
+            auto p = list;
+
+            while(token == Token::Comma) {
+                eat();
+                auto field = parseTupleField();
+                if(!field) return nullptr;
+
+                p->next = build<TupleFieldList>(field());
+                p = p->next;
+            }
+
+            if(token == Token::BraceR) {
+                eat();
+                return build<TupleType>(list);
+            } else {
+                error("Expected '}");
+            }
+        } else {
+            error("Expected one or more tuple fields");
+        }
+	} else {
+		error("Expected '{'");
+	}
+
+	return nullptr;
+}
+
+Maybe<TupleField> Parser::parseTupleField() {
+    /*
+     * tupfield →   varid [: type]
+     *          |   varid [= infixexpr]
+     *          |   type [= infixexpr]
+     * (The last one may not be valid in any context, but may be used in the future)
+     */
+
+    TypeRef type = nullptr;
+    Maybe<Id> name = Nothing;
+    ExprRef def = nullptr;
+
+    // If the token is a varid, it can either be a generic or named parameter, depending on the token after it.
+    if(token == Token::VarID) {
+        auto id = token.data.id;
+        eat();
+        if(token == Token::opColon) {
+            // This was the parameter name.
+            eat();
+            type = parseType();
+            name = id;
+        } else if(token == Token::opEquals) {
+            name = id;
+        } else {
+            // This was the type.
+            type = build<Type>(Type::Gen, id);
+        }
+    } else {
+        type = parseType();
+    }
+
+    if(!type) return Nothing;
+
+    // Parse default value.
+    if(!name && token == Token::opEquals) {
+        eat();
+        def = parseInfixExpr();
+    }
+
+    return TupleField{type, name, def};
+}
+
 
 Field* Parser::parseField() {
 	bool constant;

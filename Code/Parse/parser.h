@@ -62,11 +62,13 @@ struct Parser {
 
 	Expr* parseVarDecl(bool constant);
 	Expr* parseDeclExpr(bool constant);
-	void  parseFixity();
+	void parseFixity();
 	Maybe<Id> parseVar();
 	Maybe<Id> parseQop();
 
 	Type* parseType();
+    Maybe<TupleField> parseTupleField();
+	Type* parseTupleType();
 	Field* parseField();
 
 	void addFixity(Fixity f);

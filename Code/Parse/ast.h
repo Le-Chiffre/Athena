@@ -88,9 +88,11 @@ struct Literal {
 
 struct Type {
 	enum Kind {
-		Unit,
-		Con,
-		Ptr
+		Unit, // The empty unit type.
+		Con,  // A type constructor for a named type.
+		Ptr,  // A pointer to a type.
+        Gen,  // A generic or polymorphic named type.
+        Tup,  // A tuple type with optionally named fields.
 	} kind;
 	Id con;
 
@@ -99,6 +101,21 @@ struct Type {
 };
 
 typedef const Type* TypeRef;
+
+struct TupleField {
+    TupleField(TypeRef type, Core::Maybe<Id> name, struct Expr* def) : type(type), defaultValue(def), name(name) {}
+
+    TypeRef type;
+    struct Expr* defaultValue;
+    Core::Maybe<Id> name;
+};
+
+typedef ASTList<TupleField> TupleFieldList;
+
+struct TupleType : Type {
+    TupleType(TupleFieldList* fields) : Type(Tup), fields(fields) {}
+    TupleFieldList* fields;
+};
 
 struct Expr {
 	enum Type {
@@ -249,9 +266,9 @@ struct Arg {
 typedef ASTList<Arg> ArgList;
 
 struct FunDecl : Decl {
-	FunDecl(Id name, ExprRef body, ArgList* args, TypeRef ret) : Decl(Function), name(name), args(args), ret(ret), body(body) {}
+	FunDecl(Id name, ExprRef body, TupleType* args, TypeRef ret) : Decl(Function), name(name), args(args), ret(ret), body(body) {}
 	Id name;
-	ArgList* args;
+	TupleType* args;
 	TypeRef ret; // If the function explicitly defines one.
 	ExprRef body;
 };

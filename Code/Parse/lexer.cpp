@@ -867,6 +867,56 @@ void Lexer::ParseSymbol()
 		else p++;
 	}
 }
+
+bool Lexer::ParseUniSymbol()
+{
+	auto& tok = *mToken;
+	auto p = mP;
+	wchar32 ch;
+	if(!Core::Unicode::ConvertNextPoint(p, &ch)) {
+		mDiag.Warning("Source code must be valid UTF-8.");
+		return false;
+	}
+
+	if(ch > 255) return false;
+
+	bool handled = false;
+
+	if(ch == U'→') {
+		tok.type = Token::opArrowR;
+		tok.kind = Token::Keyword;
+		handled = true;
+	} else if(ch == U'←') {
+		tok.type = Token::opArrowL;
+		tok.kind = Token::Keyword;
+		handled = true;
+	} else if(ch == U'λ') {
+		tok.type = Token::opBackSlash;
+		tok.kind = Token::Keyword;
+		handled = true;
+	} else if(ch == U'≤') {
+		tok.type = Token::VarSym;
+		tok.kind = Token::Identifier;
+		mQualifier.name = Core::StringRef{"<="};
+		handled = true;
+	} else if(ch == U'≥') {
+		tok.type = Token::VarSym;
+		tok.kind = Token::Identifier;
+		mQualifier.name = Core::StringRef{">="};
+		handled = true;
+	} else if(ch == U'≠') {
+		tok.type = Token::VarSym;
+		tok.kind = Token::Identifier;
+		mQualifier.name = Core::StringRef{"!="};
+		handled = true;
+	}
+
+	if(handled) {
+		mP = p;
+	}
+
+	return handled;
+}
 	
 void Lexer::ParseSpecial()
 {
@@ -1139,6 +1189,13 @@ stringLit:
 	{
 		ParseSymbol();
 		tok.data.id = mContext.AddUnqualifiedName(mQualifier.name);
+	}
+
+	// Parse special unicode symbols.
+	else if(ParseUniSymbol())
+	{
+		if(tok.kind == Token::Identifier)
+			tok.data.id = mContext.AddUnqualifiedName(mQualifier.name);
 	}
 	
 	//Parse ConIDs

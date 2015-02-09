@@ -33,7 +33,7 @@ typedef Core::NumberMap<Function*, Id> FunMap;
 
 struct Scope {
     Variable* findVar(Id name);
-    Function* findFun(Id name);
+    Function* findFun(Id name, ExprList* types);
     Type* findType(Id name);
 
 	// The base name of this scope (determines type visibility).
@@ -57,7 +57,7 @@ struct Scope {
 
 typedef Scope Module;
 
-struct Function : Scope {
+struct Function {
 	Function(Id name, ast::FunDecl* decl) : name(name), astDecl(decl) {}
 
 	// The base name of this function.

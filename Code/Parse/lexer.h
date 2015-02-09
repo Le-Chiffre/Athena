@@ -222,10 +222,10 @@ struct Token {
 		opColon,
 		opColonColon,
 		opEquals,
-		opBackSlash,
+		opBackSlash, // also λ
 		opBar,
-		opArrowL,
-		opArrowR,
+		opArrowL, // <- and ←
+		opArrowR, // -> and →
 		opAt,
 		opTilde,
 		opArrowD,
@@ -339,6 +339,11 @@ private:
 	 * mP must point to the first symbol of the operator.
 	 */
 	void ParseSymbol();
+
+	/**
+	 * Parses any special unicode symbols.
+	 */
+	bool ParseUniSymbol();
 	
 	/**
 	 * Parses a special symbol.

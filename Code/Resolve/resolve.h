@@ -3,15 +3,10 @@
 
 #include "../Parse/parser.h"
 #include "resolve_ast.h"
+#include "../General/diagnostic.h"
 
 namespace athena {
 namespace resolve {
-
-struct TypeCheck {
-	bool compatible(resolve::ExprRef a, resolve::ExprRef b) {
-		return &a.type == &b.type;
-	}
-};
 
 struct TypeManager {
     TypeManager() {
@@ -114,6 +109,19 @@ struct Resolver {
 	/// Tries to find a function from the provided expression that takes the provided parameters.
 	Function* findFunction(ScopeRef scope, ast::ExprRef, ExprList* args);
 
+	/// Tries to find a function with the provided name that takes the provided parameters.
+	Function* findFunction(ScopeRef scope, Id name, ExprList* args);
+
+	/// Checks if the provided function can potentially be called with the provided arguments.
+	bool potentiallyCallable(Function* fun, ExprList* args);
+
+	/// Finds the best matching function from the current potential callees list.
+	Function* findBestMatch(ExprList* args);
+
+	/// Returns the number of implicit conversions needed to call this function with the provided arguments.
+	/// The function must be callable with these arguments.
+	uint findImplicitConversionCount(Function* f, ExprList* args);
+
 	/// Reorders the provided chain of infix operators according to the operator precedence table.
 	ast::InfixExpr& reorder(ast::InfixExpr& expr);
 
@@ -136,9 +144,11 @@ struct Resolver {
 	ast::CompileContext& context;
 	ast::Module& source;
 	Core::StaticBuffer buffer;
-	TypeCheck typeCheck;
     TypeManager types;
 	EmptyExpr emptyExpr{types.getUnit()};
+
+	// This is used to accumulate potentially callable functions.
+	Core::Array<Function*> potentialCallees{32};
 };
 
 }} // namespace athena::resolve

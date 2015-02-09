@@ -47,6 +47,8 @@ main =
 
 cast :: a = truncate a : *I8
 
+test :: a: Int → b: Int = a + b
+
 gg = var i : Int
 	 i.x = 0
 
