@@ -32,7 +32,12 @@ typedef Core::NumberMap<Type*, Id> TypeMap;
 typedef Core::NumberMap<Function*, Id> FunMap;
 
 struct Scope {
+	// Finds any variable with the provided name that is visible in this scope.
     Variable* findVar(Id name);
+
+	// Finds any local variable with the provided name that is declared within this scope.
+	Variable* findLocalVar(Id name);
+
     Function* findFun(Id name, ExprList* types);
     Type* findType(Id name);
 
@@ -49,25 +54,28 @@ struct Scope {
 	VarList variables;
 
     // The functions that were declared in this scope.
-	FunMap functions{32};
+	FunMap functions;
 
     // The types that were declared in this scope.
-    TypeMap types{32};
+    TypeMap types;
 };
 
 typedef Scope Module;
 
 struct Function {
-	Function(Id name, ast::FunDecl* decl) : name(name), astDecl(decl) {}
+	Function(Id name, ast::FunDecl* decl) : astDecl(decl), name(name) {}
 
-	// The base name of this function.
-	Id name;
-	
+	// The scope this function contains.
+	Scope scope;
+
 	// The source declaration of this function in the AST.
 	// This will be set as long as the function has not been resolved.
 	// Any function where this is set after resolving is either unused or an error.
 	ast::FunDecl* astDecl = nullptr;
-	
+
+	// The base name of this function.
+	Id name;
+
 	/*
 	 * The following fields are invalid as long as the function has not been resolved.
 	 */
@@ -76,13 +84,9 @@ struct Function {
 	Id mangledName = 0;
 
 	// The arguments this function takes.
-	// Each argument also exists in the list of variables.
+	// Each argument also exists in the function scope as a variable.
 	VarList arguments;
-	
-	// The variables that were declared in the function.
-	// This also includes the arguments.
-	VarList variables;
-	
+
 	// Any expressions this function consists of.
 	Expr* expression = nullptr;
 	

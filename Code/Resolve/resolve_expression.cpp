@@ -215,7 +215,7 @@ Expr* Resolver::resolveDecl(Scope& scope, ast::DeclExpr& expr) {
 
 	// Make sure this scope doesn't already have a variable with the same name.
 	Variable* var;
-	if((var = scope.findVar(expr.name))) {
+	if((var = scope.findLocalVar(expr.name))) {
 		error("redefinition of '%@'", var->name);
 	} else {
 		// Create the variable allocation.

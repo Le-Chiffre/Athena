@@ -1,7 +1,8 @@
 #ifndef Athena_Resolve_typecheck_h
 #define Athena_Resolve_typecheck_h
 
-#include "resolve.h"
+#include "resolve_ast.h"
+#include "../General/diagnostic.h"
 
 namespace athena {
 namespace resolve {

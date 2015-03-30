@@ -4,6 +4,7 @@
 #include "../Parse/parser.h"
 #include "resolve_ast.h"
 #include "../General/diagnostic.h"
+#include "typecheck.h"
 
 namespace athena {
 namespace resolve {
@@ -57,7 +58,7 @@ struct Resolver {
 	Resolver(ast::CompileContext& context, ast::Module& source);
 
 	Module* resolve();
-	bool resolveFunction(Function& fun, ast::FunDecl& decl);
+	bool resolveFunction(Scope& scope, Function& fun, ast::FunDecl& decl);
 	Expr* resolveExpression(Scope& scope, ast::ExprRef expr);
     Expr* resolveLiteral(Scope& scope, ast::LitExpr& expr);
 	Expr* resolveInfix(Scope& scope, ast::InfixExpr& expr);
@@ -85,7 +86,7 @@ struct Resolver {
     /// *dst* must be a primitive.
 	Expr* resolvePrimitiveOp(Scope& scope, PrimitiveOp op, resolve::ExprRef dst);
 
-	Variable* resolveArgument(ScopeRef scope, ast::Arg& arg);
+	Variable* resolveArgument(ScopeRef scope, ast::TupleField& arg);
     Field resolveField(ScopeRef scope, ast::Field& field);
 
 	/// Retrieves or creates a concrete type.
@@ -127,8 +128,11 @@ struct Resolver {
 
 	nullptr_t error(const char*);
 
-	template<class P, class...Ps>
-	nullptr_t error(const char*, P, Ps...);
+	template<class P, class... Ps>
+	nullptr_t error(const char* text, P first, Ps... more) {
+		Core::LogError(text, first, more...);
+		return nullptr;
+	}
 
 	template<class T, class... P>
 	T* build(P&&... p) {
@@ -145,6 +149,7 @@ struct Resolver {
 	ast::Module& source;
 	Core::StaticBuffer buffer;
     TypeManager types;
+	TypeCheck typeCheck;
 	EmptyExpr emptyExpr{types.getUnit()};
 
 	// This is used to accumulate potentially callable functions.

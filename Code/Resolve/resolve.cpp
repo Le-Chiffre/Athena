@@ -72,28 +72,10 @@ Module* Resolver::resolve() {
 	});
 
     module->functions.Iterate([=](Id name, Function* f) {
-        if(f->astDecl) resolveFunction(*f, *f->astDecl);
+        if(f->astDecl) resolveFunction(*module, *f, *f->astDecl);
     });
 	
 	return module;
-}
-
-bool Resolver::resolveFunction(Function& fun, ast::FunDecl& decl) {
-	ASSERT(fun.name == decl.name);
-	auto arg = decl.args;
-	while(arg) {
-		auto a = resolveArgument(fun, arg->item);
-		fun.arguments += a;
-		fun.variables += a;
-		arg = arg->next;
-	}
-	fun.expression = resolveExpression(fun, decl.body);
-	return true;
-}
-	
-Variable* Resolver::resolveArgument(ScopeRef scope, ast::Arg& arg) {
-	auto type = arg.type ? resolveType(scope, arg.type) : types.getUnknown();
-	return build<Variable>(arg.name, type, scope, arg.constant);
 }
 
 Field Resolver::resolveField(ScopeRef scope, ast::Field& field) {
@@ -119,34 +101,8 @@ PrimitiveOp* Resolver::tryPrimitiveOp(ast::ExprRef callee) {
 }
 
 CoerceExpr* Resolver::implicitCoerce(ExprRef src, TypeRef dst) {
-	// Only primitive types can be implicitly converted:
-	//  - floating point types can be converted to a larger type.
-	//  - integer types can be converted to a larger type.
-	//  - pointer types can be converted to Bool.
-	//  - Bool can be converted to an integer type.
-	// Special case: literals can be converted into any type of the same category.
-	if(src.type->isPrimitive() && dst->isPrimitive()) {
-		auto s = ((PrimType*)src.type)->type;
-		auto d = ((PrimType*)dst)->type;
-		if(category(s) == category(d) && (src.kind == Expr::Lit || d >= s)) {
-			return build<CoerceExpr>(src, dst);
-		} else {
-			error("a primitive type can only be implicitly converted to a larger type");
-		}
-	} else if(src.type->isPointer()) {
-		if(dst->isBool()) {
-			return build<CoerceExpr>(src, dst);
-		} else {
-			error("pointer types can only be implicitly converted to Bool");
-		}
-	} else if(src.type->isBool() && dst->isPrimitive()) {
-		if(((PrimType*)dst)->type < PrimitiveType::FirstFloat) {
-			return build<CoerceExpr>(src, dst);
-		} else {
-			error("booleans can only be implicitly converted to integer types");
-		}
-	} else {
-		error("only primitive types or pointers can be implicitly converted");
+	if(typeCheck.implicitCoerce(src.type, dst, Core::Nothing)) {
+		return build<CoerceExpr>(src, dst);
 	}
 
 	return nullptr;
@@ -187,12 +143,6 @@ LitExpr* Resolver::literalCoerce(const ast::Literal& lit, TypeRef dst) {
 
 nullptr_t Resolver::error(const char* text) {
 	Core::LogError(text);
-	return nullptr;
-}
-
-template<class P, class... Ps>
-nullptr_t Resolver::error(const char* text, P first, Ps... more) {
-	Core::LogError(text, first, more...);
 	return nullptr;
 }
 

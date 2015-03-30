@@ -34,7 +34,7 @@ Function* Resolver::findFunction(ScopeRef scope, Id name, ExprList* args) {
 			identifierExists = true;
 
 			// If there are multiple overloads, we have to resolve each one.
-			resolveFunction(**fn, *(*fn)->astDecl);
+			resolveFunction(*s, **fn, *(*fn)->astDecl);
 			if(potentiallyCallable(*fn, args)) potentialCallees += *fn;
 		}
 

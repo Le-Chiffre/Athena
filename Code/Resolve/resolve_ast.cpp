@@ -18,6 +18,13 @@ Variable* Scope::findVar(Id name) {
     return nullptr;
 }
 
+Variable* Scope::findLocalVar(Id name) {
+    for(auto i : variables) {
+        if(i->name == name) return i;
+    }
+    return nullptr;
+}
+
 Function* Scope::findFun(Id name, ExprList* types) {
 	// Create a list of all functions with this name.
 	Core::Array<Function*> foundFunctions{16};
