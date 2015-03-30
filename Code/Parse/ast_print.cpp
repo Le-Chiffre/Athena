@@ -247,12 +247,18 @@ private:
 		auto name = context.Find(e.name).name;
 		string.Append(name.ptr, name.length);
 		string += '(';
-		auto arg = e.args;
-		while(arg) {
-			name = context.Find(arg->item.name).name;
-			string.Append(name.ptr, name.length);
-			if(arg->next) string += ", ";
-			arg = arg->next;
+		if(e.args) {
+			auto arg = e.args->fields;
+			while(arg) {
+				if(arg->item.name)
+					name = context.Find(arg->item.name()).name;
+				else
+					name = "<unnamed>";
+				
+				string.Append(name.ptr, name.length);
+				if(arg->next) string += ", ";
+				arg = arg->next;
+			}
 		}
 		string += ')';
 

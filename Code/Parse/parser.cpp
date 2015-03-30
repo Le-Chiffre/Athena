@@ -57,7 +57,8 @@ void Parser::parseDecl() {
 	 * decl			→	fundecl
 	 * 				|	typedecl
 	 * 				|	datadecl
-	 * fundecl		→	var :: args = expr
+	 * fundecl		→	var : args = expr
+	 * 				|	var tuptype = expr
 	 * 				|	var = expr
 	 * args			→	arg0 arg1 ... argn		(n ≥ 0)
 	 * arg			→	varid
@@ -71,18 +72,19 @@ void Parser::parseDecl() {
 			eat();
 
 			// Parse zero or more arguments.
-			ArgList* args = nullptr;
+			TupleFieldList* arg = nullptr;
 			if(token == Token::VarID) {
-				args = build<ArgList>(Arg{token.data.id, nullptr, true});
-				auto p = args;
+				arg = build<TupleFieldList>(TupleField{nullptr, token.data.id, nullptr});
+				auto p = arg;
 				eat();
 				while(token == Token::VarID) {
-					p = build<ArgList>(Arg{token.data.id, nullptr, true});
+					auto pp = build<TupleFieldList>(TupleField{nullptr, token.data.id, nullptr});
 					eat();
-					args->next = p;
-					args = p;
+					p->next = pp;
+					p = pp;
 				}
 			}
+			TupleType* args = build<TupleType>(arg);
 
 			if(token == Token::opEquals) {
 				eat();
@@ -107,11 +109,17 @@ void Parser::parseDecl() {
 			}
 		} else if(token == Token::BraceL) {
             // Parse the function arguments as a tuple.
-            auto type = parseTupleType();
+            auto args = (TupleType*)parseTupleType();
+			
+			if(token != Token::opEquals) {
+				error("Expected '=' after a function signature.");
+				return;
+			}
+			eat();
 
             // Parse the function body.
             if(auto expr = parseExpr()) {
-                module.declarations += build<FunDecl>(var(), expr, nullptr, nullptr);
+                module.declarations += build<FunDecl>(var(), expr, args, nullptr);
             } else {
                 error("Expected a function body expression.");
             }
