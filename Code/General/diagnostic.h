@@ -57,6 +57,8 @@ struct DiagnosticBuilder {
 private:
 	Diagnostics& diag;
 };
+	
+inline DiagnosticBuilder Diagnostics::report(SourceLocation, DiagID) {return {*this};}
 
 struct Diagnostic {
 	Diagnostic(const Diagnostics& diag) : diag(diag) {}

@@ -43,11 +43,11 @@ main =
 		display = path.display
 	File.open path >>= readToString >>= print "{display} contains {str}"
 	let x = "Time taken: {let time = timer.tick} ms ({1000/time} fps)."
-(+) :: a b = a `add` b
+(+) : a b = a `add` b
 
-cast :: a = truncate a : *I8
+cast : a = truncate a : *I8
 
-test :: a: Int → b: Int = a + b
+test {a: Int, b: Int} = a + b
 
 gg = var i : Int
 	 i.x = 0
@@ -66,6 +66,7 @@ data X =
 	auto str = athena::ast::toString(module, context);
 	f.Write({str.ptr, str.length});
 
+	//Core::Terminal << athena::ast::toString(module, context);
 	Core::Terminal.WaitForInput();
 
 	/*llvm::LLVMContext context;

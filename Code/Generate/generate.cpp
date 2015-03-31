@@ -23,17 +23,19 @@ Function* Generator::genFunction(resolve::Function& function) {
 
 	auto type = FunctionType::get(builder.getFloatTy(), ArrayRef<Type*>(argTypes, argCount), false);
 	auto func = Function::Create(type, Function::ExternalLinkage, toRef(ccontext.Find(function.name).name), &module);
-	genScope(function)->insertInto(func);
+	auto scope = genScope(function.scope);
+	scope->insertInto(func);
+	if(function.expression) {
+		builder.SetInsertPoint(scope);
+		genExpr(*function.expression);
+		builder.ClearInsertionPoint();
+	}
 	return func;
 }
 
 BasicBlock* Generator::genScope(resolve::Scope& scope) {
 	auto block = BasicBlock::Create(context, "");
-	if(scope.expression) {
-		builder.SetInsertPoint(block);
-		genExpr(*scope.expression);
-		builder.ClearInsertionPoint();
-	}
+	// TODO: Generate variables.
 	return block;
 }
 
