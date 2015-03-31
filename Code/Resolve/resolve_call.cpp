@@ -7,7 +7,7 @@ namespace resolve {
 Function* Resolver::findFunction(ScopeRef scope, ast::ExprRef callee, ExprList* args) {
 	if(callee->isVar()) {
 		auto name = ((const ast::VarExpr*)callee)->name;
-		if(auto fun = scope.findFun(name, args)) {
+		if(auto fun = findFunction(scope, name, args)) {
 			// TODO: Create closure type if the function takes more parameters.
 			return fun;
 		} else {
@@ -30,12 +30,17 @@ Function* Resolver::findFunction(ScopeRef scope, Id name, ExprList* args) {
 		// Note: functions are added to a scope before they are processed, so any existing function will be found from here.
 		// TODO: Since only the function names are added (not their arguments),
 		// TODO: we have to resolve each function before we can know which one to call.
-		if(auto fn = s->functions.Get(name)) {
+		if(auto fns = s->functions.Get(name)) {
 			identifierExists = true;
 
 			// If there are multiple overloads, we have to resolve each one.
-			resolveFunction(*s, **fn, *(*fn)->astDecl);
-			if(potentiallyCallable(*fn, args)) potentialCallees += *fn;
+			auto fn = *fns;
+			while(fn) {
+				resolveFunction(*s, *fn);
+				if(potentiallyCallable(fn, args))
+					potentialCallees += fn;
+				fn = fn->sibling;
+			}
 		}
 
 		s = s->parent;
@@ -58,7 +63,20 @@ Function* Resolver::findFunction(ScopeRef scope, Id name, ExprList* args) {
 }
 
 bool Resolver::potentiallyCallable(Function* fun, ExprList* args) {
-	return false;
+	// For now, check if each argument is compatible.
+	auto farg = fun->arguments.begin();
+	auto fend = fun->arguments.end();
+	auto arg = args;
+	while(arg && farg != fend) {
+		// If any argument is incompatible, the function is not callable.
+		if(!typeCheck.compatible(*arg->item, (*farg)->type)) return false;
+
+		arg = arg->next;
+		farg = ++farg;
+	}
+
+	// If either iterator has elements left, the argument counts do not match.
+	return !(arg || farg != fend);
 }
 
 uint Resolver::findImplicitConversionCount(Function* f, ExprList* args) {
@@ -78,6 +96,7 @@ Function* Resolver::findBestMatch(ExprList* args) {
 
 	// For each function, check if it is better than the best one.
 	for(uint i = 1; i < potentialCallees.Count(); i++) {
+		// TODO: This should be the last match factor that is checked.
 		uint convs = findImplicitConversionCount(potentialCallees[i], args);
 		if(convs < leastConversions) {
 			sameMatchCount = 0;

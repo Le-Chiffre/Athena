@@ -118,11 +118,11 @@ Expr* Resolver::resolveCall(Scope& scope, ast::AppExpr& expr) {
 		if(auto rhs = expr.args->next) {
 			if(!rhs->next) {
 				// Two arguments.
-				resolveBinaryCall(scope, expr.callee, lhs->item, rhs->item);
+				return resolveBinaryCall(scope, expr.callee, lhs->item, rhs->item);
 			}
 		} else {
 			// Single argument.
-			resolveUnaryCall(scope, expr.callee, lhs->item);
+			return resolveUnaryCall(scope, expr.callee, lhs->item);
 		}
 	}
 
@@ -158,7 +158,7 @@ Expr* Resolver::resolveVar(Scope& scope, Id name) {
 	} else {
 		// No local or global variable was found.
 		// Check if this is a function instead.
-		if(auto fun = scope.findFun(name, nullptr)) {
+		if(auto fun = findFunction(scope, name, nullptr)) {
 			// This is a function being called with zero arguments.
 			// TODO: Create a closure if the function actually takes more arguments.
 			return build<AppExpr>(*fun, nullptr);

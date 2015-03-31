@@ -79,6 +79,11 @@ void Resolver::initPrimitives() {
 		auto id = context.AddUnqualifiedName(primitiveTypeNames[i], primitiveTypeLengths[i]);
 		types.primMap.Add(id, types.getPrim((PrimitiveType)i));
 	}
+
+	// Add the builtin aliases.
+	types.primMap.Add(context.AddUnqualifiedName("Int"), types.getPrim(PrimitiveType::U32));
+	types.primMap.Add(context.AddUnqualifiedName("Float"), types.getPrim(PrimitiveType::F32));
+	types.primMap.Add(context.AddUnqualifiedName("Double"), types.getPrim(PrimitiveType::F64));
 }
 
 Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, resolve::ExprRef lhs, resolve::ExprRef rhs) {
@@ -130,7 +135,7 @@ const Type* Resolver::getBinaryOpType(PrimitiveOp op, PrimitiveType lhs, Primiti
 	if(op < PrimitiveOp::FirstBit) {
 		// Arithmetic operators return the largest type.
 		if(arithCompatible(lhs, rhs)) {
-			return types.getPrim(Core::Min(lhs, rhs));
+			return types.getPrim(largest(lhs, rhs));
 		} else {
 			error("arithmetic operator on incompatible primitive types");
 		}

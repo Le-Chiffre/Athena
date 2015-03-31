@@ -18,9 +18,9 @@ bool TypeCheck::implicitCoerce(TypeRef src, TypeRef dst, Maybe<Diagnostics*> dia
 	//  - Bool can be converted to an integer type.
 	// Special case: literals can be converted into any type of the same category.
 	if(src->isPrimitive() && dst->isPrimitive()) {
-		auto s = ((PrimType*)src->kind)->type;
+		auto s = ((PrimType*)src)->type;
 		auto d = ((PrimType*)dst)->type;
-		if(category(s) == category(d) && (src->kind == Expr::Lit || d >= s)) {
+		if(category(s) == category(d) && d >= s) {
 			return true;
 		} else {
 			error(diag, "a primitive type can only be implicitly converted to a larger type");
@@ -42,6 +42,59 @@ bool TypeCheck::implicitCoerce(TypeRef src, TypeRef dst, Maybe<Diagnostics*> dia
 	}
 
 	return false;
+}
+
+bool TypeCheck::literalCoerce(const ast::Literal& lit, TypeRef dst, Literal& literal, Maybe<Diagnostics*> diag) {
+	// Literal conversion rules:
+	//  - Integer and Float literals can be converted to any other integer or float
+	//    (warnings should be issued if the value would not fit).
+	literal = lit;
+	if(dst->isPrimitive()) {
+		auto ptype = ((const PrimType*)dst)->type;
+		if(lit.type == ast::Literal::Int && ptype < PrimitiveType::FirstOther) {
+			if(ptype < PrimitiveType::FirstFloat) {
+				// No need to change the literal.
+			} else if(ptype < PrimitiveType::FirstOther) {
+				literal.f = lit.i;
+				literal.type = ast::Literal::Float;
+			}
+		} else if(lit.type == ast::Literal::Float && ptype < PrimitiveType::FirstOther) {
+			if(ptype < PrimitiveType::FirstFloat) {
+				literal.i = lit.f;
+				literal.type = ast::Literal::Int;
+			} else if(ptype < PrimitiveType::FirstOther) {
+				// No need to change the literal.
+			}
+		} else {
+			error(diag, "cannot convert this literal to the target type");
+			return false;
+		}
+	} else {
+		error(diag, "literals can only be converted to primitive types");
+		return false;
+	}
+
+	return true;
+}
+
+bool TypeCheck::literalCoerce(const Literal& lit, TypeRef dst, Maybe<Diagnostics*> diag) {
+	// Literal conversion rules:
+	//  - Integer and Float literals can be converted to any other integer or float
+	//    (warnings should be issued if the value would not fit).
+	if(dst->isPrimitive()) {
+		auto ptype = ((const PrimType*)dst)->type;
+		if(lit.type == ast::Literal::Int && ptype < PrimitiveType::FirstOther) {
+			return true;
+		} else if(lit.type == ast::Literal::Float && ptype < PrimitiveType::FirstOther) {
+			return true;
+		} else {
+			error(diag, "cannot convert this literal to the target type");
+			return false;
+		}
+	} else {
+		error(diag, "literals can only be converted to primitive types");
+		return false;
+	}
 }
 
 }} // namespace athena::resolve

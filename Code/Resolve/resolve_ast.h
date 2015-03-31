@@ -16,6 +16,7 @@ struct Function;
 struct Expr;
 struct Alt;
 struct Type;
+struct Resolver;
 
 typedef Scope& ScopeRef;
 typedef Function& FuncRef;
@@ -32,13 +33,12 @@ typedef Core::NumberMap<Type*, Id> TypeMap;
 typedef Core::NumberMap<Function*, Id> FunMap;
 
 struct Scope {
-	// Finds any variable with the provided name that is visible in this scope.
+	/// Finds any variable with the provided name that is visible in this scope.
     Variable* findVar(Id name);
 
-	// Finds any local variable with the provided name that is declared within this scope.
+	/// Finds any local variable with the provided name that is declared within this scope.
 	Variable* findLocalVar(Id name);
 
-    Function* findFun(Id name, ExprList* types);
     Type* findType(Id name);
 
 	// The base name of this scope (determines type visibility).
@@ -113,24 +113,27 @@ struct Alt {
 /// Types within the same category (except Other) are often compatible with each other.
 /// Within a category they are ordered large to small.
 enum class PrimitiveType {
-    FirstSigned = 0x10,
+	/*
+	 * Make sure to update PrimitiveTypeCategory and category() when changing this!
+	 */
+    FirstSigned,
 	I64 = (uint)FirstSigned,
 	I32,
 	I16,
 	I8,
 	
-	FirstUnsigned = 0x20,
+	FirstUnsigned,
 	U64 = (uint)FirstUnsigned,
 	U32,
 	U16,
 	U8,
 
-	FirstFloat = 0x40,
+	FirstFloat,
 	F64 = (uint)FirstFloat,
 	F32,
 	F16,
 
-    FirstOther = 0x80,
+    FirstOther,
     Bool = (uint)FirstOther,
 
 	TypeCount
@@ -139,15 +142,20 @@ enum class PrimitiveType {
 /// Categories for the primitive types.
 /// Used to quickly determine supported operations.
 enum class PrimitiveTypeCategory {
-    Signed = 0x10,
-    Unsigned = 0x20,
-    Float = 0x40,
-    Other = 0x80
+    Signed = 0,
+    Unsigned = 0b100,
+    Float = 0b1000,
+    Other = 0b1100
 };
 
 /// Returns the category a primitive type belongs to.
 inline PrimitiveTypeCategory category(PrimitiveType t) {
-    return (PrimitiveTypeCategory)((uint)t & 0xf0);
+    return (PrimitiveTypeCategory)((uint)t & 0b1100);
+}
+
+/// Returns the largest of the two provided types.
+inline PrimitiveType largest(PrimitiveType a, PrimitiveType b) {
+	return Core::Min(a, b);
 }
 
 struct Type {

@@ -72,7 +72,7 @@ Module* Resolver::resolve() {
 	});
 
     module->functions.Iterate([=](Id name, Function* f) {
-        if(f->astDecl) resolveFunction(*module, *f, *f->astDecl);
+        resolveFunction(*module, *f);
     });
 	
 	return module;
@@ -101,7 +101,7 @@ PrimitiveOp* Resolver::tryPrimitiveOp(ast::ExprRef callee) {
 }
 
 CoerceExpr* Resolver::implicitCoerce(ExprRef src, TypeRef dst) {
-	if(typeCheck.implicitCoerce(src.type, dst, Core::Nothing)) {
+	if(typeCheck.implicitCoerce(src.type, dst, Nothing)) {
 		return build<CoerceExpr>(src, dst);
 	}
 
@@ -109,32 +109,8 @@ CoerceExpr* Resolver::implicitCoerce(ExprRef src, TypeRef dst) {
 }
 
 LitExpr* Resolver::literalCoerce(const ast::Literal& lit, TypeRef dst) {
-	// Literal conversion rules:
-	//  - Integer and Float literals can be converted to any other integer or float
-	//    (warnings are issued if the value would not fit).
-	Literal literal = lit;
-	if(dst->isPrimitive()) {
-		auto ptype = ((const PrimType*)dst)->type;
-		if(lit.type == ast::Literal::Int) {
-			if(ptype < PrimitiveType::FirstFloat) {
-				// No need to change the literal.
-			} else if(ptype < PrimitiveType::FirstOther) {
-				literal.f = lit.i;
-				literal.type = ast::Literal::Float;
-			}
-		} else if(lit.type == ast::Literal::Float) {
-			if(ptype < PrimitiveType::FirstFloat) {
-				literal.i = lit.f;
-				literal.type = ast::Literal::Int;
-			} else if(ptype < PrimitiveType::FirstOther) {
-				// No need to change the literal.
-			}
-		} else {
-			error("cannot convert this literal to the target type");
-		}
-	} else {
-		error("literals can only be converted to primitive types");
-	}
+	Literal literal;
+	typeCheck.literalCoerce(lit, dst, literal, Nothing);
 
 	// We always return a valid value to simplify the resolver.
 	// If an error occurred the code generator will not be invoked.

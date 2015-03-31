@@ -58,7 +58,7 @@ struct Resolver {
 	Resolver(ast::CompileContext& context, ast::Module& source);
 
 	Module* resolve();
-	bool resolveFunction(Scope& scope, Function& fun, ast::FunDecl& decl);
+	bool resolveFunction(Scope& scope, Function& fun);
 	Expr* resolveExpression(Scope& scope, ast::ExprRef expr);
     Expr* resolveLiteral(Scope& scope, ast::LitExpr& expr);
 	Expr* resolveInfix(Scope& scope, ast::InfixExpr& expr);

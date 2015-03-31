@@ -4,17 +4,23 @@
 namespace athena {
 namespace resolve {
 
-bool Resolver::resolveFunction(Scope& scope, Function& fun, ast::FunDecl& decl) {
+bool Resolver::resolveFunction(Scope& scope, Function& fun) {
+    if(!fun.astDecl) return true;
+
+    auto& decl = *fun.astDecl;
     ASSERT(fun.name == decl.name);
 
     fun.scope.parent = &scope;
-    auto arg = decl.args->fields;
-    while(arg) {
-        auto a = resolveArgument(fun.scope, arg->item);
-        fun.arguments += a;
-        arg = arg->next;
+    if(decl.args) {
+        auto arg = decl.args->fields;
+        while (arg) {
+            auto a = resolveArgument(fun.scope, arg->item);
+            fun.arguments += a;
+            arg = arg->next;
+        }
     }
     fun.expression = resolveExpression(fun.scope, decl.body);
+    fun.astDecl = nullptr;
     return true;
 }
 
