@@ -230,9 +230,8 @@ Expr* Parser::parseExpr() {
 			if(token == Token::EndOfBlock) eat();
 			return build<MultiExpr>(list);
 		} else {
-			ASSERT(token == Token::EndOfBlock);
 			level.end();
-			eat();
+			if(token == Token::EndOfBlock) eat();
 			return expr;
 		}
 	} else {

@@ -14,6 +14,14 @@ namespace gen {
 Generator::Generator(ast::CompileContext& ccontext, llvm::LLVMContext& context, llvm::Module& target) :
 	context(context), module(target), builder(context), ccontext(ccontext) {}
 
+llvm::Module* Generator::generate(resolve::Module& module) {
+	module.functions.Iterate([=](resolve::Id name, resolve::Function* f) {
+		genFunction(*f);
+	});
+
+	return &this->module;
+}
+
 Function* Generator::genFunction(resolve::Function& function) {
 	auto argCount = function.arguments.Count();
 	auto argTypes = (Type**)StackAlloc(sizeof(Type*) * argCount);
@@ -27,7 +35,7 @@ Function* Generator::genFunction(resolve::Function& function) {
 	scope->insertInto(func);
 	if(function.expression) {
 		builder.SetInsertPoint(scope);
-		genExpr(*function.expression);
+		//genExpr(*function.expression);
 		builder.ClearInsertionPoint();
 	}
 	return func;

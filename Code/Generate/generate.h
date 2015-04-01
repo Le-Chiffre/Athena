@@ -9,13 +9,14 @@
 namespace athena {
 namespace gen {
 
-llvm::StringRef toRef(ast::String str) {
+inline llvm::StringRef toRef(ast::String str) {
 	return {str.ptr, str.length};
 }
 
 struct Generator {
 	Generator(ast::CompileContext& ccontext, llvm::LLVMContext& context, llvm::Module& target);
 
+	llvm::Module* generate(resolve::Module& module);
 	llvm::Function* genFunction(resolve::Function& function);
 	llvm::BasicBlock* genScope(resolve::Scope& scope);
 	llvm::Value* genExpr(resolve::ExprRef expr);
