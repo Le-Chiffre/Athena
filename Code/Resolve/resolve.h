@@ -60,6 +60,8 @@ struct Resolver {
 	Module* resolve();
 	bool resolveFunction(Scope& scope, Function& fun);
 	Expr* resolveExpression(Scope& scope, ast::ExprRef expr);
+	Expr* resolveMulti(Scope& scope, ast::MultiExpr& expr);
+	Expr* resolveMultiWithRet(Scope& scope, ast::MultiExpr& expr);
     Expr* resolveLiteral(Scope& scope, ast::LitExpr& expr);
 	Expr* resolveInfix(Scope& scope, ast::InfixExpr& expr);
 	Expr* resolvePrefix(Scope& scope, ast::PrefixExpr& expr);

@@ -19,14 +19,21 @@ bool Resolver::resolveFunction(Scope& scope, Function& fun) {
             arg = arg->next;
         }
     }
-    fun.expression = resolveExpression(fun.scope, decl.body);
+	
+	// For multi-expressions, we return the last expression in the list.
+	if(decl.body->type == ast::Expr::Multi) {
+		fun.expression = resolveMultiWithRet(fun.scope, *(ast::MultiExpr*)decl.body);
+	} else {
+		fun.expression = build<RetExpr>(*resolveExpression(fun.scope, decl.body));
+	}
+	
     fun.astDecl = nullptr;
     return true;
 }
 
 Variable* Resolver::resolveArgument(ScopeRef scope, ast::TupleField& arg) {
     auto type = arg.type ? resolveType(scope, arg.type) : types.getUnknown();
-    auto var = build<Variable>(arg.name ? arg.name() : 0, type, scope, true);
+    auto var = build<Variable>(arg.name ? arg.name() : 0, type, scope, true, true);
     scope.variables += var;
     return var;
 }

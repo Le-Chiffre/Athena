@@ -65,9 +65,15 @@ add {a: Int, b: Int} = a + b
 max {a: Int, b: Int} = if a > b then a else b
 main = add 4 5 * max 100 200
 )s";
+	
+	auto test3 = R"s(
+main {a: Int, b: Int} =
+	var x = a*b
+	x = x*b
+)s";
 
 	athena::ast::Module module;
-	athena::ast::Parser p(context, module, test2);
+	athena::ast::Parser p(context, module, test3);
 	p.parseModule();
 
 	{
@@ -86,7 +92,7 @@ main = add 4 5 * max 100 200
 	auto llmodule = new llvm::Module("top", llcontext);
 
 	athena::gen::Generator gen{context, llcontext, *llmodule};
-	//gen.generate(*resolved);
+	gen.generate(*resolved);
 
 	llmodule->dump();
 
@@ -101,7 +107,7 @@ main = add 4 5 * max 100 200
 
 
 
-	llvm::Type* putsArgs[] = {builder.getInt8Ty()->getPointerTo()};
+	/*llvm::Type* putsArgs[] = {builder.getInt8Ty()->getPointerTo()};
 	llvm::ArrayRef<llvm::Type*> argsRef{putsArgs};
 
 	auto helloworld = builder.CreateGlobalStringPtr("hello world!\n");
@@ -109,7 +115,7 @@ main = add 4 5 * max 100 200
 	auto putsFunc = llmodule->getOrInsertFunction("puts", putsType);
 
 	builder.CreateCall(putsFunc, helloworld);
-	builder.CreateRetVoid();
+	builder.CreateRetVoid();*/
 
 	/*llvm::InitializeNativeTarget();
 	llvm::InitializeNativeTargetAsmPrinter();
@@ -117,5 +123,5 @@ main = add 4 5 * max 100 200
 	std::string errors;
 	auto engine = llvm::EngineBuilder(std::move(module)).setEngineKind(llvm::EngineKind::Interpreter).setErrorStr(&errors).create();
 	engine->runFunction(mainFunc, {});*/
-	llmodule->dump();
+	//llmodule->dump();
 }

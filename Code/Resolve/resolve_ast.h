@@ -95,11 +95,15 @@ struct Function {
 };
 
 struct Variable {
-	Variable(Id name, TypeRef type, ScopeRef scope, bool constant) : name(name), type(type), scope(scope), constant(constant) {}
-	Id name;
+	Variable(Id name, TypeRef type, ScopeRef scope, bool constant, bool funParam = false) : type(type), scope(scope), name(name), constant(constant), funParam(funParam) {}
+	void* codegen = nullptr; // Opaque pointer that can be used by the code generator.
 	TypeRef type;
 	ScopeRef scope;
+	Id name;
 	bool constant;
+	bool funParam;
+	
+	bool isVar() const {return !constant && !funParam;}
 };
 
 struct Alt {
@@ -159,6 +163,8 @@ inline PrimitiveType largest(PrimitiveType a, PrimitiveType b) {
 }
 
 struct Type {
+	void* codegen = nullptr; // Opaque pointer that can be used by the code generator.
+	
 	enum Kind {
 		Unknown,
         Alias,
@@ -285,7 +291,10 @@ inline bool isBinary(PrimitiveOp op) {
 }
 
 struct Expr {
+	void* codegen = nullptr; // Opaque pointer that can be used by the code generator.
+	
 	enum Kind {
+		Multi,
 		Lit,
 		Var,
 		App,
@@ -297,6 +306,7 @@ struct Expr {
 		Assign,
 		Coerce,
 		Field,
+		Ret,
 
 		// The following expressions are only used while resolving or for error handling.
 		// They are removed before the resolve stage finishes.
@@ -309,6 +319,12 @@ struct Expr {
 
 	TypeRef type;
 	Expr(Kind k, TypeRef type) : kind(k), type(type) {}
+};
+	
+struct MultiExpr : Expr {
+	MultiExpr(Expr* expr) : Expr(Multi, expr->type), expr(expr) {}
+	Expr* expr;
+	MultiExpr* next = nullptr;
 };
 
 struct LitExpr : Expr {
@@ -374,6 +390,11 @@ struct FieldExpr : Expr {
 	FieldExpr(AggType* type, ::athena::resolve::Field* field) : Expr(Field, field->type), type(type), field(field) {}
 	AggType* type;
 	::athena::resolve::Field* field;
+};
+	
+struct RetExpr : Expr {
+	RetExpr(ExprRef e) : Expr(Ret, e.type), expr(e) {}
+	ExprRef expr;
 };
 
 /// A temporary expression that represents an unfinished declaration.

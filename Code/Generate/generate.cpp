@@ -14,28 +14,43 @@ namespace gen {
 Generator::Generator(ast::CompileContext& ccontext, llvm::LLVMContext& context, llvm::Module& target) :
 	context(context), module(target), builder(context), ccontext(ccontext) {}
 
-llvm::Module* Generator::generate(resolve::Module& module) {
+Module* Generator::generate(resolve::Module& module) {
 	module.functions.Iterate([=](resolve::Id name, resolve::Function* f) {
 		genFunction(*f);
 	});
 
 	return &this->module;
 }
-
-Function* Generator::genFunction(resolve::Function& function) {
+	
+Function* Generator::genFunctionDecl(resolve::Function& function) {
 	auto argCount = function.arguments.Count();
 	auto argTypes = (Type**)StackAlloc(sizeof(Type*) * argCount);
 	for(uint i=0; i<argCount; i++) {
-		argTypes[i] = builder.getFloatTy();
+		argTypes[i] = getType(function.arguments[i]->type);
 	}
-
-	auto type = FunctionType::get(builder.getFloatTy(), ArrayRef<Type*>(argTypes, argCount), false);
+	
+	auto type = FunctionType::get(getType(function.expression->type), ArrayRef<Type*>(argTypes, argCount), false);
 	auto func = Function::Create(type, Function::ExternalLinkage, toRef(ccontext.Find(function.name).name), &module);
+	return func;
+}
+
+Function* Generator::genFunction(resolve::Function& function) {
+	auto func = genFunctionDecl(function);
+	
+	// Generate the function arguments.
+	uint i=0;
+	for(auto it=func->arg_begin(); i<function.arguments.Count(); i++, it++) {
+		auto a = function.arguments[i];
+		it->setName(toRef(ccontext.Find(a->name).name));
+		a->codegen = it;
+	}
+	
+	// Generate the function body.
 	auto scope = genScope(function.scope);
 	scope->insertInto(func);
 	if(function.expression) {
 		builder.SetInsertPoint(scope);
-		//genExpr(*function.expression);
+		genExpr(*function.expression);
 		builder.ClearInsertionPoint();
 	}
 	return func;
@@ -43,26 +58,47 @@ Function* Generator::genFunction(resolve::Function& function) {
 
 BasicBlock* Generator::genScope(resolve::Scope& scope) {
 	auto block = BasicBlock::Create(context, "");
-	// TODO: Generate variables.
+	builder.SetInsertPoint(block);
+	// Generate the variables used in this scope (excluding function parameters).
+	// Constant variables are generated lazily as registers.
+	for(auto v : scope.variables) {
+		if(v->isVar()) {
+			auto var = builder.CreateAlloca(getType(v->type));
+			v->codegen = var;
+		}
+	}
+	builder.ClearInsertionPoint();
 	return block;
 }
-
+	
 Value* Generator::genExpr(resolve::ExprRef expr) {
 	switch(expr.kind) {
+		case resolve::Expr::Multi:
+			return genMulti((resolve::MultiExpr&)expr);
 		case resolve::Expr::Lit:
 			return genLiteral(((resolve::LitExpr&)expr).literal);
 		case resolve::Expr::Var:
-			return nullptr;//((resolve::VarExpr&)expr).var;
+			return genVar(*((resolve::VarExpr&)expr).var);
 		case resolve::Expr::App:
 			return genCall(((resolve::AppExpr&)expr).callee, ((resolve::AppExpr&)expr).args);
 		case resolve::Expr::AppI:
+			return nullptr;
+		case resolve::Expr::AppP:
 			return genPrimitiveCall(((resolve::AppPExpr&)expr).op, ((resolve::AppPExpr&)expr).args);
         case resolve::Expr::Case:
             return genCase((resolve::CaseExpr&)expr);
 		case resolve::Expr::If:
 			return genIf((resolve::IfExpr&)expr);
+		case resolve::Expr::While:
+			return nullptr;
+		case resolve::Expr::Assign:
+			return genAssign((resolve::AssignExpr&)expr);
 		case resolve::Expr::Coerce:
 			return genCoerce((resolve::CoerceExpr&)expr);
+		case resolve::Expr::Field:
+			return nullptr;
+		case resolve::Expr::Ret:
+			return genRet((resolve::RetExpr&)expr);
         default:
             FatalError("Unsupported expression type.");
             return nullptr;
@@ -83,12 +119,41 @@ Value* Generator::genLiteral(resolve::Literal& literal) {
 	FatalError("Unsupported literal type.");
 	return nullptr;
 }
+	
+Value* Generator::genVar(resolve::Variable& var) {
+	if(var.isVar()) {
+		return builder.CreateLoad((Value*)var.codegen);
+	} else {
+		return (Value*)var.codegen;
+	}
+}
+	
+Value* Generator::genAssign(resolve::AssignExpr& assign) {
+	ASSERT(assign.var.isVar());
+	builder.CreateStore(genExpr(assign.val), (Value*)assign.var.codegen);
+	return (Value*)assign.var.codegen;
+}
+	
+Value* Generator::genMulti(resolve::MultiExpr& expr) {
+	auto e = &expr;
+	Value* v = nullptr;
+	while(e) {
+		v = genExpr(*e->expr);
+		e = e->next;
+	}
+	return v;
+}
+	
+Value* Generator::genRet(resolve::RetExpr& expr) {
+	auto e = useResult(expr.expr);
+	return builder.CreateRet(e);
+}
 
-llvm::Value* Generator::genCall(resolve::Function& function, resolve::ExprList* args) {
+Value* Generator::genCall(resolve::Function& function, resolve::ExprList* args) {
     return nullptr;
 }
 
-llvm::Value* Generator::genPrimitiveCall(resolve::PrimitiveOp op, resolve::ExprList* args) {
+Value* Generator::genPrimitiveCall(resolve::PrimitiveOp op, resolve::ExprList* args) {
 	if(resolve::isBinary(op)) {
 		ASSERT(args && args->next && !args->next->next);
 		auto lhs = args->item;
@@ -113,7 +178,7 @@ llvm::Value* Generator::genPrimitiveCall(resolve::PrimitiveOp op, resolve::ExprL
 	}
 }
 
-llvm::Value* Generator::genUnaryOp(resolve::PrimitiveOp op, resolve::PrimType type, llvm::Value* in) {
+Value* Generator::genUnaryOp(resolve::PrimitiveOp op, resolve::PrimType type, llvm::Value* in) {
 	switch(op) {
 		case resolve::PrimitiveOp::Neg:
 			// Negate works for integers and floats, but not bool.
@@ -134,7 +199,7 @@ llvm::Value* Generator::genUnaryOp(resolve::PrimitiveOp op, resolve::PrimType ty
 	}
 }
 
-llvm::Value* Generator::genBinaryOp(resolve::PrimitiveOp op, llvm::Value* lhs, llvm::Value* rhs, resolve::PrimType lt, resolve::PrimType rt) {
+Value* Generator::genBinaryOp(resolve::PrimitiveOp op, llvm::Value* lhs, llvm::Value* rhs, resolve::PrimType lt, resolve::PrimType rt) {
 	ASSERT(op < resolve::PrimitiveOp::FirstUnary);
 	if(resolve::category(lt.type) == resolve::PrimitiveTypeCategory::Float) {
 		// Handle floating point types.
@@ -215,7 +280,7 @@ llvm::Value* Generator::genBinaryOp(resolve::PrimitiveOp op, llvm::Value* lhs, l
 	return nullptr;
 }
 
-llvm::Value* Generator::genPtrOp(resolve::PrimitiveOp op, llvm::Value* lhs, llvm::Value* rhs, resolve::PtrType type) {
+Value* Generator::genPtrOp(resolve::PrimitiveOp op, llvm::Value* lhs, llvm::Value* rhs, resolve::PtrType type) {
 	ASSERT(op == resolve::PrimitiveOp::Sub || (op >= resolve::PrimitiveOp::FirstCompare && op < resolve::PrimitiveOp::FirstUnary));
 	switch(op) {
 		case resolve::PrimitiveOp::Sub:
@@ -237,7 +302,7 @@ llvm::Value* Generator::genPtrOp(resolve::PrimitiveOp op, llvm::Value* lhs, llvm
 	return nullptr;
 }
 
-llvm::Value* Generator::genPtrOp(resolve::PrimitiveOp op, llvm::Value* lhs, llvm::Value* rhs, resolve::PtrType lt, resolve::PrimType rt) {
+Value* Generator::genPtrOp(resolve::PrimitiveOp op, llvm::Value* lhs, llvm::Value* rhs, resolve::PtrType lt, resolve::PrimType rt) {
 	ASSERT(op == resolve::PrimitiveOp::Sub || op == resolve::PrimitiveOp::Add);
 	if(op == resolve::PrimitiveOp::Sub) {
 		rhs = builder.CreateNeg(rhs);
@@ -245,11 +310,11 @@ llvm::Value* Generator::genPtrOp(resolve::PrimitiveOp op, llvm::Value* lhs, llvm
 	return builder.CreateGEP(lhs, rhs);
 }
 
-llvm::Value* Generator::genCase(resolve::CaseExpr& casee) {
+Value* Generator::genCase(resolve::CaseExpr& casee) {
     return nullptr;
 }
 
-llvm::Value* Generator::genIf(resolve::IfExpr& ife) {
+Value* Generator::genIf(resolve::IfExpr& ife) {
 	ASSERT(ife.cond.type->isBool());
 
 	// Create basic blocks for each branch.
@@ -293,7 +358,7 @@ llvm::Value* Generator::genIf(resolve::IfExpr& ife) {
 	}
 }
 
-llvm::Value* Generator::genCoerce(resolve::CoerceExpr& coerce) {
+Value* Generator::genCoerce(resolve::CoerceExpr& coerce) {
 	auto src = coerce.src.type;
 	auto dst = coerce.type;
 	auto llSrc = getType(src);
@@ -368,8 +433,16 @@ llvm::Value* Generator::genCoerce(resolve::CoerceExpr& coerce) {
 	FatalError("Invalid coercion between types.");
 	return nullptr;
 }
+	
+Value* Generator::useResult(resolve::ExprRef expr) {
+	auto e = genExpr(expr);
+	// Implicitly deference types that were converted to pointers by the code generator.
+	if(e->getType()->isPointerTy() && !expr.type->isPointer()) {
+		return builder.CreateLoad(e);
+	} else return e;
+}
 
-llvm::Type* Generator::genLlvmType(resolve::TypeRef type) {
+Type* Generator::genLlvmType(resolve::TypeRef type) {
 	if(type->isUnit()) return builder.getVoidTy();
 	if(type->isPrimitive()) {
 		switch(((const resolve::PrimType*)type)->type) {

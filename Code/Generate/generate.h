@@ -18,9 +18,14 @@ struct Generator {
 
 	llvm::Module* generate(resolve::Module& module);
 	llvm::Function* genFunction(resolve::Function& function);
+	llvm::Function* genFunctionDecl(resolve::Function& function);
 	llvm::BasicBlock* genScope(resolve::Scope& scope);
 	llvm::Value* genExpr(resolve::ExprRef expr);
 	llvm::Value* genLiteral(resolve::Literal& literal);
+	llvm::Value* genVar(resolve::Variable& var);
+	llvm::Value* genAssign(resolve::AssignExpr& assign);
+	llvm::Value* genMulti(resolve::MultiExpr& expr);
+	llvm::Value* genRet(resolve::RetExpr& expr);
 
 	llvm::Value* genCall(resolve::Function& function, resolve::ExprList* args);
 	llvm::Value* genPrimitiveCall(resolve::PrimitiveOp op, resolve::ExprList* args);
@@ -32,6 +37,8 @@ struct Generator {
 	llvm::Value* genIf(resolve::IfExpr& ife);
 	llvm::Value* genCoerce(resolve::CoerceExpr& coerce);
 
+	llvm::Value* useResult(resolve::ExprRef expr);
+	
 	llvm::Function* getFunction() {
 		return builder.GetInsertBlock()->getParent();
 	}

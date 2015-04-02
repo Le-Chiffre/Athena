@@ -16,6 +16,8 @@ inline TypeRef getLiteralType(TypeManager& m, const Literal& l) {
 
 Expr* Resolver::resolveExpression(Scope& scope, ast::ExprRef expr) {
 	switch(expr->type) {
+		case ast::Expr::Multi:
+			return resolveMulti(scope, *(ast::MultiExpr*)expr);
 		case ast::Expr::Lit:
 			return resolveLiteral(scope, *(ast::LitExpr*)expr);
 		case ast::Expr::Infix:
@@ -50,6 +52,36 @@ Expr* Resolver::resolveExpression(Scope& scope, ast::ExprRef expr) {
 	return nullptr;
 }
 
+Expr* Resolver::resolveMulti(Scope& scope, ast::MultiExpr& expr) {
+	MultiExpr* start = build<MultiExpr>(resolveExpression(scope, expr.exprs->item));
+	auto current = start;
+	auto e = expr.exprs->next;
+	while(e) {
+		current->next = build<MultiExpr>(resolveExpression(scope, e->item));
+		current = current->next;
+		e = e->next;
+	}
+	return start;
+}
+	
+Expr* Resolver::resolveMultiWithRet(Scope& scope, ast::MultiExpr& expr) {
+	MultiExpr* start = build<MultiExpr>(resolveExpression(scope, expr.exprs->item));
+	auto current = start;
+	auto e = expr.exprs->next;
+	while(1) {
+		// If this is the last expression, insert a return.
+		if(e->next) {
+			current->next = build<MultiExpr>(resolveExpression(scope, e->item));
+			current = current->next;
+			e = e->next;
+		} else {
+			current->next = build<MultiExpr>(build<RetExpr>(*resolveExpression(scope, e->item)));
+			break;
+		}
+	}
+	return start;
+}
+	
 Expr* Resolver::resolveLiteral(Scope& scope, ast::LitExpr& expr) {
 	return build<LitExpr>(expr.literal, getLiteralType(types, expr.literal));
 }
