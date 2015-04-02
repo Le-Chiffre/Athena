@@ -81,7 +81,7 @@ void Resolver::initPrimitives() {
 	}
 
 	// Add the builtin aliases.
-	types.primMap.Add(context.AddUnqualifiedName("Int"), types.getPrim(PrimitiveType::U32));
+	types.primMap.Add(context.AddUnqualifiedName("Int"), types.getPrim(PrimitiveType::I32));
 	types.primMap.Add(context.AddUnqualifiedName("Float"), types.getPrim(PrimitiveType::F32));
 	types.primMap.Add(context.AddUnqualifiedName("Double"), types.getPrim(PrimitiveType::F64));
 }

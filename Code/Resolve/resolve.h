@@ -5,6 +5,7 @@
 #include "resolve_ast.h"
 #include "../General/diagnostic.h"
 #include "typecheck.h"
+#include "mangle.h"
 
 namespace athena {
 namespace resolve {
@@ -153,6 +154,7 @@ struct Resolver {
     TypeManager types;
 	TypeCheck typeCheck;
 	EmptyExpr emptyExpr{types.getUnit()};
+	Mangler mangler{context};
 
 	// This is used to accumulate potentially callable functions.
 	Core::Array<Function*> potentialCallees{32};

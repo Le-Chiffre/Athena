@@ -10,9 +10,12 @@
 #include <llvm/ExecutionEngine/GenericValue.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/ExecutionEngine/Interpreter.h>
+#include <llvm/Support/raw_os_ostream.h>
 #include <core.h>
 #include <Terminal.h>
 #include <File.h>
+#include <c++/iostream>
+#include <c++/fstream>
 #include "Parse/parser.h"
 #include "Resolve/resolve.h"
 #include "Generate/generate.h"
@@ -69,7 +72,9 @@ main = add 4 5 * max 100 200
 	auto test3 = R"s(
 main {a: Int, b: Int} =
 	var x = a*b
-	x = x*b
+	x = x*2
+	if x > 5 then x = 5
+	x
 )s";
 
 	athena::ast::Module module;
@@ -89,12 +94,15 @@ main {a: Int, b: Int} =
 	//Core::Terminal << athena::ast::toString(module, context);
 
 	llvm::LLVMContext& llcontext = llvm::getGlobalContext();
-	auto llmodule = new llvm::Module("top", llcontext);
+	llvm::Module* llmodule = new llvm::Module("top", llcontext);
 
 	athena::gen::Generator gen{context, llcontext, *llmodule};
 	gen.generate(*resolved);
 
-	llmodule->dump();
+	std::ofstream ss;
+	ss.open("out.ll", std::ios::out | std::ios::trunc);
+	llvm::raw_os_ostream stream{ss};
+	llmodule->print(stream, nullptr);
 
 	Core::Terminal.WaitForInput();
 

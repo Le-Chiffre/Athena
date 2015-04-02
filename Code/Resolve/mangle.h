@@ -13,6 +13,9 @@ struct Mangler {
 	/// Mangles the name of the provided function.
 	Core::String mangle(Function* function);
 
+	/// Mangles a function name to a name id.
+	Id mangleId(Function* function);
+
 	/// Mangles a qualified name.
 	void mangleQualifier(ast::Qualified* qualified);
 

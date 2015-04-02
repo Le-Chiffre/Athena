@@ -11,8 +11,14 @@ Core::String Mangler::mangle(Function* function) {
 	auto name = context.Find(function->name);
 	mangleQualifier(&name);
 
-	// TODO: Mangle argument types.
+	for(auto a : function->arguments) {
+		mangleType(a->type);
+	}
 	return string;
+}
+
+Id Mangler::mangleId(Function* function) {
+	return context.AddUnqualifiedName(mangle(function));
 }
 
 void Mangler::mangleQualifier(ast::Qualified* qualified) {

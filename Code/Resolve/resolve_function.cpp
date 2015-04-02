@@ -26,7 +26,8 @@ bool Resolver::resolveFunction(Scope& scope, Function& fun) {
 	} else {
 		fun.expression = build<RetExpr>(*resolveExpression(fun.scope, decl.body));
 	}
-	
+
+    fun.name = mangler.mangleId(&fun);
     fun.astDecl = nullptr;
     return true;
 }

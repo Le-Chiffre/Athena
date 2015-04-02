@@ -203,8 +203,8 @@ Expr* Resolver::resolveVar(Scope& scope, Id name) {
 }
 
 Expr* Resolver::resolveIf(Scope& scope, ast::IfExpr& expr) {
-	auto cond = *resolveExpression(scope, expr.cond);
-	auto then = *resolveExpression(scope, expr.then);
+	auto& cond = *resolveExpression(scope, expr.cond);
+	auto& then = *resolveExpression(scope, expr.then);
 	auto otherwise = expr.otherwise ? resolveExpression(scope, expr.otherwise) : nullptr;
 	bool useResult = false;
 
