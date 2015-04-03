@@ -16,7 +16,7 @@ Generator::Generator(ast::CompileContext& ccontext, llvm::LLVMContext& context, 
 
 Module* Generator::generate(resolve::Module& module) {
 	module.functions.Iterate([=](resolve::Id name, resolve::Function* f) {
-		genFunction(*f);
+		if(!f->codegen) genFunction(*f);
 	});
 
 	return &this->module;
@@ -36,6 +36,7 @@ Function* Generator::genFunctionDecl(resolve::Function& function) {
 
 Function* Generator::genFunction(resolve::Function& function) {
 	auto func = genFunctionDecl(function);
+	function.codegen = func;
 	
 	// Generate the function arguments.
 	uint i=0;
@@ -49,15 +50,16 @@ Function* Generator::genFunction(resolve::Function& function) {
 	auto scope = genScope(function.scope);
 	scope->insertInto(func);
 	if(function.expression) {
+		SaveInsert save{builder};
 		builder.SetInsertPoint(scope);
 		genExpr(*function.expression);
-		builder.ClearInsertionPoint();
 	}
 	return func;
 }
 
 BasicBlock* Generator::genScope(resolve::Scope& scope) {
 	auto block = BasicBlock::Create(context, "");
+	SaveInsert save{builder};
 	builder.SetInsertPoint(block);
 	// Generate the variables used in this scope (excluding function parameters).
 	// Constant variables are generated lazily as registers.
@@ -67,7 +69,6 @@ BasicBlock* Generator::genScope(resolve::Scope& scope) {
 			v->codegen = var;
 		}
 	}
-	builder.ClearInsertionPoint();
 	return block;
 }
 	
@@ -149,8 +150,21 @@ Value* Generator::genRet(resolve::RetExpr& expr) {
 	return builder.CreateRet(e);
 }
 
-Value* Generator::genCall(resolve::Function& function, resolve::ExprList* args) {
-    return nullptr;
+Value* Generator::genCall(resolve::Function& function, resolve::ExprList* argList) {
+	// Make sure this function has been generated.
+	if(!function.codegen) {
+		genFunction(function);
+	}
+	
+	// Generate the function arguments.
+	auto argCount = function.arguments.Count();
+	auto args = (Value**)StackAlloc(sizeof(Value*) * argCount);
+	for(uint i=0; i<argCount; i++) {
+		args[i] = genExpr(*argList->item);
+		argList = argList->next;
+	}
+	
+	return builder.CreateCall((Value*)function.codegen, ArrayRef<Value*>{args, argCount});
 }
 
 Value* Generator::genPrimitiveCall(resolve::PrimitiveOp op, resolve::ExprList* args) {
@@ -318,6 +332,7 @@ Value* Generator::genIf(resolve::IfExpr& ife) {
 	ASSERT(ife.cond.type->isBool());
 
 	// Create basic blocks for each branch.
+	// Don't restore the previous one, as the next expression needs to be put in the continuation block.
 	auto function = getFunction();
 	auto thenBlock = BasicBlock::Create(context, "", function);
 	auto elseBlock = ife.otherwise ? BasicBlock::Create(context, "", function) : nullptr;
@@ -325,8 +340,7 @@ Value* Generator::genIf(resolve::IfExpr& ife) {
 
 	// Create condition.
 	auto cond = genExpr(ife.cond);
-	auto cmp = builder.CreateICmpEQ(cond, builder.getInt1(true));
-	builder.CreateCondBr(cmp, thenBlock, elseBlock ? elseBlock : contBlock);
+	builder.CreateCondBr(cond, thenBlock, elseBlock ? elseBlock : contBlock);
 
 	// Create "then" branch.
 	builder.SetInsertPoint(thenBlock);

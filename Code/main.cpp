@@ -14,8 +14,8 @@
 #include <core.h>
 #include <Terminal.h>
 #include <File.h>
-#include <c++/iostream>
-#include <c++/fstream>
+#include <iostream>
+#include <fstream>
 #include "Parse/parser.h"
 #include "Resolve/resolve.h"
 #include "Generate/generate.h"
@@ -64,6 +64,11 @@ data X =
 )s";
 
 	auto test2 = R"s(
+one = 1 : Float
+two = one + one
+power {base: Int, exponent: Int} =
+	if exponent == 0 then base
+	else power (base * base) (exponent + 1)
 add {a: Int, b: Int} = a + b
 max {a: Int, b: Int} = if a > b then a else b
 main = add 4 5 * max 100 200
@@ -78,7 +83,7 @@ main {a: Int, b: Int} =
 )s";
 
 	athena::ast::Module module;
-	athena::ast::Parser p(context, module, test3);
+	athena::ast::Parser p(context, module, test2);
 	p.parseModule();
 
 	{
@@ -91,7 +96,7 @@ main {a: Int, b: Int} =
 	athena::resolve::Resolver resolver{context, module};
 	auto resolved = resolver.resolve();
 
-	//Core::Terminal << athena::ast::toString(module, context);
+	Core::Terminal << athena::ast::toString(module, context);
 
 	llvm::LLVMContext& llcontext = llvm::getGlobalContext();
 	llvm::Module* llmodule = new llvm::Module("top", llcontext);

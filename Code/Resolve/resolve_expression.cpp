@@ -203,7 +203,7 @@ Expr* Resolver::resolveVar(Scope& scope, Id name) {
 }
 
 Expr* Resolver::resolveIf(Scope& scope, ast::IfExpr& expr) {
-	auto& cond = *resolveExpression(scope, expr.cond);
+	auto& cond = *resolveCondition(scope, expr.cond);
 	auto& then = *resolveExpression(scope, expr.then);
 	auto otherwise = expr.otherwise ? resolveExpression(scope, expr.otherwise) : nullptr;
 	bool useResult = false;
@@ -353,6 +353,15 @@ Expr* Resolver::resolveConstruct(Scope& scope, ast::ConstructExpr& expr) {
 	return nullptr;
 }
 
+Expr* Resolver::resolveCondition(ScopeRef scope, ast::ExprRef expr) {
+	auto exp = resolveExpression(scope, expr);
+	if(exp->type->isBool()) {
+		return exp;
+	} else {
+		return implicitCoerce(*exp, types.getBool());
+	}
+}
+	
 ast::InfixExpr& Resolver::reorder(ast::InfixExpr& expr) {
 	auto e = &expr;
 	auto res = e;

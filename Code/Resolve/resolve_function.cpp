@@ -20,6 +20,11 @@ bool Resolver::resolveFunction(Scope& scope, Function& fun) {
         }
     }
 	
+	// When the function parameters have been resolved, it is finished enough to be called.
+	// This must be done before resolving the expression to support recursive functions.
+	fun.astDecl = nullptr;
+	fun.name = mangler.mangleId(&fun);
+	
 	// For multi-expressions, we return the last expression in the list.
 	if(decl.body->type == ast::Expr::Multi) {
 		fun.expression = resolveMultiWithRet(fun.scope, *(ast::MultiExpr*)decl.body);
@@ -27,8 +32,6 @@ bool Resolver::resolveFunction(Scope& scope, Function& fun) {
 		fun.expression = build<RetExpr>(*resolveExpression(fun.scope, decl.body));
 	}
 
-    fun.name = mangler.mangleId(&fun);
-    fun.astDecl = nullptr;
     return true;
 }
 

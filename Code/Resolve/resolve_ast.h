@@ -72,6 +72,9 @@ struct Function {
 	// This will be set as long as the function has not been resolved.
 	// Any function where this is set after resolving is either unused or an error.
 	ast::FunDecl* astDecl = nullptr;
+	
+	// This pointer can be used in any way by the code generator.
+	void* codegen = nullptr;
 
 	// The base name of this function.
 	Id name;

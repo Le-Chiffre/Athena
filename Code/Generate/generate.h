@@ -13,6 +13,21 @@ inline llvm::StringRef toRef(ast::String str) {
 	return {str.ptr, str.length};
 }
 
+struct SaveInsert {
+	SaveInsert(llvm::IRBuilder<>& builder) : builder(builder) {
+		block = builder.GetInsertBlock();
+		insert = builder.GetInsertPoint();
+	}
+	
+	~SaveInsert() {
+		builder.SetInsertPoint(block, insert);
+	}
+	
+	llvm::IRBuilder<>& builder;
+	llvm::BasicBlock::iterator insert;
+	llvm::BasicBlock* block;
+};
+	
 struct Generator {
 	Generator(ast::CompileContext& ccontext, llvm::LLVMContext& context, llvm::Module& target);
 

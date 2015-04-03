@@ -70,6 +70,7 @@ struct Parser {
     Maybe<TupleField> parseTupleField();
 	Type* parseTupleType();
 	Field* parseField();
+	Expr* parseElse();
 
 	void addFixity(Fixity f);
 	nullptr_t error(const char* text);
@@ -81,8 +82,12 @@ struct Parser {
 	template<class Ret>
 	auto tryParse(Ret (Parser::*f)()) {
 		SaveLexer l{lexer};
+		auto tok = token;
 		auto v = (this->*f)();
-		if(!v) l.restore();
+		if(!v) {
+			l.restore();
+			token = tok;
+		}
 		return v;
 	}
 

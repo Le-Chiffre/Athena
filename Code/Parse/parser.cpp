@@ -336,15 +336,7 @@ Expr* Parser::parseLeftExpr() {
 				eat();
 				if(auto then = parseExpr()) {
 					// else is optional.
-					Expr* otherwise = nullptr;
-
-					if(token == Token::EndOfStmt) eat();
-					if(token == Token::kwElse) {
-						eat();
-						otherwise = parseExpr();
-					}
-
-					return build<IfExpr>(cond, then, otherwise);
+					return build<IfExpr>(cond, then, tryParse(&Parser::parseElse));
 				}
 			} else {
 				error("Expected 'then' after if-expression.");
@@ -819,6 +811,16 @@ Field* Parser::parseField() {
 	}
 
 	return nullptr;
+}
+	
+Expr* Parser::parseElse() {
+	if(token == Token::EndOfStmt) eat();
+	if(token == Token::kwElse) {
+		eat();
+		return parseExpr();
+	} else {
+		return nullptr;
+	}
 }
 
 nullptr_t Parser::error(const char* text) {

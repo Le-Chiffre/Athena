@@ -91,6 +91,9 @@ struct Resolver {
 
 	Variable* resolveArgument(ScopeRef scope, ast::TupleField& arg);
     Field resolveField(ScopeRef scope, ast::Field& field);
+	
+	/// Creates a boolean condition from the provided expression.
+	Expr* resolveCondition(ScopeRef scope, ast::ExprRef expr);
 
 	/// Retrieves or creates a concrete type.
 	TypeRef resolveType(ScopeRef scope, ast::TypeRef type);
