@@ -66,9 +66,9 @@ data X =
 	auto test2 = R"s(
 one = 1 : Float
 two = one + one
-power {base: Int, exponent: Int} =
+power {base: Int, exponent: Int} -> Int =
 	if exponent == 0 then base
-	else power (base * base) (exponent + 1)
+	else power (base * base) (exponent - 1)
 add {a: Int, b: Int} = a + b
 max {a: Int, b: Int} = if a > b then a else b
 main = add 4 5 * max 100 200
@@ -82,8 +82,17 @@ main {a: Int, b: Int} =
 	x
 )s";
 
+	auto test4 = R"s(
+main {a: *Int} =
+	var i = 0
+	while i < 100 in i = i + 1
+	a
+
+(++) {a: Int, b: Int} = a + 2 * b
+)s";
+
 	athena::ast::Module module;
-	athena::ast::Parser p(context, module, test2);
+	athena::ast::Parser p(context, module, test4);
 	p.parseModule();
 
 	{
@@ -110,31 +119,4 @@ main {a: Int, b: Int} =
 	llmodule->print(stream, nullptr);
 
 	Core::Terminal.WaitForInput();
-
-	llvm::IRBuilder<> builder{llcontext};
-
-	auto funcType = llvm::FunctionType::get(builder.getVoidTy(), false);
-	auto mainFunc = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, "main", llmodule);
-	auto entry = llvm::BasicBlock::Create(llcontext, "entrypoint", mainFunc);
-	builder.SetInsertPoint(entry);
-
-
-
-	/*llvm::Type* putsArgs[] = {builder.getInt8Ty()->getPointerTo()};
-	llvm::ArrayRef<llvm::Type*> argsRef{putsArgs};
-
-	auto helloworld = builder.CreateGlobalStringPtr("hello world!\n");
-	auto putsType = llvm::FunctionType::get(builder.getInt32Ty(), argsRef, false);
-	auto putsFunc = llmodule->getOrInsertFunction("puts", putsType);
-
-	builder.CreateCall(putsFunc, helloworld);
-	builder.CreateRetVoid();*/
-
-	/*llvm::InitializeNativeTarget();
-	llvm::InitializeNativeTargetAsmPrinter();
-
-	std::string errors;
-	auto engine = llvm::EngineBuilder(std::move(module)).setEngineKind(llvm::EngineKind::Interpreter).setErrorStr(&errors).create();
-	engine->runFunction(mainFunc, {});*/
-	//llmodule->dump();
 }
