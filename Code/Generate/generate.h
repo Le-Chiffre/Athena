@@ -51,6 +51,7 @@ struct Generator {
     llvm::Value* genCase(resolve::CaseExpr& casee);
 	llvm::Value* genIf(resolve::IfExpr& ife);
 	llvm::Value* genCoerce(resolve::CoerceExpr& coerce);
+	llvm::Value* genWhile(resolve::WhileExpr& expr);
 
 	llvm::Value* useResult(resolve::ExprRef expr);
 	

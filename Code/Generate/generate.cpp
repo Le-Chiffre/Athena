@@ -29,7 +29,7 @@ Function* Generator::genFunctionDecl(resolve::Function& function) {
 		argTypes[i] = getType(function.arguments[i]->type);
 	}
 	
-	auto type = FunctionType::get(getType(function.expression->type), ArrayRef<Type*>(argTypes, argCount), false);
+	auto type = FunctionType::get(getType(function.type), ArrayRef<Type*>(argTypes, argCount), false);
 	auto func = Function::Create(type, Function::ExternalLinkage, toRef(ccontext.Find(function.name).name), &module);
 	return func;
 }
@@ -91,7 +91,7 @@ Value* Generator::genExpr(resolve::ExprRef expr) {
 		case resolve::Expr::If:
 			return genIf((resolve::IfExpr&)expr);
 		case resolve::Expr::While:
-			return nullptr;
+			return genWhile((resolve::WhileExpr&)expr);
 		case resolve::Expr::Assign:
 			return genAssign((resolve::AssignExpr&)expr);
 		case resolve::Expr::Coerce:
@@ -207,6 +207,9 @@ Value* Generator::genUnaryOp(resolve::PrimitiveOp op, resolve::PrimType type, ll
 			// Performs a bitwise inversion. Defined for integers and Bool.
 			ASSERT(type.type == resolve::PrimitiveType::Bool || resolve::category(type.type) <= resolve::PrimitiveTypeCategory::Unsigned);
 			return builder.CreateNot(in);
+		case resolve::PrimitiveOp::Deref:
+			ASSERT(type.isPointer());
+			return builder.CreateLoad(in);
 		default:
 			FatalError("Unsupported primitive operator provided.");
             return nullptr;
@@ -334,9 +337,9 @@ Value* Generator::genIf(resolve::IfExpr& ife) {
 	// Create basic blocks for each branch.
 	// Don't restore the previous one, as the next expression needs to be put in the continuation block.
 	auto function = getFunction();
-	auto thenBlock = BasicBlock::Create(context, "", function);
-	auto elseBlock = ife.otherwise ? BasicBlock::Create(context, "", function) : nullptr;
-	auto contBlock = BasicBlock::Create(context, "", function);
+	auto thenBlock = BasicBlock::Create(context, "then", function);
+	auto elseBlock = ife.otherwise ? BasicBlock::Create(context, "else", function) : nullptr;
+	auto contBlock = BasicBlock::Create(context, "cont", function);
 
 	// Create condition.
 	auto cond = genExpr(ife.cond);
@@ -447,9 +450,38 @@ Value* Generator::genCoerce(resolve::CoerceExpr& coerce) {
 	FatalError("Invalid coercion between types.");
 	return nullptr;
 }
+
+Value* Generator::genWhile(resolve::WhileExpr& expr) {
+	ASSERT(expr.cond.type->isBool());
+
+	// Create basic blocks for each branch.
+	// Don't restore the previous one, as the next expression needs to be put in the continuation block.
+	auto function = getFunction();
+	auto testBlock = BasicBlock::Create(context, "test", function);
+	auto loopBlock = BasicBlock::Create(context, "loop", function);
+	auto contBlock = BasicBlock::Create(context, "cont", function);
+
+	// Create condition.
+	builder.SetInsertPoint(testBlock);
+	auto cond = genExpr(expr.cond);
+	builder.CreateCondBr(cond, loopBlock, contBlock);
+
+	// Create loop branch.
+	builder.SetInsertPoint(loopBlock);
+	genExpr(expr.loop);
+	builder.CreateBr(testBlock);
+
+	// Continue in this block.
+	builder.SetInsertPoint(contBlock);
+	return nullptr;
+}
 	
 Value* Generator::useResult(resolve::ExprRef expr) {
 	auto e = genExpr(expr);
+
+	// Check for void.
+	if(!e) return nullptr;
+
 	// Implicitly deference types that were converted to pointers by the code generator.
 	if(e->getType()->isPointerTy() && !expr.type->isPointer()) {
 		return builder.CreateLoad(e);
