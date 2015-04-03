@@ -103,12 +103,11 @@ Expr* Resolver::resolveBinaryCall(Scope& scope, ast::ExprRef function, ast::Expr
 
 	// Check if this can be a primitive operation.
 	// Note that primitive operations can be both functions and operators.
-	if((lt->type->isPrimitive() && rt->type->isPrimitive()) || (lt->type->isPointer() && rt->type->isPointer())) {
-		if(auto op = tryPrimitiveOp(function)) {
-			// This means that built-in binary operators cannot be overloaded for any pointer or primitive type.
-			if(*op < PrimitiveOp::FirstUnary)
-				return resolvePrimitiveOp(scope, *op, *lt, *rt);
-		}
+	if(auto op = tryPrimitiveBinaryOp(function)) {
+		// This means that built-in binary operators cannot be overloaded for any pointer or primitive type.
+		if(*op < PrimitiveOp::FirstUnary)
+			if(auto e = resolvePrimitiveOp(scope, *op, *lt, *rt))
+				return e;
 	}
 
 	// Otherwise, create a normal function call.
@@ -127,10 +126,11 @@ Expr* Resolver::resolveUnaryCall(Scope& scope, ast::ExprRef function, ast::ExprR
 	// Check if this can be a primitive operation.
 	// Note that primitive operations can be both functions and operators.
 	if(target->type->isPtrOrPrim()) {
-		if(auto op = tryPrimitiveOp(function)) {
+		if(auto op = tryPrimitiveUnaryOp(function)) {
 			// This means that built-in unary operators cannot be overloaded for any pointer or primitive type.
 			if(*op >= PrimitiveOp::FirstUnary)
-				return resolvePrimitiveOp(scope, *op, *target);
+				if(auto e = resolvePrimitiveOp(scope, *op, *target))
+					return e;
 		}
 	}
 

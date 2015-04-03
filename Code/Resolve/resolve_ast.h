@@ -90,6 +90,10 @@ struct Function {
 	// Each argument also exists in the function scope as a variable.
 	VarList arguments;
 
+	// The return type of this function.
+	// Note that this is resolved lazily in most cases.
+	TypeRef type = nullptr;
+
 	// Any expressions this function consists of.
 	Expr* expression = nullptr;
 	
@@ -278,6 +282,8 @@ enum class PrimitiveOp {
 	FirstUnary,
 	Neg = (uint)FirstUnary,
 	Not,
+	Ref,
+	Deref,
 	
 	// Must be last
 	OpCount
@@ -341,7 +347,7 @@ struct VarExpr : Expr {
 };
 
 struct AppExpr : Expr {
-	AppExpr(FuncRef n, ExprList* args) : Expr(App, n.expression->type), callee(n), args(args) {}
+	AppExpr(FuncRef n, ExprList* args) : Expr(App, n.type), callee(n), args(args) {}
 	FuncRef callee;
 	ExprList* args;
 };

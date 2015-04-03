@@ -19,6 +19,10 @@ bool Resolver::resolveFunction(Scope& scope, Function& fun) {
             arg = arg->next;
         }
     }
+
+    if(decl.ret) {
+        fun.type = resolveType(scope, decl.ret);
+    }
 	
 	// When the function parameters have been resolved, it is finished enough to be called.
 	// This must be done before resolving the expression to support recursive functions.
@@ -31,6 +35,11 @@ bool Resolver::resolveFunction(Scope& scope, Function& fun) {
 	} else {
 		fun.expression = build<RetExpr>(*resolveExpression(fun.scope, decl.body));
 	}
+
+    // If no type was defined or inferred before, we simply take the type of the last expression.
+    if(!fun.type) {
+        fun.type = fun.expression->type;
+    }
 
     return true;
 }

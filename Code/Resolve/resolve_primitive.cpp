@@ -8,14 +8,14 @@ static const char* primitiveOperatorNames[] = {
 	"+", "-", "*", "/", "mod",        // Arithmetic
 	"shl", "shr", "and", "or", "xor", // Bitwise
 	"==", "!=", ">", ">=", "<", "<=", // Comparison
-	"-", "not" 						  // Unary
+	"-", "not", "&", "*"			  // Unary
 };
 
 static const byte primitiveOperatorLengths[] = {
 	1, 1, 1, 1, 3,    // Arithmatic
 	3, 3, 3, 2, 3,	  // Bitwise
 	2, 2, 1, 2, 1, 2, // Comparison
-	1, 3			  // Unary
+	1, 3, 1, 1		  // Unary
 };
 
 static const uint16 primitiveOperatorPrecedences[] = {
@@ -62,9 +62,14 @@ inline bool arithCompatible(PrimitiveType lhs, PrimitiveType rhs) {
 
 void Resolver::initPrimitives() {
 	// Make sure each operator exists in the context and add them to the map.
-	for(uint i = 0; i < (uint)PrimitiveOp::OpCount; i++) {
+	for(uint i = 0; i < (uint)PrimitiveOp::FirstUnary; i++) {
 		primitiveOps[i] = context.AddUnqualifiedName(primitiveOperatorNames[i], primitiveOperatorLengths[i]);
-		primitiveMap.Add(primitiveOps[i], (PrimitiveOp)i);
+		primitiveBinaryMap.Add(primitiveOps[i], (PrimitiveOp)i);
+	}
+
+	for(uint i = (uint)PrimitiveOp::FirstUnary; i < (uint)PrimitiveOp::OpCount; i++) {
+		primitiveOps[i] = context.AddUnqualifiedName(primitiveOperatorNames[i], primitiveOperatorLengths[i]);
+		primitiveUnaryMap.Add(primitiveOps[i], (PrimitiveOp)i);
 	}
 
 	// Make sure all precedences are in the context and none have been overwritten.
@@ -81,6 +86,7 @@ void Resolver::initPrimitives() {
 	}
 
 	// Add the builtin aliases.
+	types.primMap.Add(context.AddUnqualifiedName("Byte"), types.getPrim(PrimitiveType::U8));
 	types.primMap.Add(context.AddUnqualifiedName("Int"), types.getPrim(PrimitiveType::I32));
 	types.primMap.Add(context.AddUnqualifiedName("Float"), types.getPrim(PrimitiveType::F32));
 	types.primMap.Add(context.AddUnqualifiedName("Double"), types.getPrim(PrimitiveType::F64));
@@ -119,8 +125,13 @@ Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, resolve::ExprRe
 Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, resolve::ExprRef dst) {
 	// The type is either a pointer or primitive.
 	if(dst.type->isPointer()) {
-		// Currently no unary operators are defined for pointers.
-		error("This built-in operator cannot be applied to pointer types");
+		if(op == PrimitiveOp::Deref) {
+			auto list = build<ExprList>(&dst);
+			return build<AppPExpr>(op, list, ((PtrType*)dst.type)->type);
+		} else {
+			// Currently no unary operators are defined for pointers.
+			error("this built-in operator cannot be applied to pointer types");
+		}
 	} else {
 		auto type = ((const PrimType*)dst.type)->type;
 		if(auto rtype = getUnaryOpType(op, type)) {

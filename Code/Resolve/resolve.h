@@ -10,6 +10,8 @@
 namespace athena {
 namespace resolve {
 
+typedef Core::NumberMap<PrimitiveOp, Id> PrimOpMap;
+
 struct TypeManager {
     TypeManager() {
         for(uint i=0; i<(uint)PrimitiveType::TypeCount; i++) {
@@ -104,7 +106,8 @@ struct Resolver {
     const Type* getUnaryOpType(PrimitiveOp, PrimitiveType);
 
 	/// Checks if the provided callee expression can contain a primitive operator.
-	PrimitiveOp* tryPrimitiveOp(ast::ExprRef callee);
+	PrimitiveOp* tryPrimitiveBinaryOp(ast::ExprRef callee);
+	PrimitiveOp* tryPrimitiveUnaryOp(ast::ExprRef callee);
 
 	/// Checks if the provided type can be implicitly converted to the target type.
 	CoerceExpr* implicitCoerce(ExprRef src, TypeRef dst);
@@ -150,7 +153,8 @@ struct Resolver {
 	void initPrimitives();
 
 	Id primitiveOps[(uint)PrimitiveOp::OpCount];
-	Core::NumberMap<PrimitiveOp, Id> primitiveMap;
+	PrimOpMap primitiveBinaryMap;
+	PrimOpMap primitiveUnaryMap;
 	ast::CompileContext& context;
 	ast::Module& source;
 	Core::StaticBuffer buffer;
@@ -158,6 +162,9 @@ struct Resolver {
 	TypeCheck typeCheck;
 	EmptyExpr emptyExpr{types.getUnit()};
 	Mangler mangler{context};
+
+	Function* currentFunction = nullptr;
+	Scope* currentScope = nullptr;
 
 	// This is used to accumulate potentially callable functions.
 	Core::Array<Function*> potentialCallees{32};

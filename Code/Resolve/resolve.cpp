@@ -92,12 +92,20 @@ Field Resolver::resolveField(ScopeRef scope, ast::Field& field) {
 	return {field.name, type, *content, field.constant};
 }
 
-PrimitiveOp* Resolver::tryPrimitiveOp(ast::ExprRef callee) {
+inline PrimitiveOp* tryOp(PrimOpMap& map, ast::ExprRef callee) {
 	if(callee->isVar()) {
-		return primitiveMap.Get(((const ast::VarExpr*)callee)->name);
+		return map.Get(((const ast::VarExpr*)callee)->name);
 	} else {
 		return nullptr;
 	}
+}
+
+PrimitiveOp* Resolver::tryPrimitiveBinaryOp(ast::ExprRef callee) {
+	return tryOp(primitiveBinaryMap, callee);
+}
+
+PrimitiveOp* Resolver::tryPrimitiveUnaryOp(ast::ExprRef callee) {
+	return tryOp(primitiveUnaryMap, callee);
 }
 
 CoerceExpr* Resolver::implicitCoerce(ExprRef src, TypeRef dst) {
