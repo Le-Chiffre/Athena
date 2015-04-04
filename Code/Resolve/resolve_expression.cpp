@@ -88,30 +88,25 @@ Expr* Resolver::resolveLiteral(Scope& scope, ast::LitExpr& expr) {
 
 Expr* Resolver::resolveInfix(Scope& scope, ast::InfixExpr& expr) {
 	auto& e = reorder(expr);
-	ast::VarExpr var(e.op);
-	return resolveBinaryCall(scope, &var, e.lhs, e.rhs);
+	return resolveBinaryCall(scope, e.op, *resolveExpression(scope, e.lhs), *resolveExpression(scope, e.rhs));
 }
 
 Expr* Resolver::resolvePrefix(Scope& scope, ast::PrefixExpr& expr) {
-	ast::VarExpr var(expr.op);
-	return resolveUnaryCall(scope, &var, expr.dst);
+	return resolveUnaryCall(scope, expr.op, *resolveExpression(scope, expr.dst));
 }
 
-Expr* Resolver::resolveBinaryCall(Scope& scope, ast::ExprRef function, ast::ExprRef lhs, ast::ExprRef rhs) {
-	auto lt = resolveExpression(scope, lhs);
-	auto rt = resolveExpression(scope, rhs);
-
+Expr* Resolver::resolveBinaryCall(Scope& scope, Id function, ExprRef lt, ExprRef rt) {
 	// Check if this can be a primitive operation.
 	// Note that primitive operations can be both functions and operators.
 	if(auto op = tryPrimitiveBinaryOp(function)) {
 		// This means that built-in binary operators cannot be overloaded for any pointer or primitive type.
 		if(*op < PrimitiveOp::FirstUnary)
-			if(auto e = resolvePrimitiveOp(scope, *op, *lt, *rt))
+			if(auto e = resolvePrimitiveOp(scope, *op, lt, rt))
 				return e;
 	}
 
 	// Otherwise, create a normal function call.
-	auto args = build<ExprList>(lt, build<ExprList>(rt));
+	auto args = build<ExprList>(&lt, build<ExprList>(&rt));
 	if(auto func = findFunction(scope, function, args)) {
 		return build<AppExpr>(*func, args);
 	} else {
@@ -120,22 +115,20 @@ Expr* Resolver::resolveBinaryCall(Scope& scope, ast::ExprRef function, ast::Expr
 	}
 }
 
-Expr* Resolver::resolveUnaryCall(Scope& scope, ast::ExprRef function, ast::ExprRef dst) {
-	auto target = resolveExpression(scope, dst);
-
+Expr* Resolver::resolveUnaryCall(Scope& scope, Id function, ExprRef target) {
 	// Check if this can be a primitive operation.
 	// Note that primitive operations can be both functions and operators.
-	if(target->type->isPtrOrPrim()) {
+	if(target.type->isPtrOrPrim()) {
 		if(auto op = tryPrimitiveUnaryOp(function)) {
 			// This means that built-in unary operators cannot be overloaded for any pointer or primitive type.
 			if(*op >= PrimitiveOp::FirstUnary)
-				if(auto e = resolvePrimitiveOp(scope, *op, *target))
+				if(auto e = resolvePrimitiveOp(scope, *op, target))
 					return e;
 		}
 	}
 
 	// Otherwise, create a normal function call.
-	auto args = build<ExprList>(target);
+	auto args = build<ExprList>(&target);
 	if(auto func = findFunction(scope, function, args)) {
 		return build<AppExpr>(*func, args);
 	} else {
@@ -145,16 +138,26 @@ Expr* Resolver::resolveUnaryCall(Scope& scope, ast::ExprRef function, ast::ExprR
 }
 
 Expr* Resolver::resolveCall(Scope& scope, ast::AppExpr& expr) {
+	// If the operand is a field expression we need special handling, since there are several options:
+	// - the field operand is an actual field of its target and has a function type, which we call.
+	// - the field operand is not a field, and we produce a function call with the target as first parameter.
+	if(expr.callee->type == ast::Expr::Field) {
+		return resolveField(scope, *(ast::FieldExpr*)expr.callee, expr.args);
+	}
+
 	// Special case for calls with one or two parameters - these can map to builtin operations.
-	if(auto lhs = expr.args) {
-		if(auto rhs = expr.args->next) {
-			if(!rhs->next) {
-				// Two arguments.
-				return resolveBinaryCall(scope, expr.callee, lhs->item, rhs->item);
+	if(expr.callee->type == ast::Expr::Var) {
+		auto name = ((ast::VarExpr*)expr.callee)->name;
+		if (auto lhs = expr.args) {
+			if (auto rhs = expr.args->next) {
+				if (!rhs->next) {
+					// Two arguments.
+					return resolveBinaryCall(scope, name, *resolveExpression(scope, lhs->item), *resolveExpression(scope, rhs->item));
+				}
+			} else {
+				// Single argument.
+				return resolveUnaryCall(scope, name, *resolveExpression(scope, lhs->item));
 			}
-		} else {
-			// Single argument.
-			return resolveUnaryCall(scope, expr.callee, lhs->item);
 		}
 	}
 
@@ -345,7 +348,29 @@ Expr* Resolver::resolveCoerce(Scope& scope, ast::CoerceExpr& expr) {
 	return implicitCoerce(*resolveExpression(scope, expr.target), resolveType(scope, expr.kind));
 }
 
-Expr* Resolver::resolveField(Scope& scope, ast::FieldExpr& expr) {
+Expr* Resolver::resolveField(Scope& scope, ast::FieldExpr& expr, ast::ExprList* args) {
+	auto field = resolveExpression(scope, expr.field);
+	auto target = resolveExpression(scope, expr.target);
+
+	// Check if this is a field or function call expression.
+	// For types without named fields, this is always a function call.
+	// For types with named fields, this is a field expression if the target is a VarExpr,
+	// and the type has a field with that name.
+	if(field->type->isTuple() && target->kind == Expr::Var) {
+		auto tupType = (TupleType*)field->type;
+		if(auto f = tupType->findField(((ast::VarExpr*)target)->name)) {
+			auto fexpr = build<FieldExpr>(*target, f);
+			if(args) {
+				//return resolveCall(scope, )
+			} else {
+				return fexpr;
+			}
+		}
+	}
+
+	// Generate a function call from the field, with the target as the first parameter.
+	//resolveUnaryCall()
+
 	return nullptr;
 }
 

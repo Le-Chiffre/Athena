@@ -176,6 +176,7 @@ struct Type {
 		Unknown,
         Alias,
 		Unit,
+		Tuple,
 		Agg,
 		Var,
 		Array,
@@ -191,6 +192,7 @@ struct Type {
 	bool isPointer() const {return kind == Ptr;}
     bool isPrimitive() const {return kind == Prim;}
 	bool isPtrOrPrim() const {return ((uint)kind & 0x10) != 0;}
+	bool isTuple() const {return kind == Tuple;}
 	bool isKnown() const {return kind != Unknown;}
 	bool isUnit() const {return kind == Unit;}
     bool isAlias() const {return kind == Alias;}
@@ -216,15 +218,29 @@ struct PtrType : Type {
 };
 
 struct Field {
-	Field(Id name, TypeRef type, ExprRef content, bool constant) : name(name), type(type), content(content), constant(constant) {}
+	Field(Id name, TypeRef type, TypeRef container, Expr* content, bool constant) :
+		name(name), type(type), container(container), content(content), constant(constant) {}
 
 	Id name;
 	TypeRef type;
-	ExprRef content;
+	TypeRef container;
+	Expr* content;
 	bool constant;
 };
 
 typedef Core::Array<Field> FieldList;
+
+struct TupleType : Type {
+	TupleType() : Type(Tuple) {}
+	FieldList fields;
+
+	Field* findField(Id name) {
+		for(auto& i : fields) {
+			if(i.name == name) return &i;
+		}
+		return nullptr;
+	}
+};
 
 struct AggType : Type {
 	AggType(Id name, ast::DataDecl* astDecl) : Type(Agg), name(name), astDecl(astDecl) {}
@@ -396,8 +412,8 @@ struct CoerceExpr : Expr {
 };
 
 struct FieldExpr : Expr {
-	FieldExpr(AggType* type, ::athena::resolve::Field* field) : Expr(Field, field->type), type(type), field(field) {}
-	AggType* type;
+	FieldExpr(ExprRef container, ::athena::resolve::Field* field) : Expr(Field, field->type), container(container), field(field) {}
+	ExprRef container;
 	::athena::resolve::Field* field;
 };
 	

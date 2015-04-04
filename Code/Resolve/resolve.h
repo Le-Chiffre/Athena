@@ -48,10 +48,15 @@ struct TypeManager {
 		return type;
 	}
 
+	bool getTuple(uint hash, TupleType*& type) {
+		return tuples.AddGet(hash, type);
+	}
+
     Core::FixedArray<PrimType, (uint)PrimitiveType::TypeCount> prims;
 	Core::NumberMap<TypeRef, Id> primMap; // Maps from ast type name to type.
     Core::NumberMap<ArrayType, TypeRef> arrays;
 	Core::NumberMap<PtrType, TypeRef> ptrs;
+	Core::NumberMap<TupleType, uint> tuples;
     const Type* stringType;
 	const Type unitType{Type::Unit};
 	const Type unknownType{Type::Unknown};
@@ -68,8 +73,8 @@ struct Resolver {
     Expr* resolveLiteral(Scope& scope, ast::LitExpr& expr);
 	Expr* resolveInfix(Scope& scope, ast::InfixExpr& expr);
 	Expr* resolvePrefix(Scope& scope, ast::PrefixExpr& expr);
-	Expr* resolveBinaryCall(Scope& scope, ast::ExprRef function, ast::ExprRef lhs, ast::ExprRef rhs);
-	Expr* resolveUnaryCall(Scope& scope, ast::ExprRef function, ast::ExprRef dst);
+	Expr* resolveBinaryCall(Scope& scope, Id function, ExprRef lhs, ExprRef rhs);
+	Expr* resolveUnaryCall(Scope& scope, Id function, ExprRef dst);
 	Expr* resolveCall(Scope& scope, ast::AppExpr& expr);
     Expr* resolveVar(Scope& scope, Id var);
     Expr* resolveIf(Scope& scope, ast::IfExpr& expr);
@@ -77,11 +82,12 @@ struct Resolver {
 	Expr* resolveAssign(Scope& scope, ast::AssignExpr& expr);
 	Expr* resolveWhile(Scope& scope, ast::WhileExpr& expr);
 	Expr* resolveCoerce(Scope& scope, ast::CoerceExpr& expr);
-	Expr* resolveField(Scope& scope, ast::FieldExpr& expr);
+	Expr* resolveField(Scope& scope, ast::FieldExpr& expr, ast::ExprList* args = nullptr);
 	Expr* resolveConstruct(Scope& scope, ast::ConstructExpr& expr);
 	
 	void resolveAlias(Scope& scope, AliasType* type);
     void resolveAggregate(Scope& scope, AggType* type);
+	TypeRef resolveTuple(Scope& scope, ast::TupleType& type);
 
     /// Resolves a binary operation on two primitive types.
     /// *lhs* and *rhs* must be primitives.
@@ -92,7 +98,7 @@ struct Resolver {
 	Expr* resolvePrimitiveOp(Scope& scope, PrimitiveOp op, resolve::ExprRef dst);
 
 	Variable* resolveArgument(ScopeRef scope, ast::TupleField& arg);
-    Field resolveField(ScopeRef scope, ast::Field& field);
+    Field resolveField(ScopeRef scope, TypeRef container, ast::Field& field);
 	
 	/// Creates a boolean condition from the provided expression.
 	Expr* resolveCondition(ScopeRef scope, ast::ExprRef expr);
@@ -106,8 +112,8 @@ struct Resolver {
     const Type* getUnaryOpType(PrimitiveOp, PrimitiveType);
 
 	/// Checks if the provided callee expression can contain a primitive operator.
-	PrimitiveOp* tryPrimitiveBinaryOp(ast::ExprRef callee);
-	PrimitiveOp* tryPrimitiveUnaryOp(ast::ExprRef callee);
+	PrimitiveOp* tryPrimitiveBinaryOp(Id callee);
+	PrimitiveOp* tryPrimitiveUnaryOp(Id callee);
 
 	/// Checks if the provided type can be implicitly converted to the target type.
 	CoerceExpr* implicitCoerce(ExprRef src, TypeRef dst);

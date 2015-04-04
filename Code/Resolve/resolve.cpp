@@ -78,7 +78,7 @@ Module* Resolver::resolve() {
 	return module;
 }
 
-Field Resolver::resolveField(ScopeRef scope, ast::Field& field) {
+Field Resolver::resolveField(ScopeRef scope, TypeRef container, ast::Field& field) {
 	ASSERT(field.type || field.content);
 	TypeRef type = nullptr;
 	Expr* content = nullptr;
@@ -89,23 +89,15 @@ Field Resolver::resolveField(ScopeRef scope, ast::Field& field) {
 		content = resolveExpression(scope, field.content);
 	
 	// TODO: Typecheck here if both are set.
-	return {field.name, type, *content, field.constant};
+	return {field.name, type, container, content, field.constant};
 }
 
-inline PrimitiveOp* tryOp(PrimOpMap& map, ast::ExprRef callee) {
-	if(callee->isVar()) {
-		return map.Get(((const ast::VarExpr*)callee)->name);
-	} else {
-		return nullptr;
-	}
+PrimitiveOp* Resolver::tryPrimitiveBinaryOp(Id callee) {
+	return primitiveBinaryMap.Get(callee);
 }
 
-PrimitiveOp* Resolver::tryPrimitiveBinaryOp(ast::ExprRef callee) {
-	return tryOp(primitiveBinaryMap, callee);
-}
-
-PrimitiveOp* Resolver::tryPrimitiveUnaryOp(ast::ExprRef callee) {
-	return tryOp(primitiveUnaryMap, callee);
+PrimitiveOp* Resolver::tryPrimitiveUnaryOp(Id callee) {
+	return primitiveUnaryMap.Get(callee);
 }
 
 CoerceExpr* Resolver::implicitCoerce(ExprRef src, TypeRef dst) {
