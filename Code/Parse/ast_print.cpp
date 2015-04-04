@@ -340,6 +340,8 @@ private:
 		string += "type: ";
 		if(type->kind == Type::Unit) {
 			string += "()";
+		} else if(type->kind == Type::Tup){
+			string += "tuple";
 		} else {
 			if(type->kind == Type::Ptr)
 				string += Parser::kPointerSigil;

@@ -112,10 +112,21 @@ Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, resolve::ExprRe
 	} else if(rhs.type->isPointer()) {
 		error("This built-in operator cannot be applied to a primitive and a pointer");
 	} else {
-		auto lt = ((const PrimType*)lhs.type)->type;
-		auto rt = ((const PrimType*)rhs.type)->type;
+		auto left = &lhs;
+		auto right = &rhs;
+
+		// If one of the expressions is a literal, it can be converted implicitly.
+		if(lhs.kind == Expr::Lit) {
+			left = literalCoerce(((LitExpr&)lhs).literal, rhs.type);
+		} else if(rhs.kind == Expr::Lit) {
+			right = literalCoerce(((LitExpr&)rhs).literal, lhs.type);
+		}
+
+		auto lt = ((const PrimType*)left->type)->type;
+		auto rt = ((const PrimType*)right->type)->type;
+
 		if(auto type = getBinaryOpType(op, lt, rt)) {
-			auto list = build<ExprList>(&lhs, build<ExprList>(&rhs));
+			auto list = build<ExprList>(left, build<ExprList>(right));
 			return build<AppPExpr>(op, list, type);
 		}
 	}

@@ -83,12 +83,9 @@ main {a: Int, b: Int} =
 )s";
 
 	auto test4 = R"s(
-main {a: *Int} =
-	var i = 0
-	while i < 100 in i = i + 1
-	a
+type Float2 = {x: Float, y: Float}
 
-(++) {a: Int, b: Int} = a + 2 * b
+dot {a: Float2, b: Float2} = a.x * b.x + a.y * b.y
 )s";
 
 	athena::ast::Module module;

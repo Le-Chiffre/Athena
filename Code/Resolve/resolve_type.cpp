@@ -13,7 +13,7 @@ void Resolver::resolveAlias(Scope& scope, AliasType* type) {
 void Resolver::resolveAggregate(Scope& scope, AggType* type) {
 	ASSERT(type->astDecl);
 
-	// A type can have no fields (this is used a lot in variant types).
+	// A type may have no fields (this is used a lot in variant types).
 	if(type->astDecl->fields) {
 		for(auto i : *type->astDecl->fields) {
 			type->fields += resolveField(scope, i);
@@ -31,6 +31,11 @@ TypeRef Resolver::resolveType(ScopeRef scope, ast::TypeRef type) {
 		ast::Type t{ast::Type::Con, type->con};
 		return types.getPtr(resolveType(scope, &t));
 	} else {
+		// Check if this type has been defined in this scope.
+		if(auto t = scope.findType(type->con)) {
+			return t;
+		}
+
 		// Check if this is a primitive type.
 		if(auto t = types.primMap.Get(type->con)) {
 			return *t;

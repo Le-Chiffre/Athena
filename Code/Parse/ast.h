@@ -94,7 +94,7 @@ struct Type {
         Gen,  // A generic or polymorphic named type.
         Tup,  // A tuple type with optionally named fields.
 	} kind;
-	Id con;
+	Id con = 0;
 
 	Type(Kind k) : kind(k) {}
 	Type(Kind k, Id con) : kind(k), con(con) {}
