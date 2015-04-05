@@ -71,22 +71,18 @@ Expr* Resolver::resolveMultiWithRet(Scope& scope, ast::MultiExpr& expr) {
 	MultiExpr* start = build<MultiExpr>(resolveExpression(scope, expr.exprs->item));
 	auto current = start;
 	auto e = expr.exprs->next;
-	auto type = start->type;
 	while(1) {
 		// If this is the last expression, insert a return.
 		if(e->next) {
 			current->next = build<MultiExpr>(resolveExpression(scope, e->item));
 			current = current->next;
-			type = current->type;
 			e = e->next;
 		} else {
 			current->next = build<MultiExpr>(build<RetExpr>(*resolveExpression(scope, e->item)));
-			type = current->next->type;
-			break;
+			start->type = current->next->type;
+			return start;
 		}
 	}
-	start->type = type;
-	return start;
 }
 	
 Expr* Resolver::resolveLiteral(Scope& scope, ast::LitExpr& expr) {

@@ -286,25 +286,22 @@ Expr* Parser::parseTypedExpr() {
 
 Expr* Parser::parseInfixExpr() {
 	/*
-	 * infixexp		→	lexp qop infixexp			(infix operator application)
-	 * 				|	varsym infixexp				(prefix operator application)
-	 *				|	lexp
+	 * infixexp		→	pexp qop infixexp			(infix operator application)
+	 * 				|	pexp = infiexp				(assignment)
+	 *				|	pexp
 	 */
 
-	// Prefix operator.
-	if(token == Token::VarSym) {
-		auto op = token.data.id;
-		eat();
-		if(auto expr = parseInfixExpr()) {
-			return build<PrefixExpr>(op, expr);
-		} else {
-			return (Expr*)error("Expected expression after a prefix operator.");
-		}
-	}
-
 	// Left-expression or binary operator.
-	if(auto lhs = parseLeftExpr()) {
-		if(auto op = tryParse(&Parser::parseQop)) {
+	if(auto lhs = parsePrefixExpr()) {
+		if(token == Token::opEquals) {
+			eat();
+			if(auto value = parseInfixExpr()) {
+				return build<AssignExpr>(lhs, value);
+			} else {
+				error("Expected an expression after assignment.");
+				return nullptr;
+			}
+		} else if(auto op = tryParse(&Parser::parseQop)) {
 			// Binary operator.
 			if(auto rhs = parseInfixExpr()) {
 				return build<InfixExpr>(op(), lhs, rhs);
@@ -320,6 +317,26 @@ Expr* Parser::parseInfixExpr() {
 	}
 }
 
+Expr* Parser::parsePrefixExpr() {
+	/*
+	 * pexp		→	varsym lexp				(prefix operator application)
+	 *			|	lexp
+	 */
+
+	// Prefix operator.
+	if(token == Token::VarSym) {
+		auto op = token.data.id;
+		eat();
+		if(auto expr = parseLeftExpr()) {
+			return build<PrefixExpr>(op, expr);
+		} else {
+			return (Expr*)error("Expected expression after a prefix operator.");
+		}
+	} else {
+		return parseLeftExpr();
+	}
+}
+
 Expr* Parser::parseLeftExpr() {
 	/*
 	 * lexp		→	\ apat1 … apatn -> exp					(lambda abstraction, n ≥ 1)
@@ -329,7 +346,6 @@ Expr* Parser::parseLeftExpr() {
 	 *			|	case exp of { alts }					(case expression)
 	 *			|	while exp do exp						(while loop)
 	 *			|	do { stmts }							(do expression)
-	 *			|	fexp = infixexp							(assignment)
 	 *			|	fexp
 	 */
 	if(token == Token::kwLet) {
@@ -385,18 +401,7 @@ Expr* Parser::parseLeftExpr() {
 			error("Expected expression after 'while'");
 		}
 	} else {
-		if(auto expr = parseCallExpr()) {
-			if(token == Token::opEquals) {
-				eat();
-				if(auto value = parseInfixExpr()) {
-					return build<AssignExpr>(expr, value);
-				} else {
-					error("Expected an expression after assignment.");
-				}
-			} else {
-				return expr;
-			}
-		}
+		return parseCallExpr();
 	}
 
 	return nullptr;

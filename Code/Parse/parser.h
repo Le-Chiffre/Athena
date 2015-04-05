@@ -49,6 +49,7 @@ struct Parser {
 	Expr* parseExpr();
 	Expr* parseTypedExpr();
 	Expr* parseInfixExpr();
+	Expr* parsePrefixExpr();
 	Expr* parseLeftExpr();
 	Expr* parseCallExpr();
 	Expr* parseAppExpr();
