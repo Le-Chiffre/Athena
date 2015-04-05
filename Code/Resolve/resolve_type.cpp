@@ -4,10 +4,11 @@
 namespace athena {
 namespace resolve {
 
-void Resolver::resolveAlias(Scope& scope, AliasType* type) {
+TypeRef Resolver::resolveAlias(Scope& scope, AliasType* type) {
 	ASSERT(type->astDecl);
-	type->type = resolveType(scope, type->astDecl->target);
+	auto target = resolveType(scope, type->astDecl->target);
 	type->astDecl = nullptr;
+	return target;
 }
 
 void Resolver::resolveAggregate(Scope& scope, AggType* type) {
@@ -15,8 +16,10 @@ void Resolver::resolveAggregate(Scope& scope, AggType* type) {
 
 	// A type may have no fields (this is used a lot in variant types).
 	if(type->astDecl->fields) {
+		uint index = 0;
 		for(auto i : *type->astDecl->fields) {
-			type->fields += resolveField(scope, type, i);
+			type->fields += resolveField(scope, type, index, i);
+			index++;
 		}
 	}
 
@@ -38,17 +41,19 @@ TypeRef Resolver::resolveTuple(Scope& scope, ast::TupleType& type) {
 	if(!types.getTuple(h, result)) {
 		// Otherwise, create the type.
 		new (result) TupleType;
+		uint i = 0;
 		f = type.fields;
 		while(f) {
 			auto t = resolveType(scope, f->item.type);
-			result->fields += Field{f->item.name ? f->item.name() : 0, t, result, nullptr, true};
+			result->fields += Field{f->item.name ? f->item.name() : 0, i, t, result, nullptr, true};
 			f = f->next;
+			i++;
 		}
 	}
 
 	return result;
 }
-
+	
 TypeRef Resolver::resolveType(ScopeRef scope, ast::TypeRef type) {
 	// Check if this is a primitive type.
 	if(type->kind == ast::Type::Unit) {

@@ -39,6 +39,8 @@ struct Generator {
 	llvm::Value* genLiteral(resolve::Literal& literal);
 	llvm::Value* genVar(resolve::Variable& var);
 	llvm::Value* genAssign(resolve::AssignExpr& assign);
+	llvm::Value* genLoad(resolve::Expr& target);
+	llvm::Value* genStore(resolve::StoreExpr& expr);
 	llvm::Value* genMulti(resolve::MultiExpr& expr);
 	llvm::Value* genRet(resolve::RetExpr& expr);
 
@@ -52,18 +54,18 @@ struct Generator {
 	llvm::Value* genIf(resolve::IfExpr& ife);
 	llvm::Value* genCoerce(resolve::CoerceExpr& coerce);
 	llvm::Value* genWhile(resolve::WhileExpr& expr);
-
-	llvm::Value* useResult(resolve::ExprRef expr);
+	llvm::Value* genField(resolve::FieldExpr& expr);
 	
 	llvm::Function* getFunction() {
 		return builder.GetInsertBlock()->getParent();
 	}
 
 	llvm::Type* getType(resolve::TypeRef type) {
-		llvm::Type** t;
-		if(!typeMap.AddGet(type, t))
-			*t = genLlvmType(type);
-		return *t;
+		if(!type->codegen) {
+			type->codegen = genLlvmType(type);
+		}
+
+		return (llvm::Type*)type->codegen;
 	}
 
 private:
@@ -73,7 +75,6 @@ private:
 	llvm::Module& module;
 	llvm::IRBuilder<> builder;
 	ast::CompileContext& ccontext;
-	Core::NumberMap<llvm::Type*, resolve::TypeRef> typeMap;
 };
 
 }} // namespace athena::gen

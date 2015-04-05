@@ -21,16 +21,16 @@ struct TypeManager {
         stringType = getArray(getU8());
     }
 
-	TypeRef getUnit() const {return &unitType;}
-	TypeRef getUnknown() const {return &unknownType;}
+	TypeRef getUnit() {return &unitType;}
+	TypeRef getUnknown() {return &unknownType;}
 
-    TypeRef getPrim(PrimitiveType t) const {return &prims[(uint)t];}
-    TypeRef getBool() const {return &prims[(uint)PrimitiveType::Bool];}
-    TypeRef getFloat() const {return &prims[(uint)PrimitiveType::F32];}
-    TypeRef getDouble() const {return &prims[(uint)PrimitiveType::F64];}
-    TypeRef getInt() const {return &prims[(uint)PrimitiveType::I32];}
-    TypeRef getU8() const {return &prims[(uint)PrimitiveType::U8];}
-    TypeRef getString() const {return stringType;}
+    TypeRef getPrim(PrimitiveType t) {return &prims[(uint)t];}
+    TypeRef getBool() {return &prims[(uint)PrimitiveType::Bool];}
+    TypeRef getFloat() {return &prims[(uint)PrimitiveType::F32];}
+    TypeRef getDouble() {return &prims[(uint)PrimitiveType::F64];}
+    TypeRef getInt() {return &prims[(uint)PrimitiveType::I32];}
+    TypeRef getU8() {return &prims[(uint)PrimitiveType::U8];}
+    TypeRef getString() {return stringType;}
 
     TypeRef getArray(TypeRef content) {
         ArrayType* type;
@@ -57,9 +57,9 @@ struct TypeManager {
     Core::NumberMap<ArrayType, TypeRef> arrays;
 	Core::NumberMap<PtrType, TypeRef> ptrs;
 	Core::NumberMap<TupleType, uint> tuples;
-    const Type* stringType;
-	const Type unitType{Type::Unit};
-	const Type unknownType{Type::Unknown};
+	Type* stringType;
+	Type unitType{Type::Unit};
+	Type unknownType{Type::Unknown};
 };
 
 struct Resolver {
@@ -85,9 +85,10 @@ struct Resolver {
 	Expr* resolveField(Scope& scope, ast::FieldExpr& expr, ast::ExprList* args = nullptr);
 	Expr* resolveConstruct(Scope& scope, ast::ConstructExpr& expr);
 	
-	void resolveAlias(Scope& scope, AliasType* type);
+	TypeRef resolveAlias(Scope& scope, AliasType* type);
     void resolveAggregate(Scope& scope, AggType* type);
 	TypeRef resolveTuple(Scope& scope, ast::TupleType& type);
+	ExprList* resolveExpressions(Scope& scope, ast::ExprList* list);
 
     /// Resolves a binary operation on two primitive types.
     /// *lhs* and *rhs* must be primitives.
@@ -98,7 +99,7 @@ struct Resolver {
 	Expr* resolvePrimitiveOp(Scope& scope, PrimitiveOp op, resolve::ExprRef dst);
 
 	Variable* resolveArgument(ScopeRef scope, ast::TupleField& arg);
-    Field resolveField(ScopeRef scope, TypeRef container, ast::Field& field);
+    Field resolveField(ScopeRef scope, TypeRef container, uint index, ast::Field& field);
 	
 	/// Creates a boolean condition from the provided expression.
 	Expr* resolveCondition(ScopeRef scope, ast::ExprRef expr);
@@ -106,14 +107,23 @@ struct Resolver {
 	/// Retrieves or creates a concrete type.
 	TypeRef resolveType(ScopeRef scope, ast::TypeRef type);
 
-    const Type* getBinaryOpType(PrimitiveOp, PrimitiveType, PrimitiveType);
-	const Type* getPtrOpType(PrimitiveOp, const PtrType*, PrimitiveType);
-	const Type* getPtrOpType(PrimitiveOp, const PtrType*, const PtrType*);
-    const Type* getUnaryOpType(PrimitiveOp, PrimitiveType);
+	TypeRef getBinaryOpType(PrimitiveOp, PrimitiveType, PrimitiveType);
+	TypeRef getPtrOpType(PrimitiveOp, PtrType*, PrimitiveType);
+	TypeRef getPtrOpType(PrimitiveOp, PtrType*, PtrType*);
+	TypeRef getUnaryOpType(PrimitiveOp, PrimitiveType);
 
 	/// Checks if the provided callee expression can contain a primitive operator.
 	PrimitiveOp* tryPrimitiveBinaryOp(Id callee);
 	PrimitiveOp* tryPrimitiveUnaryOp(Id callee);
+
+	/**
+	 * In some cases, pointer expressions can be implicitly dereferenced.
+	 * One example is "x {a: *Float2} = a.x", where a is deferenced implicitly.
+	 * This function helps implementing this by doing the following:
+	 *  - For pointer or reference types, it generates a load on the target.
+	 *  - For other types, it just returns the target.
+	 */
+	Expr* implicitLoad(ExprRef target);
 
 	/// Checks if the provided type can be implicitly converted to the target type.
 	CoerceExpr* implicitCoerce(ExprRef src, TypeRef dst);

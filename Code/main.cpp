@@ -85,11 +85,22 @@ main {a: Int, b: Int} =
 	auto test4 = R"s(
 type Float2 = {x: Float, y: Float}
 
-dot {a: Float2, b: Float2} = a.x * b.x + a.y * b.y
+dot {a: Float2, b: Float2} =
+	var res = a.x * b.x + a.y * b.y
+	res
+	
+stuff {x: *Float2} = x.y
+)s";
+	
+	auto test5 = R"s(
+testfun {a: *Int} =
+	let b = a + 1
+	*b = 2
+	*b
 )s";
 
 	athena::ast::Module module;
-	athena::ast::Parser p(context, module, test4);
+	athena::ast::Parser p(context, module, test5);
 	p.parseModule();
 
 	{

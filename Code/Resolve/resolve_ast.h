@@ -20,7 +20,7 @@ struct Resolver;
 
 typedef Scope& ScopeRef;
 typedef Function& FuncRef;
-typedef const Type* TypeRef;
+typedef Type* TypeRef;
 typedef const Expr& ExprRef;
 
 typedef ast::ASTList<const Expr*> ExprList;
@@ -29,7 +29,7 @@ typedef Core::Array<Function*> FunList;
 typedef Core::Array<Type*> TypeList;
 typedef ast::ASTList<Scope*> ScopeList;
 typedef ast::ASTList<Alt*> AltList;
-typedef Core::NumberMap<Type*, Id> TypeMap;
+typedef Core::NumberMap<TypeRef, Id> TypeMap;
 typedef Core::NumberMap<Function*, Id> FunMap;
 
 struct Scope {
@@ -39,7 +39,7 @@ struct Scope {
 	/// Finds any local variable with the provided name that is declared within this scope.
 	Variable* findLocalVar(Id name);
 
-    Type* findType(Id name);
+    TypeRef findType(Id name);
 
 	// The base name of this scope (determines type visibility).
 	Id name;
@@ -218,10 +218,11 @@ struct PtrType : Type {
 };
 
 struct Field {
-	Field(Id name, TypeRef type, TypeRef container, Expr* content, bool constant) :
-		name(name), type(type), container(container), content(content), constant(constant) {}
+	Field(Id name, uint index, TypeRef type, TypeRef container, Expr* content, bool constant) :
+		name(name), index(index), type(type), container(container), content(content), constant(constant) {}
 
 	Id name;
+	uint index;
 	TypeRef type;
 	TypeRef container;
 	Expr* content;
@@ -260,10 +261,11 @@ struct MapType : Type {
 	TypeRef to;
 };
 
+// This type is just a placeholder. It is put in place of alias declarations while type names are still being resolved.
+// When all names exist, the aliases are replaced with their target types.
 struct AliasType : Type {
     AliasType(Id name, ast::TypeDecl* astDecl) : Type(Alias), name(name), astDecl(astDecl) {}
 	Id name;
-    TypeRef type = nullptr;
 	ast::TypeDecl* astDecl;
 };
 
@@ -322,13 +324,15 @@ struct Expr {
 		Multi,
 		Lit,
 		Var,
+		Load,
+		Store,
 		App,
 		AppI,
 		AppP,
 		Case,
 		If,
 		While,
-		Assign,
+		Assign, // constant variables.
 		Coerce,
 		Field,
 		Ret,
@@ -358,8 +362,9 @@ struct LitExpr : Expr {
 };
 
 struct VarExpr : Expr {
-	VarExpr(Variable* var) : Expr(Var, var->type), var(var) {}
+	VarExpr(Variable* var, TypeRef type, bool indirect) : Expr(Var, type), var(var), indirect(indirect) {}
 	Variable* var;
+	bool indirect;
 };
 
 struct AppExpr : Expr {
@@ -400,10 +405,21 @@ struct WhileExpr : Expr {
 	ExprRef loop;
 };
 
+struct LoadExpr : Expr {
+	LoadExpr(ExprRef target, TypeRef type) : Expr(Load, type), target(target) {}
+	ExprRef target;
+};
+
+struct StoreExpr : Expr {
+	StoreExpr(ExprRef target, ExprRef value, TypeRef type) : Expr(Store, type), target(target), value(value) {}
+	ExprRef target;
+	ExprRef value;
+};
+
 struct AssignExpr : Expr {
-	AssignExpr(Variable& var, ExprRef val) : Expr(Assign, var.type), var(var), val(val) {}
-	Variable& var;
-	ExprRef val;
+	AssignExpr(Variable& target, ExprRef value) : Expr(Assign, target.type), target(target), value(value) {}
+	Variable& target;
+	ExprRef value;
 };
 
 struct CoerceExpr : Expr {

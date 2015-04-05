@@ -38,7 +38,7 @@ Module* Resolver::resolve() {
 				name = ((ast::DataDecl*)decl)->name;
 			}
 			
-			Type** type;
+			TypeRef* type;
 			if(module->types.AddGet(name, type)) {
 				// This type was already declared in this scope.
 				// Ignore the type that was defined last.
@@ -57,11 +57,12 @@ Module* Resolver::resolve() {
     // Perform the resolve pass. All defined names in this scope are now available.
 	// Symbols may be resolved lazily when used by other symbols,
 	// so we just skip those that are already defined.
-	module->types.Iterate([=](Id name, Type* t) {
+	module->types.Iterate([=](Id name, TypeRef& t) {
 		if(t->kind == Type::Alias) {
+			// Alias types are completely replaced by their contents, since they are equivalent.
             auto a = (AliasType*)t;
             if(a->astDecl) {
-                resolveAlias(*module, a);
+                t = resolveAlias(*module, a);
             }
         } else if(t->kind == Type::Agg) {
             auto a = (AggType*)t;
@@ -78,7 +79,7 @@ Module* Resolver::resolve() {
 	return module;
 }
 
-Field Resolver::resolveField(ScopeRef scope, TypeRef container, ast::Field& field) {
+Field Resolver::resolveField(ScopeRef scope, TypeRef container, uint index, ast::Field& field) {
 	ASSERT(field.type || field.content);
 	TypeRef type = nullptr;
 	Expr* content = nullptr;
@@ -89,7 +90,7 @@ Field Resolver::resolveField(ScopeRef scope, TypeRef container, ast::Field& fiel
 		content = resolveExpression(scope, field.content);
 	
 	// TODO: Typecheck here if both are set.
-	return {field.name, type, container, content, field.constant};
+	return {field.name, index, type, container, content, field.constant};
 }
 
 PrimitiveOp* Resolver::tryPrimitiveBinaryOp(Id callee) {
@@ -98,6 +99,14 @@ PrimitiveOp* Resolver::tryPrimitiveBinaryOp(Id callee) {
 
 PrimitiveOp* Resolver::tryPrimitiveUnaryOp(Id callee) {
 	return primitiveUnaryMap.Get(callee);
+}
+
+Expr* Resolver::implicitLoad(ExprRef target) {
+	if(target.type->isPointer()) {
+		return build<LoadExpr>(target, ((PtrType*)target.type)->type);
+	} else {
+		return (Expr*)&target;
+	}
 }
 
 CoerceExpr* Resolver::implicitCoerce(ExprRef src, TypeRef dst) {

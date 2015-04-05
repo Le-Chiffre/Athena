@@ -440,7 +440,7 @@ Expr* Parser::parseAppExpr() {
 		auto app = parseBaseExpr();
 		if(!app) return nullptr;
 
-		return build<FieldExpr>(app, e);
+		return build<FieldExpr>(e, app);
 	} else {
 		return e;
 	}

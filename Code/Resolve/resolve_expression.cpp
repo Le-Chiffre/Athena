@@ -56,11 +56,14 @@ Expr* Resolver::resolveMulti(Scope& scope, ast::MultiExpr& expr) {
 	MultiExpr* start = build<MultiExpr>(resolveExpression(scope, expr.exprs->item));
 	auto current = start;
 	auto e = expr.exprs->next;
+	auto type = start->type;
 	while(e) {
 		current->next = build<MultiExpr>(resolveExpression(scope, e->item));
 		current = current->next;
+		type = current->type;
 		e = e->next;
 	}
+	start->type = type;
 	return start;
 }
 	
@@ -68,17 +71,21 @@ Expr* Resolver::resolveMultiWithRet(Scope& scope, ast::MultiExpr& expr) {
 	MultiExpr* start = build<MultiExpr>(resolveExpression(scope, expr.exprs->item));
 	auto current = start;
 	auto e = expr.exprs->next;
+	auto type = start->type;
 	while(1) {
 		// If this is the last expression, insert a return.
 		if(e->next) {
 			current->next = build<MultiExpr>(resolveExpression(scope, e->item));
 			current = current->next;
+			type = current->type;
 			e = e->next;
 		} else {
 			current->next = build<MultiExpr>(build<RetExpr>(*resolveExpression(scope, e->item)));
+			type = current->next->type;
 			break;
 		}
 	}
+	start->type = type;
 	return start;
 }
 	
@@ -162,18 +169,7 @@ Expr* Resolver::resolveCall(Scope& scope, ast::AppExpr& expr) {
 	}
 
 	// Create a list of function arguments.
-	ExprList* args = nullptr;
-	if(expr.args) {
-		auto arg = expr.args;
-		args = build<ExprList>(resolveExpression(scope, arg->item));
-		auto a = args;
-		arg = arg->next;
-		while(arg) {
-			a->next = build<ExprList>(resolveExpression(scope, arg->item));
-			a = a->next;
-			arg = arg->next;
-		}
-	}
+	auto args = resolveExpressions(scope, expr.args);
 
 	// Find the function to call.
 	if(auto fun = findFunction(scope, expr.callee, args)) {
@@ -189,7 +185,12 @@ Expr* Resolver::resolveVar(Scope& scope, Id name) {
 	// This is resolved by looking through the current scope.
 	if(auto var = scope.findVar(name)) {
 		// This is a variable being read.
-		return build<VarExpr>(var);
+		// If it is not constant, it will be represented through an indirection.
+		// This means that load operations are needed to use it.
+		if(var->constant)
+			return build<VarExpr>(var, var->type, false);
+		else
+			return implicitLoad(*build<VarExpr>(var, types.getPtr(var->type), true));
 	} else {
 		// No local or global variable was found.
 		// Check if this is a function instead.
@@ -261,20 +262,42 @@ Expr* Resolver::resolveDecl(Scope& scope, ast::DeclExpr& expr) {
 	// If the variable was assigned, we return the assignment expression.
 	// Otherwise, just return a dummy expression.
 	// This will ensure a compilation error if the declaration is used directly.
-	if(content)
-		return build<AssignExpr>(*var, *content);
-	else
+	if(content) {
+		// Constants are registers, while variables are on the stack.
+		if(var->constant)
+			return build<AssignExpr>(*var, *content);
+		else
+			return build<StoreExpr>(*build<VarExpr>(var, type, true), *content, type);
+	} else {
 		return build<EmptyDeclExpr>(*var);
+	}
 }
 
 Expr* Resolver::resolveAssign(Scope& scope, ast::AssignExpr& expr) {
+	// Assignment has several cases:
+	//  - assigning a variable load removes the load and produces a Store.
+	//  - assigning a field load removes the load and produces a Store.
+	//  - assigning an indirection load removes the load and produces a Store.
 	// Make sure the type can be assigned to.
 	auto target = resolveExpression(scope, expr.target);
-	if(target->kind == Expr::Var) {
+	if(target->kind == Expr::Load) {
+		auto load = (LoadExpr*)target;
 		auto value = resolveExpression(scope, expr.value);
+		TypeRef type;
+
+		if(load->target.kind == Expr::Var) {
+			type = ((VarExpr&)load->target).var->type;
+		} else if(load->target.kind == Expr::Field) {
+			type = ((FieldExpr&)load->target).field->type;
+		} else if(load->target.type->isPointer()) {
+			type = ((PtrType*)load->target.type)->type;
+		} else {
+			error("expression is not assignable");
+			return nullptr;
+		}
 
 		// Perform an implicit conversion if needed.
-		if(target->type != value->type) {
+		if(type != value->type) {
 			value = implicitCoerce(*value, target->type);
 			if(!value) {
 				error("assigning to '' from incompatible type ''");
@@ -284,15 +307,11 @@ Expr* Resolver::resolveAssign(Scope& scope, ast::AssignExpr& expr) {
 			}
 		}
 
-		return build<AssignExpr>(*((VarExpr*)target)->var, *value);
-	} else if(target->kind == Expr::Field) {
-		// TODO: Assign to field.
-		return &emptyExpr;
+		return build<StoreExpr>(load->target, *value, value->type);
 	} else {
 		error("expression is not assignable");
+		return nullptr;
 	}
-
-	return nullptr;
 }
 
 Expr* Resolver::resolveWhile(Scope& scope, ast::WhileExpr& expr) {
@@ -349,19 +368,20 @@ Expr* Resolver::resolveCoerce(Scope& scope, ast::CoerceExpr& expr) {
 }
 
 Expr* Resolver::resolveField(Scope& scope, ast::FieldExpr& expr, ast::ExprList* args) {
-	auto field = resolveExpression(scope, expr.field);
 	auto target = resolveExpression(scope, expr.target);
 
 	// Check if this is a field or function call expression.
 	// For types without named fields, this is always a function call.
 	// For types with named fields, this is a field expression if the target is a VarExpr,
 	// and the type has a field with that name.
-	if(field->type->isTuple() && target->kind == Expr::Var) {
-		auto tupType = (TupleType*)field->type;
-		if(auto f = tupType->findField(((ast::VarExpr*)target)->name)) {
+	if(target->type->isTuple() && expr.field->type == ast::Expr::Var) {
+		auto tupType = (TupleType*)target->type;
+		if(auto f = tupType->findField(((ast::VarExpr*)expr.field)->name)) {
 			auto fexpr = build<FieldExpr>(*target, f);
 			if(args) {
+				// TODO: Indirect calls.
 				//return resolveCall(scope, )
+				return nullptr;
 			} else {
 				return fexpr;
 			}
@@ -369,8 +389,8 @@ Expr* Resolver::resolveField(Scope& scope, ast::FieldExpr& expr, ast::ExprList* 
 	}
 
 	// Generate a function call from the field, with the target as the first parameter.
-	//resolveUnaryCall()
-
+	//ast::AppExpr app{};
+	//return resolveCall(scope);
 	return nullptr;
 }
 
@@ -385,6 +405,23 @@ Expr* Resolver::resolveCondition(ScopeRef scope, ast::ExprRef expr) {
 	} else {
 		return implicitCoerce(*exp, types.getBool());
 	}
+}
+
+ExprList* Resolver::resolveExpressions(Scope& scope, ast::ExprList* list) {
+	// Create a list of function arguments.
+	ExprList* args = nullptr;
+	if(list) {
+		auto arg = list;
+		args = build<ExprList>(resolveExpression(scope, arg->item));
+		auto a = args;
+		arg = arg->next;
+		while(arg) {
+			a->next = build<ExprList>(resolveExpression(scope, arg->item));
+			a = a->next;
+			arg = arg->next;
+		}
+	}
+	return args;
 }
 	
 ast::InfixExpr& Resolver::reorder(ast::InfixExpr& expr) {

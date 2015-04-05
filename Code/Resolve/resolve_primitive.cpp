@@ -95,15 +95,15 @@ void Resolver::initPrimitives() {
 Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, resolve::ExprRef lhs, resolve::ExprRef rhs) {
 	// This is either a pointer or primitive.
 	if(lhs.type->isPointer()) {
-		auto lt = (const PtrType*)lhs.type;
+		auto lt = (PtrType*)lhs.type;
 		if(rhs.type->isPointer()) {
-			auto rt = (const PtrType*)lhs.type;
+			auto rt = (PtrType*)lhs.type;
 			if(auto type = getPtrOpType(op, lt, rt)) {
 				auto list = build<ExprList>(&lhs, build<ExprList>(&rhs));
 				return build<AppPExpr>(op, list, type);
 			}
 		} else {
-			auto rt = ((const PrimType*)rhs.type)->type;
+			auto rt = ((PrimType*)rhs.type)->type;
 			if(auto type = getPtrOpType(op, lt, rt)) {
 				auto list = build<ExprList>(&lhs, build<ExprList>(&rhs));
 				return build<AppPExpr>(op, list, type);
@@ -137,8 +137,7 @@ Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, resolve::ExprRe
 	// The type is either a pointer or primitive.
 	if(dst.type->isPointer()) {
 		if(op == PrimitiveOp::Deref) {
-			auto list = build<ExprList>(&dst);
-			return build<AppPExpr>(op, list, ((PtrType*)dst.type)->type);
+			return build<LoadExpr>(dst, ((PtrType*)dst.type)->type);
 		} else {
 			// Currently no unary operators are defined for pointers.
 			error("this built-in operator cannot be applied to pointer types");
@@ -153,7 +152,7 @@ Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, resolve::ExprRe
 	return nullptr;
 }
 
-const Type* Resolver::getBinaryOpType(PrimitiveOp op, PrimitiveType lhs, PrimitiveType rhs) {
+TypeRef Resolver::getBinaryOpType(PrimitiveOp op, PrimitiveType lhs, PrimitiveType rhs) {
 	if(op < PrimitiveOp::FirstBit) {
 		// Arithmetic operators return the largest type.
 		if(arithCompatible(lhs, rhs)) {
@@ -180,7 +179,7 @@ const Type* Resolver::getBinaryOpType(PrimitiveOp op, PrimitiveType lhs, Primiti
 	return nullptr;
 }
 
-const Type* Resolver::getPtrOpType(PrimitiveOp op, const PtrType* ptr, PrimitiveType prim) {
+TypeRef Resolver::getPtrOpType(PrimitiveOp op, PtrType* ptr, PrimitiveType prim) {
 	// Only addition and subtraction are defined.
 	if(prim < PrimitiveType::FirstFloat) {
 		if(op == PrimitiveOp::Add || op == PrimitiveOp::Sub) {
@@ -195,7 +194,7 @@ const Type* Resolver::getPtrOpType(PrimitiveOp op, const PtrType* ptr, Primitive
 	return nullptr;
 }
 
-const Type* Resolver::getPtrOpType(PrimitiveOp op, const PtrType* lhs, const PtrType* rhs) {
+TypeRef Resolver::getPtrOpType(PrimitiveOp op, PtrType* lhs, PtrType* rhs) {
 	// Supported ptr-ptr operations: comparison and difference (for the same pointer types).
 	if(lhs == rhs) {
 		if(op >= PrimitiveOp::FirstCompare && op < PrimitiveOp::FirstUnary) {
@@ -213,7 +212,7 @@ const Type* Resolver::getPtrOpType(PrimitiveOp op, const PtrType* lhs, const Ptr
 	return nullptr;
 }
 
-const Type* Resolver::getUnaryOpType(PrimitiveOp op, PrimitiveType type) {
+TypeRef Resolver::getUnaryOpType(PrimitiveOp op, PrimitiveType type) {
 	if(op == PrimitiveOp::Neg) {
 		// Returns the same type.
 		if(category(type) <= PrimitiveTypeCategory::Float) {

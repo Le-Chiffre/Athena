@@ -80,6 +80,10 @@ Value* Generator::genExpr(resolve::ExprRef expr) {
 			return genLiteral(((resolve::LitExpr&)expr).literal);
 		case resolve::Expr::Var:
 			return genVar(*((resolve::VarExpr&)expr).var);
+		case resolve::Expr::Load:
+			return genLoad((resolve::Expr&)((resolve::LoadExpr&)expr).target);
+		case resolve::Expr::Store:
+			return genStore((resolve::StoreExpr&)expr);
 		case resolve::Expr::App:
 			return genCall(((resolve::AppExpr&)expr).callee, ((resolve::AppExpr&)expr).args);
 		case resolve::Expr::AppI:
@@ -97,7 +101,7 @@ Value* Generator::genExpr(resolve::ExprRef expr) {
 		case resolve::Expr::Coerce:
 			return genCoerce((resolve::CoerceExpr&)expr);
 		case resolve::Expr::Field:
-			return nullptr;
+			return genField((resolve::FieldExpr&)expr);
 		case resolve::Expr::Ret:
 			return genRet((resolve::RetExpr&)expr);
         default:
@@ -122,19 +126,25 @@ Value* Generator::genLiteral(resolve::Literal& literal) {
 }
 	
 Value* Generator::genVar(resolve::Variable& var) {
-	if(var.isVar()) {
-		return builder.CreateLoad((Value*)var.codegen);
-	} else {
-		return (Value*)var.codegen;
-	}
+	ASSERT(var.codegen != nullptr); // This could happen if a constant is used before its creation.
+	return (Value*)var.codegen;
 }
 	
 Value* Generator::genAssign(resolve::AssignExpr& assign) {
-	ASSERT(assign.var.isVar());
-	builder.CreateStore(genExpr(assign.val), (Value*)assign.var.codegen);
-	return (Value*)assign.var.codegen;
+	ASSERT(!assign.target.isVar());
+	auto e = genExpr(assign.value);
+	assign.target.codegen = e;
+	return e;
 }
-	
+
+Value* Generator::genLoad(resolve::Expr& target) {
+	return builder.CreateLoad(genExpr(target));
+}
+
+Value* Generator::genStore(resolve::StoreExpr& expr) {
+	return builder.CreateStore(genExpr(expr.value), genExpr(expr.target));
+}
+
 Value* Generator::genMulti(resolve::MultiExpr& expr) {
 	auto e = &expr;
 	Value* v = nullptr;
@@ -146,7 +156,7 @@ Value* Generator::genMulti(resolve::MultiExpr& expr) {
 }
 	
 Value* Generator::genRet(resolve::RetExpr& expr) {
-	auto e = useResult(expr.expr);
+	auto e = genExpr(expr.expr);
 	return builder.CreateRet(e);
 }
 
@@ -475,17 +485,15 @@ Value* Generator::genWhile(resolve::WhileExpr& expr) {
 	builder.SetInsertPoint(contBlock);
 	return nullptr;
 }
-	
-Value* Generator::useResult(resolve::ExprRef expr) {
-	auto e = genExpr(expr);
 
-	// Check for void.
-	if(!e) return nullptr;
-
-	// Implicitly deference types that were converted to pointers by the code generator.
-	if(e->getType()->isPointerTy() && !expr.type->isPointer()) {
-		return builder.CreateLoad(e);
-	} else return e;
+llvm::Value* Generator::genField(resolve::FieldExpr& expr) {
+	auto container = genExpr(expr.container);
+	if(container->getType()->isPointerTy()) {
+		return builder.CreateStructGEP(container, expr.field->index);
+	} else {
+		ASSERT(container->getType()->isAggregateType());
+		return builder.CreateExtractValue(container, expr.field->index);
+	}
 }
 
 Type* Generator::genLlvmType(resolve::TypeRef type) {
@@ -512,6 +520,19 @@ Type* Generator::genLlvmType(resolve::TypeRef type) {
 	} else if(type->isPointer()) {
 		auto llType = getType(((const resolve::PtrType*)type)->type);
 		return PointerType::getUnqual(llType);
+	} else if(type->isTuple()) {
+		// Each tuple type is unique, so we can always generate and put it here.
+		auto tuple = (resolve::TupleType*)type;
+
+		// Generate the tuple contents.
+		auto fCount = tuple->fields.Count();
+		auto fields = (Type**)StackAlloc(sizeof(Type*) * fCount);
+		for(uint i=0; i<fCount; i++) {
+			fields[i] = getType(tuple->fields[i].type);
+		}
+
+		auto llType = StructType::create(context, {fields, fCount});
+		return llType;
 	}
 
 	FatalError("Unsupported type.");

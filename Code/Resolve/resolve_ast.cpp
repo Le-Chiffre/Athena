@@ -9,7 +9,7 @@ Variable* Scope::findVar(Id name) {
     // TODO: Make this faster.
     auto scope = this;
     while(scope) {
-        for(auto i : variables) {
+        for(auto i : scope->variables) {
             if(i->name == name) return i;
         }
         scope = scope->parent;
@@ -26,14 +26,14 @@ Variable* Scope::findLocalVar(Id name) {
     return nullptr;
 }
 
-Type* Scope::findType(Id name) {
+TypeRef Scope::findType(Id name) {
     // Type names are unique, although a generic type may have specializations.
     // Generic types are handled separately.
     auto scope = this;
     while(scope) {
         // Even if the type name exists, it may not have been resolved yet.
         // This is handled by the caller.
-        if(auto t = types.Get(name)) return *t;
+        if(auto t = scope->types.Get(name)) return *t;
         scope = scope->parent;
     }
 
