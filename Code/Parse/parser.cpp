@@ -287,7 +287,8 @@ Expr* Parser::parseTypedExpr() {
 Expr* Parser::parseInfixExpr() {
 	/*
 	 * infixexp		→	pexp qop infixexp			(infix operator application)
-	 * 				|	pexp = infiexp				(assignment)
+	 * 				|	pexp = infixexp				(assignment)
+	 * 				|	pexp $ infixexp				(application shortcut)
 	 *				|	pexp
 	 */
 
@@ -299,6 +300,14 @@ Expr* Parser::parseInfixExpr() {
 				return build<AssignExpr>(lhs, value);
 			} else {
 				error("Expected an expression after assignment.");
+				return nullptr;
+			}
+		} else if(token == Token::opDollar) {
+			eat();
+			if(auto value = parseInfixExpr()) {
+				return build<AppExpr>(lhs, build<ExprList>(value));
+			} else {
+				error("Expected a right-hand side for a binary operator.");
 				return nullptr;
 			}
 		} else if(auto op = tryParse(&Parser::parseQop)) {

@@ -227,6 +227,7 @@ struct Token {
 		opArrowL, // <- and ←
 		opArrowR, // -> and →
 		opAt,
+		opDollar,
 		opTilde,
 		opArrowD,
 	};

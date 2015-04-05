@@ -194,8 +194,7 @@ uint ParseIntLiteral(const char*& p)
  */
 double ParseFloatLiteral(const char*& p)
 {
-	DebugError("Not implemented.");
-	return 0;
+	return Core::DoubleFromString(p);
 }
 
 /**
@@ -802,6 +801,9 @@ void Lexer::ParseSymbol()
 		} else if(*p == '|') {
 			//This is the reserved bar operator.
 			tok.type = Token::opBar;
+		} else if(*p == '$') {
+			// This is the reserved dollar operator.
+			tok.type = Token::opDollar;
 		} else if(*p == '@') {
 			//This is the reserved at operator.
 			tok.type = Token::opAt;
