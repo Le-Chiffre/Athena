@@ -61,7 +61,8 @@ struct ASTList<T*>
 
 enum class ForeignConvention {
 	CCall,
-	Stdcall
+	Stdcall,
+	Cpp
 };
 
 struct Fixity {
@@ -94,10 +95,11 @@ struct Literal {
 struct Type {
 	enum Kind {
 		Unit, // The empty unit type.
-		Con,  // A type constructor for a named type.
+		Con,  // A type name for a named type.
 		Ptr,  // A pointer to a type.
         Gen,  // A generic or polymorphic named type.
         Tup,  // A tuple type with optionally named fields.
+		Fun,  // A function type.
 	} kind;
 	Id con = 0;
 
@@ -120,6 +122,12 @@ typedef ASTList<TupleField> TupleFieldList;
 struct TupleType : Type {
     TupleType(TupleFieldList* fields) : Type(Tup), fields(fields) {}
     TupleFieldList* fields;
+};
+
+struct FunType : Type {
+	FunType(TupleFieldList* params, TypeRef ret) : Type(Fun), params(params), returnType(ret) {}
+	TupleFieldList* params;
+	TypeRef returnType;
 };
 
 struct Expr {
@@ -254,7 +262,8 @@ struct Decl {
 	enum Kind {
 		Function,
 		Type,
-		Data
+		Data,
+		Foreign
 	} kind;
 
 	Decl(Kind t) : kind(t) {}
@@ -282,6 +291,15 @@ struct TypeDecl : Decl {
 	TypeDecl(Id name, TypeRef target) : Decl(Type), name(name), target(target) {}
 	Id name;
 	TypeRef target;
+};
+
+struct ForeignDecl : Decl {
+	ForeignDecl(Id importName, Id importedName, ::athena::ast::Type* type, ForeignConvention cconv) :
+		Decl(Foreign), importName(importName), importedName(importedName), type(type), cconv(cconv) {}
+	Id importName;
+	Id importedName;
+	::athena::ast::Type* type;
+	ForeignConvention cconv;
 };
 
 struct Field {

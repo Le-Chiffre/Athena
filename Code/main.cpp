@@ -93,14 +93,21 @@ stuff {x: *Float2} = x.y
 )s";
 	
 	auto test5 = R"s(
-testfun {a: *Int} =
-	let b = a + 1
-	*b = 2
-	*b
+h {x: Int} = x*2
+g {x: Int} = x*4
+f {x: Int} = x*8
+e = f $ g $ h 1
+)s";
+
+	auto foreigntest = R"s(
+foreign import "strlen" stringLength : {*Char} -> Int
+foreign import "printf" print : {str: *Char} -> Int
+
+fluff = print "hello world!"
 )s";
 
 	athena::ast::Module module;
-	athena::ast::Parser p(context, module, test5);
+	athena::ast::Parser p(context, module, foreigntest);
 	p.parseModule();
 
 	{
@@ -110,10 +117,10 @@ testfun {a: *Int} =
 		f.Write({str.ptr, str.length});
 	}
 
+	Core::Terminal << athena::ast::toString(module, context);
+
 	athena::resolve::Resolver resolver{context, module};
 	auto resolved = resolver.resolve();
-
-	Core::Terminal << athena::ast::toString(module, context);
 
 	llvm::LLVMContext& llcontext = llvm::getGlobalContext();
 	llvm::Module* llmodule = new llvm::Module("top", llcontext);

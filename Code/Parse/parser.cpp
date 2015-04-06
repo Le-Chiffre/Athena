@@ -254,6 +254,8 @@ void Parser::parseForeignDecl() {
 					convention = ForeignConvention::CCall;
 				} else if(name.name == "stdcall") {
 					convention = ForeignConvention::Stdcall;
+				} else if(name.name == "cpp") {
+					convention = ForeignConvention::Cpp;
 				} else {
 					error("unknown calling convention.");
 				}
@@ -269,13 +271,22 @@ void Parser::parseForeignDecl() {
 				error("expected name string.");
 			}
 
+			Id importName = 0;
+			if(token == Token::VarID) {
+				importName = token.data.id;
+				eat();
+			} else {
+				error("expected an identifier");
+			}
+
 			if(token == Token::opColon) {
 				eat();
 			} else {
 				error("expected ':'.");
 			}
 
-			
+			auto type = parseType();
+			module.declarations += build<ForeignDecl>(importName, name, type, convention);
 		} else {
 			error("expected 'import'.");
 		}
@@ -782,7 +793,14 @@ Type* Parser::parseType() {
 		eat();
 		return build<Type>(Type::Con, id);
 	} else if(token == Token::BraceL) {
-        return parseTupleType();
+        auto tup = parseTupleType();
+		if(token == Token::opArrowR) {
+			eat();
+			auto ret = parseType();
+			return build<FunType>(((TupleType*)tup)->fields, ret);
+		} else {
+			return tup;
+		}
     }
 
 	error("Expected a type.");

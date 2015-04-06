@@ -35,6 +35,7 @@ struct Printer {
 			case Decl::Function: toString((const FunDecl&)decl); break;
 			case Decl::Type: toString((const TypeDecl&)decl); break;
 			case Decl::Data: toString((const DataDecl&)decl); break;
+			case Decl::Foreign: toString((const ForeignDecl&)decl); break;
 		}
 		return string;
 	}
@@ -289,6 +290,14 @@ private:
 		removeLevel();
 	}
 
+	void toString(const ForeignDecl& e) {
+		string += "ForeignDecl ";
+		auto name = context.Find(e.importedName).name;
+		string.Append(name.ptr, name.length);
+		string += " : ";
+		toString(e.type);
+	}
+
 	void toString(const Field& f, bool last) {
 		toStringIntro(last);
 
@@ -342,6 +351,8 @@ private:
 			string += "()";
 		} else if(type->kind == Type::Tup){
 			string += "tuple";
+		} else if(type->kind == Type::Fun) {
+			string += "fun";
 		} else {
 			if(type->kind == Type::Ptr)
 				string += Parser::kPointerSigil;
