@@ -45,6 +45,7 @@ struct Parser {
 	void parseDecl();
 	void parseDataDecl();
 	void parseTypeDecl();
+	void parseForeignDecl();
 
 	Expr* parseExpr();
 	Expr* parseTypedExpr();

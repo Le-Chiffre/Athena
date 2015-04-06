@@ -1,4 +1,5 @@
 #include "parser.h"
+#include "lexer.h"
 
 namespace athena {
 namespace ast {
@@ -67,6 +68,8 @@ void Parser::parseDecl() {
 		parseTypeDecl();
 	} else if(token == Token::kwData) {
 		parseDataDecl();
+	} else if(token == Token::kwForeign) {
+		parseForeignDecl();
 	} else if(auto var = tryParse(&Parser::parseVar)) {
 		if(token == Token::opColon) {
 			eat();
@@ -225,6 +228,59 @@ void Parser::parseTypeDecl() {
 		}
 	} else {
 		error("expected 'type'.");
+	}
+}
+
+void Parser::parseForeignDecl() {
+	/*
+	 * topdecl	→	foreign fdecl
+	 * fdecl	→	import callconv [safety] impent var : ftype	   	 	(define variable)
+	 * 			|	export callconv expent var : ftype	    			(expose variable)
+	 * callconv	→	ccall | stdcall | cplusplus	    					(calling convention)
+	 * impent	→	[string]
+	 * expent	→	[string]
+	 * safety	→	unsafe | safe
+	 */
+	if(token == Token::kwForeign) {
+		eat();
+		if(token == Token::kwImport) {
+			eat();
+
+			// Optional calling convention. Otherwise, default to ccall.
+			auto convention = ForeignConvention::CCall;
+			if(token == Token::VarID) {
+				auto& name = lexer.GetContext().Find(token.data.id);
+				if(name.name == "ccall") {
+					convention = ForeignConvention::CCall;
+				} else if(name.name == "stdcall") {
+					convention = ForeignConvention::Stdcall;
+				} else {
+					error("unknown calling convention.");
+				}
+
+				eat();
+			}
+
+			Id name = 0;
+			if(token == Token::String) {
+				name = token.data.id;
+				eat();
+			} else {
+				error("expected name string.");
+			}
+
+			if(token == Token::opColon) {
+				eat();
+			} else {
+				error("expected ':'.");
+			}
+
+			
+		} else {
+			error("expected 'import'.");
+		}
+	} else {
+		error("expected 'foreign'.");
 	}
 }
 

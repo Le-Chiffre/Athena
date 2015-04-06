@@ -59,6 +59,11 @@ struct ASTList<T*>
 	}
 };
 
+enum class ForeignConvention {
+	CCall,
+	Stdcall
+};
+
 struct Fixity {
 	enum Kind : uint8 {
 		Left, Right, Prefix
