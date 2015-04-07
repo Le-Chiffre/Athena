@@ -32,8 +32,8 @@ struct Generator {
 	Generator(ast::CompileContext& ccontext, llvm::LLVMContext& context, llvm::Module& target);
 
 	llvm::Module* generate(resolve::Module& module);
-	llvm::Function* genFunction(resolve::Function& function);
-	llvm::Function* genFunctionDecl(resolve::Function& function);
+	void genFunction(llvm::Function* function, resolve::Function& decl);
+	llvm::Function* genFunctionDecl(resolve::FunctionDecl& function);
 	llvm::BasicBlock* genScope(resolve::Scope& scope);
 	llvm::Value* genExpr(resolve::ExprRef expr);
 	llvm::Value* genLiteral(resolve::Literal& literal);
@@ -44,7 +44,7 @@ struct Generator {
 	llvm::Value* genMulti(resolve::MultiExpr& expr);
 	llvm::Value* genRet(resolve::RetExpr& expr);
 
-	llvm::Value* genCall(resolve::Function& function, resolve::ExprList* args);
+	llvm::Value* genCall(resolve::FunctionDecl& function, resolve::ExprList* args);
 	llvm::Value* genPrimitiveCall(resolve::PrimitiveOp op, resolve::ExprList* args);
 	llvm::Value* genUnaryOp(resolve::PrimitiveOp op, resolve::PrimType type, llvm::Value* in);
 	llvm::Value* genBinaryOp(resolve::PrimitiveOp op, llvm::Value* lhs, llvm::Value* rhs, resolve::PrimType lt, resolve::PrimType rt);
@@ -66,6 +66,21 @@ struct Generator {
 		}
 
 		return (llvm::Type*)type->codegen;
+	}
+
+	uint getCconv(resolve::ForeignConvention conv) {
+		switch(conv) {
+			case resolve::ForeignConvention::CCall:
+				return llvm::CallingConv::C;
+			case resolve::ForeignConvention::Stdcall:
+				return llvm::CallingConv::X86_StdCall;
+			case resolve::ForeignConvention::Cpp:
+				// Cpp only affects name mangling.
+				return llvm::CallingConv::C;
+		}
+
+		ASSERT(false);
+		return llvm::CallingConv::C;
 	}
 
 private:

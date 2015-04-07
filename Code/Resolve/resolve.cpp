@@ -23,11 +23,23 @@ Module* Resolver::resolve() {
 		if(decl->kind == ast::Decl::Function) {
 			// Create a linked list of functions with the same name.
 			auto name = ((ast::FunDecl*)decl)->name;
-			Function** f;
+			FunctionDecl** f;
 			if(!module->functions.AddGet(name, f)) *f = nullptr;
 			auto fun = *f;
 			*f = build<Function>(name, (ast::FunDecl*)decl);
 			(*f)->sibling = fun;
+		} else if(decl->kind == ast::Decl::Foreign) {
+			auto fdecl = (ast::ForeignDecl*)decl;
+			if(fdecl->type->kind == ast::Type::Fun) {
+				auto name = fdecl->importedName;
+				FunctionDecl **f;
+				if (!module->functions.AddGet(name, f)) *f = nullptr;
+				auto fun = *f;
+				*f = build<ForeignFunction>(fdecl);
+				(*f)->sibling = fun;
+			} else {
+				error("cannot handle foreign variable imports yet.");
+			}
 		} else {
 			// Type names have to be unique - give an error and ignore any repeated definitions.
 			Id name;
@@ -72,8 +84,8 @@ Module* Resolver::resolve() {
         }
 	});
 
-    module->functions.Iterate([=](Id name, Function* f) {
-        resolveFunction(*module, *f);
+    module->functions.Iterate([=](Id name, FunctionDecl* f) {
+        resolveFunctionDecl(*module, *f);
     });
 	
 	return module;

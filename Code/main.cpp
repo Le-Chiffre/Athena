@@ -100,8 +100,8 @@ e = f $ g $ h 1
 )s";
 
 	auto foreigntest = R"s(
-foreign import "strlen" stringLength : {*Char} -> Int
-foreign import "printf" print : {str: *Char} -> Int
+foreign import "strlen" stringLength : {*U8} -> Int
+foreign import "printf" print : {str: *U8} -> Int
 
 fluff = print "hello world!"
 )s";

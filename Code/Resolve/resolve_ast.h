@@ -13,13 +13,14 @@ using ast::Id;
 struct Variable;
 struct Scope;
 struct Function;
+struct FunctionDecl;
 struct Expr;
 struct Alt;
 struct Type;
 struct Resolver;
 
 typedef Scope& ScopeRef;
-typedef Function& FuncRef;
+typedef FunctionDecl& FuncRef;
 typedef Type* TypeRef;
 typedef const Expr& ExprRef;
 
@@ -30,7 +31,8 @@ typedef Core::Array<Type*> TypeList;
 typedef ast::ASTList<Scope*> ScopeList;
 typedef ast::ASTList<Alt*> AltList;
 typedef Core::NumberMap<TypeRef, Id> TypeMap;
-typedef Core::NumberMap<Function*, Id> FunMap;
+typedef Core::NumberMap<FunctionDecl*, Id> FunMap;
+typedef ast::ForeignConvention ForeignConvention;
 
 struct Scope {
 	/// Finds any variable with the provided name that is visible in this scope.
@@ -62,29 +64,24 @@ struct Scope {
 
 typedef Scope Module;
 
-struct Function {
-	Function(Id name, ast::FunDecl* decl) : astDecl(decl), name(name) {}
+struct FunctionDecl {
+	FunctionDecl(Id name, bool foreign, bool impl) : name(name), isForeign(foreign), hasImpl(impl) {}
 
-	// The scope this function contains.
-	Scope scope;
-
-	// The source declaration of this function in the AST.
-	// This will be set as long as the function has not been resolved.
-	// Any function where this is set after resolving is either unused or an error.
-	ast::FunDecl* astDecl = nullptr;
-	
 	// This pointer can be used in any way by the code generator.
 	void* codegen = nullptr;
 
 	// The base name of this function.
 	Id name;
 
+	// If set, this is a ForeignFunction.
+	bool isForeign = false;
+
+	// If set, this is a Function.
+	bool hasImpl = false;
+
 	/*
 	 * The following fields are invalid as long as the function has not been resolved.
 	 */
-	
-	// The mangled name of this function.
-	Id mangledName = 0;
 
 	// The arguments this function takes.
 	// Each argument also exists in the function scope as a variable.
@@ -94,11 +91,39 @@ struct Function {
 	// Note that this is resolved lazily in most cases.
 	TypeRef type = nullptr;
 
+	// The next function overload with this name.
+	FunctionDecl* sibling = nullptr;
+};
+
+struct Function : FunctionDecl {
+	Function(Id name, ast::FunDecl* decl) : FunctionDecl(name, false, true), astDecl(decl) {}
+
+	// The scope this function contains.
+	Scope scope;
+
+	// The source declaration of this function in the AST.
+	// This will be set as long as the function has not been resolved.
+	// Any function where this is set after resolving is either unused or an error.
+	ast::FunDecl* astDecl = nullptr;
+
+	/*
+	 * The following fields are invalid as long as the function has not been resolved.
+	 */
+	
+	// The mangled name of this function.
+	Id mangledName = 0;
+
 	// Any expressions this function consists of.
 	Expr* expression = nullptr;
-	
-	// The next function overload with this name.
-	Function* sibling = nullptr;
+};
+
+struct ForeignFunction : FunctionDecl {
+	ForeignFunction(ast::ForeignDecl* decl) :
+		FunctionDecl(decl->importedName, true, false), astType((ast::FunType*)decl->type), importName(decl->importName), cconv(decl->cconv) {}
+
+	ast::FunType* astType;
+	Id importName;
+	ForeignConvention cconv;
 };
 
 struct Variable {

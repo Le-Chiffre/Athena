@@ -18,7 +18,7 @@ struct TypeManager {
             prims += PrimType{(PrimitiveType)i};
         }
 
-        stringType = getArray(getU8());
+        stringType = getPtr(getU8());
     }
 
 	TypeRef getUnit() {return &unitType;}
@@ -66,7 +66,9 @@ struct Resolver {
 	Resolver(ast::CompileContext& context, ast::Module& source);
 
 	Module* resolve();
+	bool resolveFunctionDecl(Scope& scope, FunctionDecl& fun);
 	bool resolveFunction(Scope& scope, Function& fun);
+	bool resolveForeignFunction(Scope& scope, ForeignFunction& fun);
 	Expr* resolveExpression(Scope& scope, ast::ExprRef expr);
 	Expr* resolveMulti(Scope& scope, ast::MultiExpr& expr);
 	Expr* resolveMultiWithRet(Scope& scope, ast::MultiExpr& expr);
@@ -133,20 +135,20 @@ struct Resolver {
 	LitExpr* literalCoerce(const ast::Literal& lit, TypeRef dst);
 
 	/// Tries to find a function from the provided expression that takes the provided parameters.
-	Function* findFunction(ScopeRef scope, ast::ExprRef, ExprList* args);
+	FunctionDecl* findFunction(ScopeRef scope, ast::ExprRef, ExprList* args);
 
 	/// Tries to find a function with the provided name that takes the provided parameters.
-	Function* findFunction(ScopeRef scope, Id name, ExprList* args);
+	FunctionDecl* findFunction(ScopeRef scope, Id name, ExprList* args);
 
 	/// Checks if the provided function can potentially be called with the provided arguments.
-	bool potentiallyCallable(Function* fun, ExprList* args);
+	bool potentiallyCallable(FunctionDecl* fun, ExprList* args);
 
 	/// Finds the best matching function from the current potential callees list.
-	Function* findBestMatch(ExprList* args);
+	FunctionDecl* findBestMatch(ExprList* args);
 
 	/// Returns the number of implicit conversions needed to call this function with the provided arguments.
 	/// The function must be callable with these arguments.
-	uint findImplicitConversionCount(Function* f, ExprList* args);
+	uint findImplicitConversionCount(FunctionDecl* f, ExprList* args);
 
 	/// Reorders the provided chain of infix operators according to the operator precedence table.
 	ast::InfixExpr& reorder(ast::InfixExpr& expr);
@@ -183,7 +185,7 @@ struct Resolver {
 	Scope* currentScope = nullptr;
 
 	// This is used to accumulate potentially callable functions.
-	Core::Array<Function*> potentialCallees{32};
+	Core::Array<FunctionDecl*> potentialCallees{32};
 };
 
 }} // namespace athena::resolve

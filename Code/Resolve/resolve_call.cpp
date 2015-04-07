@@ -4,7 +4,7 @@
 namespace athena {
 namespace resolve {
 
-Function* Resolver::findFunction(ScopeRef scope, ast::ExprRef callee, ExprList* args) {
+FunctionDecl* Resolver::findFunction(ScopeRef scope, ast::ExprRef callee, ExprList* args) {
 	if(callee->isVar()) {
 		auto name = ((const ast::VarExpr*)callee)->name;
 		if(auto fun = findFunction(scope, name, args)) {
@@ -20,7 +20,7 @@ Function* Resolver::findFunction(ScopeRef scope, ast::ExprRef callee, ExprList* 
 	return nullptr;
 }
 
-Function* Resolver::findFunction(ScopeRef scope, Id name, ExprList* args) {
+FunctionDecl* Resolver::findFunction(ScopeRef scope, Id name, ExprList* args) {
 	potentialCallees.Clear();
 	bool identifierExists = false;
 
@@ -36,7 +36,7 @@ Function* Resolver::findFunction(ScopeRef scope, Id name, ExprList* args) {
 			// If there are multiple overloads, we have to resolve each one.
 			auto fn = *fns;
 			while(fn) {
-				resolveFunction(*s, *fn);
+				resolveFunctionDecl(*s, *fn);
 				if(potentiallyCallable(fn, args))
 					potentialCallees += fn;
 				fn = fn->sibling;
@@ -62,7 +62,7 @@ Function* Resolver::findFunction(ScopeRef scope, Id name, ExprList* args) {
 	return findBestMatch(args);
 }
 
-bool Resolver::potentiallyCallable(Function* fun, ExprList* args) {
+bool Resolver::potentiallyCallable(FunctionDecl* fun, ExprList* args) {
 	// For now, check if each argument is compatible.
 	auto farg = fun->arguments.begin();
 	auto fend = fun->arguments.end();
@@ -79,18 +79,18 @@ bool Resolver::potentiallyCallable(Function* fun, ExprList* args) {
 	return !(arg || farg != fend);
 }
 
-uint Resolver::findImplicitConversionCount(Function* f, ExprList* args) {
+uint Resolver::findImplicitConversionCount(FunctionDecl* f, ExprList* args) {
 	return 0;
 }
 
-Function* Resolver::findBestMatch(ExprList* args) {
+FunctionDecl* Resolver::findBestMatch(ExprList* args) {
 	// One function is a better match than the other if one of the following is true:
 	//  - The call needs less implicit conversions.
 	//  - The function is less generic.
 	ASSERT(potentialCallees.Count() > 0);
 	if(potentialCallees.Count() == 1) return potentialCallees[0];
 
-	Function* bestMatch = potentialCallees[0];
+	auto bestMatch = potentialCallees[0];
 	uint leastConversions = findImplicitConversionCount(bestMatch, args);
 	uint sameMatchCount = 0; // The number of functions that match just as well as the best one.
 

@@ -15,14 +15,14 @@ Generator::Generator(ast::CompileContext& ccontext, llvm::LLVMContext& context, 
 	context(context), module(target), builder(context), ccontext(ccontext) {}
 
 Module* Generator::generate(resolve::Module& module) {
-	module.functions.Iterate([=](resolve::Id name, resolve::Function* f) {
-		if(!f->codegen) genFunction(*f);
+	module.functions.Iterate([=](resolve::Id name, resolve::FunctionDecl* f) {
+		if(!f->codegen) genFunctionDecl(*f);
 	});
 
 	return &this->module;
 }
 	
-Function* Generator::genFunctionDecl(resolve::Function& function) {
+Function* Generator::genFunctionDecl(resolve::FunctionDecl& function) {
 	auto argCount = function.arguments.Count();
 	auto argTypes = (Type**)StackAlloc(sizeof(Type*) * argCount);
 	for(uint i=0; i<argCount; i++) {
@@ -30,14 +30,24 @@ Function* Generator::genFunctionDecl(resolve::Function& function) {
 	}
 	
 	auto type = FunctionType::get(getType(function.type), ArrayRef<Type*>(argTypes, argCount), false);
-	auto func = Function::Create(type, Function::ExternalLinkage, toRef(ccontext.Find(function.name).name), &module);
-	return func;
+	if(function.isForeign) {
+		auto &ff = (resolve::ForeignFunction&)function;
+		auto func = Function::Create(type, Function::ExternalLinkage, toRef(ccontext.Find(ff.importName).name), &module);
+		func->setCallingConv(getCconv(ff.cconv));
+		function.codegen = func;
+		return func;
+	} else {
+		auto func = Function::Create(type, Function::InternalLinkage, toRef(ccontext.Find(function.name).name), &module);
+		func->setCallingConv(CallingConv::Fast);
+		function.codegen = func;
+		if(function.hasImpl) {
+			genFunction(func, (resolve::Function&)function);
+		}
+		return func;
+	}
 }
 
-Function* Generator::genFunction(resolve::Function& function) {
-	auto func = genFunctionDecl(function);
-	function.codegen = func;
-	
+void Generator::genFunction(Function* func, resolve::Function& function) {
 	// Generate the function arguments.
 	uint i=0;
 	for(auto it=func->arg_begin(); i<function.arguments.Count(); i++, it++) {
@@ -54,7 +64,6 @@ Function* Generator::genFunction(resolve::Function& function) {
 		builder.SetInsertPoint(scope);
 		genExpr(*function.expression);
 	}
-	return func;
 }
 
 BasicBlock* Generator::genScope(resolve::Scope& scope) {
@@ -160,10 +169,10 @@ Value* Generator::genRet(resolve::RetExpr& expr) {
 	return builder.CreateRet(e);
 }
 
-Value* Generator::genCall(resolve::Function& function, resolve::ExprList* argList) {
+Value* Generator::genCall(resolve::FunctionDecl& function, resolve::ExprList* argList) {
 	// Make sure this function has been generated.
 	if(!function.codegen) {
-		genFunction(function);
+		genFunctionDecl(function);
 	}
 	
 	// Generate the function arguments.

@@ -4,6 +4,28 @@
 namespace athena {
 namespace resolve {
 
+bool Resolver::resolveFunctionDecl(Scope& scope, FunctionDecl& fun) {
+    if(fun.hasImpl) return resolveFunction(scope, (Function&)fun);
+    if(fun.isForeign) return resolveForeignFunction(scope, (ForeignFunction&)fun);
+
+    return false;
+}
+
+bool Resolver::resolveForeignFunction(Scope& scope, ForeignFunction& fun) {
+    if(!fun.astType) return true;
+
+    fun.type = resolveType(scope, fun.astType->returnType);
+    auto arg = fun.astType->params;
+    while(arg) {
+        auto a = resolveArgument(scope, arg->item);
+        fun.arguments += a;
+        arg = arg->next;
+    }
+
+    fun.astType = nullptr;
+    return true;
+}
+
 bool Resolver::resolveFunction(Scope& scope, Function& fun) {
     if(!fun.astDecl) return true;
 

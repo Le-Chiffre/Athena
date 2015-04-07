@@ -286,7 +286,7 @@ void Parser::parseForeignDecl() {
 			}
 
 			auto type = parseType();
-			module.declarations += build<ForeignDecl>(importName, name, type, convention);
+			module.declarations += build<ForeignDecl>(name, importName, type, convention);
 		} else {
 			error("expected 'import'.");
 		}
