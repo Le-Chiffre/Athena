@@ -71,6 +71,7 @@ struct Parser {
 	Type* parseType();
     Maybe<TupleField> parseTupleField();
 	Type* parseTupleType();
+	Expr* parseTupleConstruct();
 	Field* parseField();
 	Expr* parseElse();
 

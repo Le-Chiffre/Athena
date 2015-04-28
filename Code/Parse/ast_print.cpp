@@ -228,8 +228,8 @@ private:
 
 	void toString(const ConstructExpr& e) {
 		string += "ConstructExpr ";
-		auto name = context.Find(e.name).name;
-		string.Append(name.ptr, name.length);
+		//auto name = context.Find(e.name).name;
+		//string.Append(name.ptr, name.length);
 	}
 
 	void toString(const FormatExpr& e) {

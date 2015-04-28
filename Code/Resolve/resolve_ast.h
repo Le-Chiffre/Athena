@@ -361,6 +361,7 @@ struct Expr {
 		Coerce,
 		Field,
 		Ret,
+		Construct,
 
 		// The following expressions are only used while resolving or for error handling.
 		// They are removed before the resolve stage finishes.
@@ -461,6 +462,11 @@ struct FieldExpr : Expr {
 struct RetExpr : Expr {
 	RetExpr(ExprRef e) : Expr(Ret, e.type), expr(e) {}
 	ExprRef expr;
+};
+
+struct ConstructExpr : Expr {
+	ConstructExpr(TypeRef type, FieldList* fields) : Expr(Construct, type), fields(fields) {}
+	FieldList* fields;
 };
 
 /// A temporary expression that represents an unfinished declaration.

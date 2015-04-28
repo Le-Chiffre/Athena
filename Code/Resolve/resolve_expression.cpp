@@ -16,6 +16,8 @@ inline TypeRef getLiteralType(TypeManager& m, const Literal& l) {
 
 Expr* Resolver::resolveExpression(Scope& scope, ast::ExprRef expr) {
 	switch(expr->type) {
+		case ast::Expr::Unit:
+			return build<EmptyExpr>(types.getUnit());
 		case ast::Expr::Multi:
 			return resolveMulti(scope, *(ast::MultiExpr*)expr);
 		case ast::Expr::Lit:
@@ -391,6 +393,24 @@ Expr* Resolver::resolveField(Scope& scope, ast::FieldExpr& expr, ast::ExprList* 
 }
 
 Expr* Resolver::resolveConstruct(Scope& scope, ast::ConstructExpr& expr) {
+	auto type = resolveType(scope, expr.type);
+	if(type->isPrimitive()) return resolvePrimitiveConstruct(scope, type, expr);
+
+	if(type->isTuple()) {
+		FieldList* list = nullptr;
+		auto f = expr.args;
+		while(f) {
+			
+			auto l = build<Field>();
+		}
+
+		return build<ConstructExpr>(type, list);
+	}
+	
+	return nullptr;
+}
+
+Expr* Resolver::resolvePrimitiveConstruct(Scope& scope, TypeRef type, ast::ConstructExpr) {
 	return nullptr;
 }
 

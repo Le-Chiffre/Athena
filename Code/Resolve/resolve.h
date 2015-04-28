@@ -86,6 +86,7 @@ struct Resolver {
 	Expr* resolveCoerce(Scope& scope, ast::CoerceExpr& expr);
 	Expr* resolveField(Scope& scope, ast::FieldExpr& expr, ast::ExprList* args = nullptr);
 	Expr* resolveConstruct(Scope& scope, ast::ConstructExpr& expr);
+	Expr* resolvePrimitiveConstruct(Scope& scope, TypeRef type, ast::ConstructExpr);
 	
 	TypeRef resolveAlias(Scope& scope, AliasType* type);
     void resolveAggregate(Scope& scope, AggType* type);

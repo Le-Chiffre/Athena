@@ -529,10 +529,11 @@ Expr* Parser::parseAppExpr() {
 
 Expr* Parser::parseBaseExpr() {
 	/*
-	 * bexp		→	qvar			(variable or function without args)
-	 * 			|	qcon			(object construction)
+	 * bexp		→	qvar				(variable or function without args)
+	 * 			|	qcon				(object construction)
 	 *			|	literal
-	 *			|	( exp )			(parenthesized expression)
+	 *			|	( exp )				(parenthesized expression)
+	 *			|	{ exp, ..., exp }	(tuple construction / unit)
 	 */
 	if(token == Token::Literal) {
 		return parseLiteral();
@@ -549,10 +550,12 @@ Expr* Parser::parseBaseExpr() {
 		} else {
 			return (Expr*)error("Expected expression after '('.");
 		}
+	} else if(token == Token::BraceL) {
+		return parseTupleConstruct();
 	} else if(token == Token::ConID) {
 		auto name = token.data.id;
 		eat();
-		return build<ConstructExpr>(name);
+		return build<ConstructExpr>(build<Type>(Type::Con, name), nullptr);
 	} else if(auto var = tryParse(&Parser::parseVar)) {
 		return build<VarExpr>(var());
 	} else {
@@ -769,15 +772,7 @@ Maybe<Id> Parser::parseQop() {
 }
 
 Type* Parser::parseType() {
-	if(token == Token::ParenL) {
-		eat();
-		if(token == Token::ParenR) {
-			eat();
-			return build<Type>(Type::Unit);
-		} else {
-			error("Expected ')' after '(' in type.");
-		}
-	} else if(token == Token::VarSym) {
+	if(token == Token::VarSym) {
 		auto name = lexer.GetContext().Find(token.data.id).name;
 		if(name.length == 1 && name.ptr[0] == kPointerSigil) {
 			eat();
@@ -793,6 +788,7 @@ Type* Parser::parseType() {
 		eat();
 		return build<Type>(Type::Con, id);
 	} else if(token == Token::BraceL) {
+		// Also handles unit type.
         auto tup = parseTupleType();
 		if(token == Token::opArrowR) {
 			eat();
@@ -809,11 +805,18 @@ Type* Parser::parseType() {
 
 Type* Parser::parseTupleType() {
     /*
-     * tuptype  →   { tupfield1, ..., tupfieldn }       (n ≥ 1)
+     * tuptype  →   { tupfield1, ..., tupfieldn }       (n ≥ 0)
      */
 
 	if(token == Token::BraceL) {
 		eat();
+
+		// Check for empty tuple.
+		if(token == Token::BraceR) {
+			eat();
+			return build<Type>(Type::Unit);
+		}
+
         if(auto f = parseTupleField()) {
             auto list = build<TupleFieldList>(f());
             auto p = list;
@@ -836,6 +839,45 @@ Type* Parser::parseTupleType() {
         } else {
             error("Expected one or more tuple fields");
         }
+	} else {
+		error("Expected '{'");
+	}
+
+	return nullptr;
+}
+
+Expr* Parser::parseTupleConstruct() {
+	if(token == Token::BraceL) {
+		eat();
+
+		// Check for empty tuple.
+		if(token == Token::BraceR) {
+			eat();
+			return build<Expr>(Expr::Unit);
+		}
+
+		if(auto f = parseTupleField()) {
+			auto list = build<TupleFieldList>(f());
+			auto p = list;
+
+			while(token == Token::Comma) {
+				eat();
+				auto field = parseTupleField();
+				if(!field) return nullptr;
+
+				p->next = build<TupleFieldList>(field());
+				p = p->next;
+			}
+
+			if(token == Token::BraceR) {
+				eat();
+				return build<ConstructExpr>(nullptr, list);
+			} else {
+				error("Expected '}");
+			}
+		} else {
+			error("Expected one or more tuple fields");
+		}
 	} else {
 		error("Expected '{'");
 	}

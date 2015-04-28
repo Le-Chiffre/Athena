@@ -132,6 +132,7 @@ struct FunType : Type {
 
 struct Expr {
 	enum Type {
+		Unit,
 		Multi,
 		Lit,
 		Var,
@@ -239,8 +240,9 @@ struct FieldExpr : Expr {
 };
 
 struct ConstructExpr : Expr {
-	ConstructExpr(Id name) : Expr(Construct), name(name) {}
-	Id name;
+	ConstructExpr(TypeRef type, TupleFieldList* args) : Expr(Construct), type(type), args(args) {}
+	TypeRef type;
+	TupleFieldList* args;
 };
 
 /// Formatted strings are divided into chunks.
