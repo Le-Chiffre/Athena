@@ -108,11 +108,13 @@ Value* Generator::genExpr(resolve::ExprRef expr) {
 		case resolve::Expr::Assign:
 			return genAssign((resolve::AssignExpr&)expr);
 		case resolve::Expr::Coerce:
-			return genCoerce((resolve::CoerceExpr&)expr);
+			return genCoerce(((resolve::CoerceExpr&)expr).src, ((resolve::CoerceExpr&)expr).type);
 		case resolve::Expr::Field:
 			return genField((resolve::FieldExpr&)expr);
 		case resolve::Expr::Ret:
 			return genRet((resolve::RetExpr&)expr);
+		case resolve::Expr::Construct:
+			return genConstruct((resolve::ConstructExpr&)expr);
         default:
             FatalError("Unsupported expression type.");
             return nullptr;
@@ -394,12 +396,11 @@ Value* Generator::genIf(resolve::IfExpr& ife) {
 	}
 }
 
-Value* Generator::genCoerce(resolve::CoerceExpr& coerce) {
-	auto src = coerce.src.type;
-	auto dst = coerce.type;
+Value* Generator::genCoerce(const resolve::Expr& srce, resolve::Type* dst) {
+	auto src = srce.type;
 	auto llSrc = getType(src);
 	auto llDst = getType(dst);
-	auto expr = genExpr(coerce.src);
+	auto expr = genExpr(srce);
 
 	if(src == dst) return expr;
 
@@ -407,7 +408,7 @@ Value* Generator::genCoerce(resolve::CoerceExpr& coerce) {
 		// Pointer typecast.
 		return builder.CreateBitCast(expr, llDst);
 	} else if(dst->isPrimitive()) {
-		auto d_typ = ((const resolve::PrimType*)coerce.type)->type;
+		auto d_typ = ((const resolve::PrimType*)dst)->type;
 
 		if(src->isPointer()) {
 			// Pointer to integer conversion.
@@ -417,7 +418,7 @@ Value* Generator::genCoerce(resolve::CoerceExpr& coerce) {
 
 		if(src->isPrimitive()) {
 			// Primitive to primitive conversion.
-			auto s_typ = ((const resolve::PrimType*)coerce.src.type)->type;
+			auto s_typ = ((const resolve::PrimType*)src)->type;
 			if(d_typ < resolve::PrimitiveType::FirstFloat) {
 				if(s_typ < resolve::PrimitiveType::FirstFloat)
 					// Integer-to-integer cast.
@@ -462,7 +463,7 @@ Value* Generator::genCoerce(resolve::CoerceExpr& coerce) {
 		}
 	} else if(dst->isPointer()) {
 		// Integer to pointer conversion.
-		auto s_typ = ((const resolve::PrimType*)coerce.src.type)->type;
+		auto s_typ = ((const resolve::PrimType*)src)->type;
 		ASSERT(s_typ < resolve::PrimitiveType::FirstFloat);
 	}
 
@@ -495,13 +496,28 @@ Value* Generator::genWhile(resolve::WhileExpr& expr) {
 	return nullptr;
 }
 
-llvm::Value* Generator::genField(resolve::FieldExpr& expr) {
+Value* Generator::genField(resolve::FieldExpr& expr) {
 	auto container = genExpr(expr.container);
 	if(container->getType()->isPointerTy()) {
 		return builder.CreateStructGEP(container, expr.field->index);
 	} else {
 		ASSERT(container->getType()->isAggregateType());
 		return builder.CreateExtractValue(container, expr.field->index);
+	}
+}
+
+Value* Generator::genConstruct(resolve::ConstructExpr& expr) {
+	if(expr.type->isPtrOrPrim()) {
+		return genCoerce(expr.args[0].expr, expr.type);
+	} else if(expr.type->isTuple()) {
+		auto type = getType(expr.type);
+		Value* v = UndefValue::get(type);
+		for(auto a : expr.args) {
+			v = builder.CreateInsertValue(v, genExpr(a.expr), a.index);
+		}
+		return v;
+	} else {
+		DebugError("Not implemented");
 	}
 }
 

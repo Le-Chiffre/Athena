@@ -397,14 +397,35 @@ Expr* Resolver::resolveConstruct(Scope& scope, ast::ConstructExpr& expr) {
 	if(type->isPrimitive()) return resolvePrimitiveConstruct(scope, type, expr);
 
 	if(type->isTuple()) {
-		FieldList* list = nullptr;
+		auto ttype = (TupleType*)type;
+		auto con = build<ConstructExpr>(type);
 		auto f = expr.args;
+		uint counter = 0;
+		uint total = 0;
 		while(f) {
-			
-			auto l = build<Field>();
+			uint index = 0;
+			if(f->item.name) {
+				if(auto fi = ttype->findField(f->item.name()))
+					index = fi->index;
+				else
+					error("constructor-provided field does not exist");
+			} else {
+				index = counter;
+				counter++;
+			}
+
+			total++;
+			auto e = resolveExpression(scope, f->item.defaultValue);
+			if(!typeCheck.compatible(*e, ttype->fields[index].type)) {
+				error("incompatible constructor argument type");
+			}
+
+			con->args += ConstructArg{index, *e};
+			f = f->next;
 		}
 
-		return build<ConstructExpr>(type, list);
+		if(total != ttype->fields.Count()) error("constructor argument count does not match type");
+		return con;
 	}
 	
 	return nullptr;

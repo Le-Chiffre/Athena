@@ -464,9 +464,14 @@ struct RetExpr : Expr {
 	ExprRef expr;
 };
 
+struct ConstructArg {
+	uint index;
+	ExprRef expr;
+};
+
 struct ConstructExpr : Expr {
-	ConstructExpr(TypeRef type, FieldList* fields) : Expr(Construct, type), fields(fields) {}
-	FieldList* fields;
+	ConstructExpr(TypeRef type) : Expr(Construct, type) {}
+	Core::Array<ConstructArg> args;
 };
 
 /// A temporary expression that represents an unfinished declaration.
