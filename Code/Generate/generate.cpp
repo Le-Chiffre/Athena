@@ -72,9 +72,16 @@ BasicBlock* Generator::genScope(resolve::Scope& scope) {
 	builder.SetInsertPoint(block);
 	// Generate the variables used in this scope (excluding function parameters).
 	// Constant variables are generated lazily as registers.
+	for(auto v : scope.shadows) {
+		if(v->isVar()) {
+			auto var = builder.CreateAlloca(getType(v->type), nullptr, toRef(ccontext.Find(v->name).name));
+			v->codegen = var;
+		}
+	}
+
 	for(auto v : scope.variables) {
 		if(v->isVar()) {
-			auto var = builder.CreateAlloca(getType(v->type));
+			auto var = builder.CreateAlloca(getType(v->type), nullptr, toRef(ccontext.Find(v->name).name));
 			v->codegen = var;
 		}
 	}
@@ -497,6 +504,7 @@ Value* Generator::genWhile(resolve::WhileExpr& expr) {
 	auto contBlock = BasicBlock::Create(context, "cont", function);
 
 	// Create condition.
+	builder.CreateBr(testBlock);
 	builder.SetInsertPoint(testBlock);
 	auto cond = genExpr(expr.cond);
 	builder.CreateCondBr(cond, loopBlock, contBlock);
@@ -572,7 +580,7 @@ Type* Generator::genLlvmType(resolve::TypeRef type) {
 			fields[i] = getType(tuple->fields[i].type);
 		}
 
-		auto llType = StructType::create(context, {fields, fCount});
+		auto llType = StructType::create(context, {fields, fCount}, "tuple");
 		return llType;
 	}
 

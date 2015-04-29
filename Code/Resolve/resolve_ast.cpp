@@ -9,6 +9,10 @@ Variable* Scope::findVar(Id name) {
     // TODO: Make this faster.
     auto scope = this;
     while(scope) {
+        for(auto i : scope->shadows) {
+            if(i->name == name) return i;
+        }
+
         for(auto i : scope->variables) {
             if(i->name == name) return i;
         }
@@ -20,6 +24,10 @@ Variable* Scope::findVar(Id name) {
 }
 
 Variable* Scope::findLocalVar(Id name) {
+    for(auto i : shadows) {
+        if(i->name == name) return i;
+    }
+
     for(auto i : variables) {
         if(i->name == name) return i;
     }

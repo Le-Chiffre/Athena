@@ -247,7 +247,14 @@ Expr* Resolver::resolveDecl(Scope& scope, ast::DeclExpr& expr) {
 	// Make sure this scope doesn't already have a variable with the same name.
 	Variable* var;
 	if((var = scope.findLocalVar(expr.name))) {
-		error("redefinition of '%@'", var->name);
+		// Mutable variables that shadow function parameters are automatically initialized.
+		if(!content && var->funParam && var->constant) {
+			var = build<Variable>(expr.name, var->type, scope, false);
+			content = getRV(*resolveVar(scope, expr.name));
+			scope.shadows += var;
+		} else {
+			error("redefinition of '%@'", var->name);
+		}
 	} else {
 		// Create the variable allocation.
 		var = build<Variable>(expr.name, type, scope, expr.constant);
@@ -276,7 +283,7 @@ Expr* Resolver::resolveAssign(Scope& scope, ast::AssignExpr& expr) {
 		TypeRef type;
 
 		// Perform an implicit conversion if needed.
-		value = implicitCoerce(*value, target->type);
+		value = implicitCoerce(*value, ((LVType*)target->type)->type);
 		if(!value) {
 			error("assigning to '' from incompatible type ''");
 			//TODO: Implement Type printing.

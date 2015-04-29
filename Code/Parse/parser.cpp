@@ -463,7 +463,7 @@ Expr* Parser::parseLeftExpr() {
 	} else if(token == Token::kwWhile) {
 		eat();
 		if(auto cond = parseInfixExpr()) {
-			if(token == Token::kwIn) {
+			if(token == Token::kwDo) {
 				eat();
 				if(auto loop = parseExpr()) {
 					return build<WhileExpr>(cond, loop);
@@ -647,7 +647,7 @@ Expr* Parser::parseVarDecl(bool constant) {
 
 Expr* Parser::parseDeclExpr(bool constant) {
 	/*
-	 * declexpr		→	varid = expr
+	 * declexpr		→	varid [= expr]
 	 */
 	if(token == Token::VarID) {
 		auto id = token.data.id;

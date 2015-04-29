@@ -55,6 +55,9 @@ struct Scope {
 	// The variables that were declared in this scope.
 	VarList variables;
 
+	// The function parameters that were shadowed in this scope.
+	VarList shadows;
+
     // The functions that were declared in this scope.
 	FunMap functions;
 
