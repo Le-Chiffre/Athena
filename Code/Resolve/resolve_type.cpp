@@ -33,6 +33,8 @@ TypeRef Resolver::resolveTuple(Scope& scope, ast::TupleType& type) {
 	while(f) {
 		auto t = resolveType(scope, f->item.type);
 		h.Add(t);
+		// Include the name to ensure that tuples with the same memory layout are not exactly the same.
+		if(f->item.name) h.Add(f->item.name());
 		f = f->next;
 	}
 

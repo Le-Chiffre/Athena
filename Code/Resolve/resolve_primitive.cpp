@@ -137,7 +137,7 @@ Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, resolve::ExprRe
 	// The type is either a pointer or primitive.
 	if(dst.type->isPointer()) {
 		if(op == PrimitiveOp::Deref) {
-			return build<LoadExpr>(dst, ((PtrType*)dst.type)->type);
+			return build<LoadExpr>(dst, types.getRV(((PtrType*)dst.type)->type));
 		} else {
 			// Currently no unary operators are defined for pointers.
 			error("this built-in operator cannot be applied to pointer types");

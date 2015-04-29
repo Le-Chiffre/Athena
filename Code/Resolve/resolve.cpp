@@ -121,9 +121,16 @@ Expr* Resolver::implicitLoad(ExprRef target) {
 	}
 }
 
-CoerceExpr* Resolver::implicitCoerce(ExprRef src, TypeRef dst) {
+Expr* Resolver::implicitCoerce(ExprRef src, TypeRef dst) {
+	if(src.type == dst) return (Expr*)&src;
+
 	if(typeCheck.implicitCoerce(src.type, dst, Nothing)) {
-		return build<CoerceExpr>(src, dst);
+		// Lvalue to Rvalue conversion is so common that we implement it as a special instruction.
+		// This also allows for a simpler code generator.
+		if(src.type->isLvalue())
+			return implicitCoerce(*getRV(src), dst);
+		else
+			return build<CoerceExpr>(src, dst);
 	}
 
 	return nullptr;
@@ -136,6 +143,16 @@ LitExpr* Resolver::literalCoerce(const ast::Literal& lit, TypeRef dst) {
 	// We always return a valid value to simplify the resolver.
 	// If an error occurred the code generator will not be invoked.
 	return build<LitExpr>(literal, dst);
+}
+
+Expr* Resolver::createRet(ExprRef e) {
+	return build<RetExpr>(*getRV(e));
+}
+
+Expr* Resolver::getRV(ExprRef e) {
+	if(e.type->isLvalue()) {
+		return build<CoerceLVExpr>(e, types.getRV(e.type));
+	} else return (Expr*)&e;
 }
 
 nullptr_t Resolver::error(const char* text) {

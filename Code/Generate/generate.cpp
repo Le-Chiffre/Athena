@@ -109,6 +109,8 @@ Value* Generator::genExpr(resolve::ExprRef expr) {
 			return genAssign((resolve::AssignExpr&)expr);
 		case resolve::Expr::Coerce:
 			return genCoerce(((resolve::CoerceExpr&)expr).src, ((resolve::CoerceExpr&)expr).type);
+		case resolve::Expr::CoerceLV:
+			return genCoerceLV(((resolve::CoerceLVExpr&)expr).src, ((resolve::CoerceLVExpr&)expr).type);
 		case resolve::Expr::Field:
 			return genField((resolve::FieldExpr&)expr);
 		case resolve::Expr::Ret:
@@ -149,11 +151,16 @@ Value* Generator::genAssign(resolve::AssignExpr& assign) {
 }
 
 Value* Generator::genLoad(resolve::Expr& target) {
-	return builder.CreateLoad(genExpr(target));
+	// Loads are just placeholders for generating lvalues.
+	// The actual load is done when converting to rvalue.
+	return genExpr(target);
 }
 
 Value* Generator::genStore(resolve::StoreExpr& expr) {
-	return builder.CreateStore(genExpr(expr.value), genExpr(expr.target));
+	ASSERT(expr.target.type->isLvalue());
+	auto target = genExpr(expr.target);
+	builder.CreateStore(genExpr(expr.value), target);
+	return target;
 }
 
 Value* Generator::genMulti(resolve::MultiExpr& expr) {
@@ -469,6 +476,14 @@ Value* Generator::genCoerce(const resolve::Expr& srce, resolve::Type* dst) {
 
 	FatalError("Invalid coercion between types.");
 	return nullptr;
+}
+
+Value* Generator::genCoerceLV(const resolve::Expr& src, resolve::Type* dst) {
+	ASSERT(src.type->isLvalue());
+	ASSERT(((resolve::LVType*)src.type)->type == dst);
+
+	// LValues are always implicitly pointers in the code generator.
+	return builder.CreateLoad(genExpr(src));
 }
 
 Value* Generator::genWhile(resolve::WhileExpr& expr) {

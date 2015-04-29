@@ -11,6 +11,11 @@ inline void error(Maybe<Diagnostics*> diag, const char* text) {
 }
 
 bool TypeCheck::implicitCoerce(TypeRef src, TypeRef dst, Maybe<Diagnostics*> diag) {
+	// Lvalue types are semantically equivalent and can always be implicitly converted.
+	if(src->isLvalue()) {
+		return compatible(((LVType*)src)->type, dst);
+	}
+
 	// Only primitive types can be implicitly converted:
 	//  - floating point types can be converted to a larger type.
 	//  - integer types can be converted to a larger type.
@@ -37,6 +42,18 @@ bool TypeCheck::implicitCoerce(TypeRef src, TypeRef dst, Maybe<Diagnostics*> dia
 		} else {
 			error(diag, "booleans can only be implicitly converted to an integer types");
 		}
+	} else if(src->isTuple() && dst->isTuple()) {
+		// Tuples can be implicitly converted to more defined tuples.
+		auto s = (TupleType*)src;
+		auto d = (TupleType*)dst;
+		if(s->fields.Count() != d->fields.Count()) return false;
+
+		for(uint i=0; i<s->fields.Count(); i++) {
+			if(s->fields[i].name && s->fields[i].name != d->fields[i].name) return false;
+			if(!compatible(s->fields[i].type, d->fields[i].type)) return false;
+		}
+
+		return true;
 	} else {
 		error(diag, "only primitive types or pointers can be implicitly converted");
 	}

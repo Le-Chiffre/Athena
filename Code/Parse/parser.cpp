@@ -856,13 +856,13 @@ Expr* Parser::parseTupleConstruct() {
 			return build<Expr>(Expr::Unit);
 		}
 
-		if(auto f = parseTupleField()) {
+		if(auto f = parseTupleConstructField()) {
 			auto list = build<TupleFieldList>(f());
 			auto p = list;
 
 			while(token == Token::Comma) {
 				eat();
-				auto field = parseTupleField();
+				auto field = parseTupleConstructField();
 				if(!field) return nullptr;
 
 				p->next = build<TupleFieldList>(field());
@@ -888,8 +888,8 @@ Expr* Parser::parseTupleConstruct() {
 Maybe<TupleField> Parser::parseTupleField() {
     /*
      * tupfield →   varid [: type]
-     *          |   varid [= infixexpr]
-     *          |   type [= infixexpr]
+     *          |   varid [= typedexpr]
+     *          |   type [= typedexpr]
      * (The last one may not be valid in any context, but may be used in the future)
      */
 
@@ -916,17 +916,44 @@ Maybe<TupleField> Parser::parseTupleField() {
         type = parseType();
     }
 
-    if(!type) return Nothing;
-
     // Parse default value.
-    if(!name && token == Token::opEquals) {
+    if(token == Token::opEquals) {
         eat();
-        def = parseInfixExpr();
+        def = parseTypedExpr();
     }
+
+	if(!type && !def) return Nothing;
 
     return TupleField{type, name, def};
 }
 
+Maybe<TupleField> Parser::parseTupleConstructField() {
+	/*
+     * tupcfield 	→  typedexpr
+     *          	|   varid [= typedexpr]
+     */
+
+	Maybe<Id> name = Nothing;
+	ExprRef def = nullptr;
+
+	// If the token is a varid, it can either be a generic or named parameter, depending on the token after it.
+	if(token == Token::VarID) {
+		auto id = token.data.id;
+		eat();
+		if(token == Token::opEquals) {
+			name = id;
+			eat();
+			def = parseTypedExpr();
+		} else {
+			def = build<VarExpr>(id);
+		}
+	} else {
+		def = parseTypedExpr();
+	}
+
+	if(!def) return Nothing;
+	return TupleField{nullptr, name, def};
+}
 
 Field* Parser::parseField() {
 	bool constant;

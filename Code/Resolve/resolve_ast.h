@@ -206,6 +206,7 @@ struct Type {
 		Var,
 		Array,
 		Map,
+		Lvalue,
 
 		// These are often checked for together, so we let them share a single bit.
 		Prim = 0x10,
@@ -223,6 +224,7 @@ struct Type {
 	bool isUnit() const {return kind == Unit;}
     bool isAlias() const {return kind == Alias;}
 	bool isBool() const;
+	bool isLvalue() const {return kind == Lvalue;}
 
 	Type(Kind kind) : kind(kind) {}
 };
@@ -240,6 +242,12 @@ inline bool Type::isBool() const {return isPrimitive() && ((const PrimType*)this
 /// Pointers must have a concrete type; pointers to the unit type are not supported.
 struct PtrType : Type {
 	PtrType(TypeRef type) : Type(Ptr), type(type) {}
+	TypeRef type;
+};
+
+/// Represents an lvalue (as opposed to rvalue).
+struct LVType : Type {
+	LVType(TypeRef type) : Type(Lvalue), type(type) {}
 	TypeRef type;
 };
 	
@@ -362,6 +370,7 @@ struct Expr {
 		While,
 		Assign, // constant variables.
 		Coerce,
+		CoerceLV, // common special case of Coerce.
 		Field,
 		Ret,
 		Construct,
@@ -391,9 +400,8 @@ struct LitExpr : Expr {
 };
 
 struct VarExpr : Expr {
-	VarExpr(Variable* var, TypeRef type, bool indirect) : Expr(Var, type), var(var), indirect(indirect) {}
+	VarExpr(Variable* var, TypeRef type) : Expr(Var, type), var(var) {}
 	Variable* var;
-	bool indirect;
 };
 
 struct AppExpr : Expr {
@@ -456,8 +464,13 @@ struct CoerceExpr : Expr {
 	ExprRef src;
 };
 
+struct CoerceLVExpr : Expr {
+	CoerceLVExpr(ExprRef src, TypeRef dst) : Expr(CoerceLV, dst), src(src) {}
+	ExprRef src;
+};
+
 struct FieldExpr : Expr {
-	FieldExpr(ExprRef container, ::athena::resolve::Field* field) : Expr(Field, field->type), container(container), field(field) {}
+	FieldExpr(ExprRef container, ::athena::resolve::Field* field, TypeRef type) : Expr(Field, type), container(container), field(field) {}
 	ExprRef container;
 	::athena::resolve::Field* field;
 };

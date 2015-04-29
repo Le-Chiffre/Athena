@@ -52,11 +52,26 @@ struct TypeManager {
 		return tuples.AddGet(hash, type);
 	}
 
+	TypeRef getLV(TypeRef t) {
+		LVType* type;
+		if(!lvalues.AddGet(t, type))
+			new (type) LVType(t);
+
+		return type;
+	}
+
+	// t must be an lvalue.
+	TypeRef getRV(TypeRef t) {
+		ASSERT(t->isLvalue());
+		return ((LVType*)t)->type;
+	}
+
     Core::FixedArray<PrimType, (uint)PrimitiveType::TypeCount> prims;
 	Core::NumberMap<TypeRef, Id> primMap; // Maps from ast type name to type.
     Core::NumberMap<ArrayType, TypeRef> arrays;
 	Core::NumberMap<PtrType, TypeRef> ptrs;
 	Core::NumberMap<TupleType, uint> tuples;
+	Core::NumberMap<LVType, TypeRef> lvalues;
 	Type* stringType;
 	Type unitType{Type::Unit};
 	Type unknownType{Type::Unknown};
@@ -86,6 +101,7 @@ struct Resolver {
 	Expr* resolveCoerce(Scope& scope, ast::CoerceExpr& expr);
 	Expr* resolveField(Scope& scope, ast::FieldExpr& expr, ast::ExprList* args = nullptr);
 	Expr* resolveConstruct(Scope& scope, ast::ConstructExpr& expr);
+	Expr* resolveAnonConstruct(Scope& scope, ast::ConstructExpr& expr);
 	Expr* resolvePrimitiveConstruct(Scope& scope, TypeRef type, ast::ConstructExpr);
 	
 	TypeRef resolveAlias(Scope& scope, AliasType* type);
@@ -115,6 +131,12 @@ struct Resolver {
 	TypeRef getPtrOpType(PrimitiveOp, PtrType*, PtrType*);
 	TypeRef getUnaryOpType(PrimitiveOp, PrimitiveType);
 
+	/// Creates a return of the provided expression.
+	Expr* createRet(ExprRef);
+
+	/// Makes sure the provided expression is an rvalue.
+	Expr* getRV(ExprRef);
+
 	/// Checks if the provided callee expression can contain a primitive operator.
 	PrimitiveOp* tryPrimitiveBinaryOp(Id callee);
 	PrimitiveOp* tryPrimitiveUnaryOp(Id callee);
@@ -129,7 +151,7 @@ struct Resolver {
 	Expr* implicitLoad(ExprRef target);
 
 	/// Checks if the provided type can be implicitly converted to the target type.
-	CoerceExpr* implicitCoerce(ExprRef src, TypeRef dst);
+	Expr* implicitCoerce(ExprRef src, TypeRef dst);
 
 	/// Checks if the provided literal type can be converted to the target type.
 	/// This is more flexible than an implicit coercion and done on compile time.

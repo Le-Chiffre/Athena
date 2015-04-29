@@ -80,7 +80,7 @@ Expr* Resolver::resolveMultiWithRet(Scope& scope, ast::MultiExpr& expr) {
 			current = current->next;
 			e = e->next;
 		} else {
-			current->next = build<MultiExpr>(build<RetExpr>(*resolveExpression(scope, e->item)));
+			current->next = build<MultiExpr>(createRet(*resolveExpression(scope, e->item)));
 			start->type = current->next->type;
 			return start;
 		}
@@ -93,11 +93,11 @@ Expr* Resolver::resolveLiteral(Scope& scope, ast::LitExpr& expr) {
 
 Expr* Resolver::resolveInfix(Scope& scope, ast::InfixExpr& expr) {
 	auto& e = reorder(expr);
-	return resolveBinaryCall(scope, e.op, *resolveExpression(scope, e.lhs), *resolveExpression(scope, e.rhs));
+	return resolveBinaryCall(scope, e.op, *getRV(*resolveExpression(scope, e.lhs)), *getRV(*resolveExpression(scope, e.rhs)));
 }
 
 Expr* Resolver::resolvePrefix(Scope& scope, ast::PrefixExpr& expr) {
-	return resolveUnaryCall(scope, expr.op, *resolveExpression(scope, expr.dst));
+	return resolveUnaryCall(scope, expr.op, *getRV(*resolveExpression(scope, expr.dst)));
 }
 
 Expr* Resolver::resolveBinaryCall(Scope& scope, Id function, ExprRef lt, ExprRef rt) {
@@ -157,11 +157,11 @@ Expr* Resolver::resolveCall(Scope& scope, ast::AppExpr& expr) {
 			if (auto rhs = expr.args->next) {
 				if (!rhs->next) {
 					// Two arguments.
-					return resolveBinaryCall(scope, name, *resolveExpression(scope, lhs->item), *resolveExpression(scope, rhs->item));
+					return resolveBinaryCall(scope, name, *getRV(*resolveExpression(scope, lhs->item)), *getRV(*resolveExpression(scope, rhs->item)));
 				}
 			} else {
 				// Single argument.
-				return resolveUnaryCall(scope, name, *resolveExpression(scope, lhs->item));
+				return resolveUnaryCall(scope, name, *getRV(*resolveExpression(scope, lhs->item)));
 			}
 		}
 	}
@@ -183,12 +183,9 @@ Expr* Resolver::resolveVar(Scope& scope, Id name) {
 	// This is resolved by looking through the current scope.
 	if(auto var = scope.findVar(name)) {
 		// This is a variable being read.
-		// If it is not constant, it will be represented through an indirection.
-		// This means that load operations are needed to use it.
-		if(var->constant)
-			return build<VarExpr>(var, var->type, false);
-		else
-			return implicitLoad(*build<VarExpr>(var, types.getPtr(var->type), true));
+		// Constant variables are rvalues, while mutables are lvalues.
+		auto type = var->constant ? var->type : types.getLV(var->type);
+		return build<VarExpr>(var, type);
 	} else {
 		// No local or global variable was found.
 		// Check if this is a function instead.
@@ -206,8 +203,8 @@ Expr* Resolver::resolveVar(Scope& scope, Id name) {
 
 Expr* Resolver::resolveIf(Scope& scope, ast::IfExpr& expr) {
 	auto& cond = *resolveCondition(scope, expr.cond);
-	auto& then = *resolveExpression(scope, expr.then);
-	auto otherwise = expr.otherwise ? resolveExpression(scope, expr.otherwise) : nullptr;
+	auto& then = *getRV(*resolveExpression(scope, expr.then));
+	auto otherwise = expr.otherwise ? getRV(*resolveExpression(scope, expr.otherwise)) : nullptr;
 	bool useResult = false;
 
 	// Find the type of the expression.
@@ -238,7 +235,7 @@ Expr* Resolver::resolveDecl(Scope& scope, ast::DeclExpr& expr) {
 	Expr* content = nullptr;
 	TypeRef type;
 	if(expr.content) {
-		content = resolveExpression(scope, expr.content);
+		content = getRV(*resolveExpression(scope, expr.content));
 		type = content->type;
 	} else {
 		type = types.getUnknown();
@@ -265,47 +262,29 @@ Expr* Resolver::resolveDecl(Scope& scope, ast::DeclExpr& expr) {
 		if(var->constant)
 			return build<AssignExpr>(*var, *content);
 		else
-			return build<StoreExpr>(*build<VarExpr>(var, type, true), *content, type);
+			return build<StoreExpr>(*build<VarExpr>(var, types.getLV(type)), *content, type);
 	} else {
 		return build<EmptyDeclExpr>(*var);
 	}
 }
 
 Expr* Resolver::resolveAssign(Scope& scope, ast::AssignExpr& expr) {
-	// Assignment has several cases:
-	//  - assigning a variable load removes the load and produces a Store.
-	//  - assigning a field load removes the load and produces a Store.
-	//  - assigning an indirection load removes the load and produces a Store.
-	// Make sure the type can be assigned to.
+	// Only lvalues can be assigned.
 	auto target = resolveExpression(scope, expr.target);
-	if(target->kind == Expr::Load) {
-		auto load = (LoadExpr*)target;
-		auto value = resolveExpression(scope, expr.value);
+	if(target->type->isLvalue()) {
+		auto value = getRV(*resolveExpression(scope, expr.value));
 		TypeRef type;
 
-		if(load->target.kind == Expr::Var) {
-			type = ((VarExpr&)load->target).var->type;
-		} else if(load->target.kind == Expr::Field) {
-			type = ((FieldExpr&)load->target).field->type;
-		} else if(load->target.type->isPointer()) {
-			type = ((PtrType*)load->target.type)->type;
-		} else {
-			error("expression is not assignable");
+		// Perform an implicit conversion if needed.
+		value = implicitCoerce(*value, target->type);
+		if(!value) {
+			error("assigning to '' from incompatible type ''");
+			//TODO: Implement Type printing.
+			//error("assigning to '%@' from incompatible type '%@'", target->type, value->type);
 			return nullptr;
 		}
 
-		// Perform an implicit conversion if needed.
-		if(type != value->type) {
-			value = implicitCoerce(*value, target->type);
-			if(!value) {
-				error("assigning to '' from incompatible type ''");
-				//TODO: Implement Type printing.
-				//error("assigning to '%@' from incompatible type '%@'", target->type, value->type);
-				return nullptr;
-			}
-		}
-
-		return build<StoreExpr>(load->target, *value, value->type);
+		return build<StoreExpr>(*target, *value, target->type);
 	} else {
 		error("expression is not assignable");
 		return nullptr;
@@ -313,14 +292,10 @@ Expr* Resolver::resolveAssign(Scope& scope, ast::AssignExpr& expr) {
 }
 
 Expr* Resolver::resolveWhile(Scope& scope, ast::WhileExpr& expr) {
-	auto cond = resolveExpression(scope, expr.cond);
-	if(cond->type == types.getBool()) {
-		auto loop = resolveExpression(scope, expr.loop);
-		return build<WhileExpr>(*cond, *loop, types.getUnit());
-	} else {
-		error("while loop condition must resolve to boolean type");
-		return nullptr;
-	}
+	// The while loop returns nothing, so there is no need to convert the body to an lvalue.
+	auto loop = resolveExpression(scope, expr.loop);
+	auto cond = resolveCondition(scope, expr.cond);
+	return build<WhileExpr>(*cond, *loop, types.getUnit());
 }
 
 Expr* Resolver::resolveCoerce(Scope& scope, ast::CoerceExpr& expr) {
@@ -361,12 +336,13 @@ Expr* Resolver::resolveCoerce(Scope& scope, ast::CoerceExpr& expr) {
 		// For now, just do the default.
 	}
 
-	// Perform an implicit coercion as the default.
+	// Perform an implicit coercion as the default. Also handles lvalues.
 	return implicitCoerce(*resolveExpression(scope, expr.target), resolveType(scope, expr.kind));
 }
 
 Expr* Resolver::resolveField(Scope& scope, ast::FieldExpr& expr, ast::ExprList* args) {
 	auto target = resolveExpression(scope, expr.target);
+	bool constant = target->kind == Expr::Var && ((VarExpr*)target)->var->constant && target->type->isTuple();
 
 	// Check if this is a field or function call expression.
 	// For types without named fields, this is always a function call.
@@ -375,7 +351,7 @@ Expr* Resolver::resolveField(Scope& scope, ast::FieldExpr& expr, ast::ExprList* 
 	if(target->type->isTupleOrIndirect() && expr.field->type == ast::Expr::Var) {
 		auto tupType = target->type->isTuple() ? (TupleType*)target->type : (TupleType*)((PtrType*)target->type)->type;
 		if(auto f = tupType->findField(((ast::VarExpr*)expr.field)->name)) {
-			auto fexpr = build<FieldExpr>(*target, f);
+			auto fexpr = build<FieldExpr>(*target, f, constant ? f->type : types.getLV(f->type));
 			if(args) {
 				// TODO: Indirect calls.
 				//return resolveCall(scope, )
@@ -393,7 +369,14 @@ Expr* Resolver::resolveField(Scope& scope, ast::FieldExpr& expr, ast::ExprList* 
 }
 
 Expr* Resolver::resolveConstruct(Scope& scope, ast::ConstructExpr& expr) {
-	auto type = resolveType(scope, expr.type);
+	// If no type is provided, we create a tuple from the arguments.
+	Type* type;
+	if(expr.type) {
+		type = resolveType(scope, expr.type);
+	} else {
+		return resolveAnonConstruct(scope, expr);
+	}
+
 	if(type->isPrimitive()) return resolvePrimitiveConstruct(scope, type, expr);
 
 	if(type->isTuple()) {
@@ -415,7 +398,7 @@ Expr* Resolver::resolveConstruct(Scope& scope, ast::ConstructExpr& expr) {
 			}
 
 			total++;
-			auto e = resolveExpression(scope, f->item.defaultValue);
+			auto e = getRV(*resolveExpression(scope, f->item.defaultValue));
 			if(!typeCheck.compatible(*e, ttype->fields[index].type)) {
 				error("incompatible constructor argument type");
 			}
@@ -431,17 +414,48 @@ Expr* Resolver::resolveConstruct(Scope& scope, ast::ConstructExpr& expr) {
 	return nullptr;
 }
 
+Expr* Resolver::resolveAnonConstruct(Scope& scope, ast::ConstructExpr& expr) {
+	// Generate a hash for the fields.
+	Core::Hasher h;
+	auto f = expr.args;
+	auto con = build<ConstructExpr>(types.getUnknown());
+	uint index = 0;
+	while(f) {
+		ASSERT(f->item.defaultValue);
+		auto e = getRV(*resolveExpression(scope, f->item.defaultValue));
+		h.Add(e->type);
+		if(f->item.name) h.Add(f->item.name());
+
+		con->args += ConstructArg{index, *e};
+
+		index++;
+		f = f->next;
+	}
+
+	// Check if this kind of tuple has been used already.
+	TupleType* result = nullptr;
+	if(!types.getTuple(h, result)) {
+		// Otherwise, create the type.
+		new (result) TupleType;
+		uint i = 0;
+		f = expr.args;
+		while(f) {
+			auto t = con->args[i].expr.type;
+			result->fields += Field{f->item.name ? f->item.name() : 0, i, t, result, nullptr, true};
+			f = f->next;
+			i++;
+		}
+	}
+	con->type = result;
+	return con;
+}
+
 Expr* Resolver::resolvePrimitiveConstruct(Scope& scope, TypeRef type, ast::ConstructExpr) {
 	return nullptr;
 }
 
 Expr* Resolver::resolveCondition(ScopeRef scope, ast::ExprRef expr) {
-	auto exp = resolveExpression(scope, expr);
-	if(exp->type->isBool()) {
-		return exp;
-	} else {
-		return implicitCoerce(*exp, types.getBool());
-	}
+	return implicitCoerce(*resolveExpression(scope, expr), types.getBool());
 }
 
 ExprList* Resolver::resolveExpressions(Scope& scope, ast::ExprList* list) {
@@ -449,11 +463,11 @@ ExprList* Resolver::resolveExpressions(Scope& scope, ast::ExprList* list) {
 	ExprList* args = nullptr;
 	if(list) {
 		auto arg = list;
-		args = build<ExprList>(resolveExpression(scope, arg->item));
+		args = build<ExprList>(getRV(*resolveExpression(scope, arg->item)));
 		auto a = args;
 		arg = arg->next;
 		while(arg) {
-			a->next = build<ExprList>(resolveExpression(scope, arg->item));
+			a->next = build<ExprList>(getRV(*resolveExpression(scope, arg->item)));
 			a = a->next;
 			arg = arg->next;
 		}
