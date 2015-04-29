@@ -372,8 +372,8 @@ Expr* Resolver::resolveField(Scope& scope, ast::FieldExpr& expr, ast::ExprList* 
 	// For types without named fields, this is always a function call.
 	// For types with named fields, this is a field expression if the target is a VarExpr,
 	// and the type has a field with that name.
-	if(target->type->isTuple() && expr.field->type == ast::Expr::Var) {
-		auto tupType = (TupleType*)target->type;
+	if(target->type->isTupleOrIndirect() && expr.field->type == ast::Expr::Var) {
+		auto tupType = target->type->isTuple() ? (TupleType*)target->type : (TupleType*)((PtrType*)target->type)->type;
 		if(auto f = tupType->findField(((ast::VarExpr*)expr.field)->name)) {
 			auto fexpr = build<FieldExpr>(*target, f);
 			if(args) {

@@ -518,6 +518,7 @@ Value* Generator::genConstruct(resolve::ConstructExpr& expr) {
 		return v;
 	} else {
 		DebugError("Not implemented");
+		return nullptr;
 	}
 }
 

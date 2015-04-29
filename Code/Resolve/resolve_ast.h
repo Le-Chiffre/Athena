@@ -218,6 +218,7 @@ struct Type {
     bool isPrimitive() const {return kind == Prim;}
 	bool isPtrOrPrim() const {return ((uint)kind & 0x10) != 0;}
 	bool isTuple() const {return kind == Tuple;}
+	bool isTupleOrIndirect() const;
 	bool isKnown() const {return kind != Unknown;}
 	bool isUnit() const {return kind == Unit;}
     bool isAlias() const {return kind == Alias;}
@@ -241,6 +242,8 @@ struct PtrType : Type {
 	PtrType(TypeRef type) : Type(Ptr), type(type) {}
 	TypeRef type;
 };
+	
+inline bool Type::isTupleOrIndirect() const {return isTuple() || (kind == Ptr && ((PtrType*)this)->type->isTuple());}
 
 struct Field {
 	Field(Id name, uint index, TypeRef type, TypeRef container, Expr* content, bool constant) :
