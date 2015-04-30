@@ -57,6 +57,7 @@ struct Generator {
 	llvm::Value* genWhile(resolve::WhileExpr& expr);
 	llvm::Value* genField(resolve::FieldExpr& expr);
 	llvm::Value* genConstruct(resolve::ConstructExpr& expr);
+	llvm::Value* genLazyCond(resolve::PrimitiveOp op, resolve::ExprRef lhs, resolve::ExprRef rhs);
 	
 	llvm::Function* getFunction() {
 		return builder.GetInsertBlock()->getParent();

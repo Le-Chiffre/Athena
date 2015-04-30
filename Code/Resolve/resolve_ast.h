@@ -189,7 +189,10 @@ enum class PrimitiveTypeCategory {
 
 /// Returns the category a primitive type belongs to.
 inline PrimitiveTypeCategory category(PrimitiveType t) {
-    return (PrimitiveTypeCategory)((uint)t & 0b1100);
+	if(t < PrimitiveType::FirstUnsigned) return PrimitiveTypeCategory::Signed;
+	if(t < PrimitiveType::FirstFloat) return PrimitiveTypeCategory::Unsigned;
+	if(t < PrimitiveType::FirstOther) return PrimitiveTypeCategory::Float;
+	return PrimitiveTypeCategory::Other;
 }
 
 /// Returns the largest of the two provided types.
@@ -354,6 +357,11 @@ inline bool isUnary(PrimitiveOp op) {
 /// Returns true if this operation takes exactly two parameters.
 inline bool isBinary(PrimitiveOp op) {
 	return op < PrimitiveOp::FirstUnary;
+}
+
+/// Returns true if this operation is logical and/or.
+inline bool isAndOr(PrimitiveOp op) {
+	return op == PrimitiveOp::And || op == PrimitiveOp::Or;
 }
 
 struct Expr {

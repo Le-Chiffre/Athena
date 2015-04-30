@@ -208,6 +208,13 @@ Value* Generator::genPrimitiveCall(resolve::PrimitiveOp op, resolve::ExprList* a
 		ASSERT(args && args->next && !args->next->next);
 		auto lhs = args->item;
 		auto rhs = args->next->item;
+
+		// Special case for booleans with && and ||, where we use early-out.
+		if(lhs->type->isBool() && rhs->type->isBool() && resolve::isAndOr(op)) {
+			return genLazyCond(op, *lhs, *rhs);
+		}
+
+		// Create a general primitive operation.
 		auto le = genExpr(*lhs);
 		auto re = genExpr(*rhs);
 		if(lhs->type->isPointer()) {
@@ -254,7 +261,8 @@ Value* Generator::genUnaryOp(resolve::PrimitiveOp op, resolve::PrimType type, ll
 
 Value* Generator::genBinaryOp(resolve::PrimitiveOp op, llvm::Value* lhs, llvm::Value* rhs, resolve::PrimType lt, resolve::PrimType rt) {
 	ASSERT(op < resolve::PrimitiveOp::FirstUnary);
-	if(resolve::category(lt.type) == resolve::PrimitiveTypeCategory::Float) {
+	auto cat = resolve::category(lt.type);
+	if(cat == resolve::PrimitiveTypeCategory::Float) {
 		// Handle floating point types.
 		ASSERT(op < resolve::PrimitiveOp::FirstBit || op >= resolve::PrimitiveOp::FirstCompare);
 		switch(op) {
@@ -283,7 +291,7 @@ Value* Generator::genBinaryOp(resolve::PrimitiveOp op, llvm::Value* lhs, llvm::V
 			default: ;
 		}
 	} else {
-		// Handle integral types (Bool is also handled here).
+		// Handle integral types and booleans.
 		bool hasSign = resolve::category(lt.type) == resolve::PrimitiveTypeCategory::Signed;
 		switch(op) {
 			case resolve::PrimitiveOp::Add:
@@ -501,13 +509,16 @@ Value* Generator::genWhile(resolve::WhileExpr& expr) {
 	// Don't restore the previous one, as the next expression needs to be put in the continuation block.
 	auto function = getFunction();
 	auto testBlock = BasicBlock::Create(context, "test", function);
-	auto loopBlock = BasicBlock::Create(context, "loop", function);
-	auto contBlock = BasicBlock::Create(context, "cont", function);
 
 	// Create condition.
 	builder.CreateBr(testBlock);
 	builder.SetInsertPoint(testBlock);
 	auto cond = genExpr(expr.cond);
+
+	// We create these after the condition because the condition may produce blocks of its own.
+	// Creating the blocks afterwards gives a more logical code order.
+	auto loopBlock = BasicBlock::Create(context, "loop", function);
+	auto contBlock = BasicBlock::Create(context, "cont", function);
 	builder.CreateCondBr(cond, loopBlock, contBlock);
 
 	// Create loop branch.
@@ -544,6 +555,37 @@ Value* Generator::genConstruct(resolve::ConstructExpr& expr) {
 		DebugError("Not implemented");
 		return nullptr;
 	}
+}
+
+Value* Generator::genLazyCond(resolve::PrimitiveOp op, resolve::ExprRef lhs, resolve::ExprRef rhs) {
+	// Create basic blocks for each branch.
+	// Don't restore the previous one, as the next expression needs to be put in the continuation block.
+	auto function = getFunction();
+	auto lhsBlock = builder.GetInsertBlock();
+	auto rhsBlock = BasicBlock::Create(context, "cond.rhs", function);
+	auto contBlock = BasicBlock::Create(context, "cond.cont", function);
+
+	// Create lhs condition.
+	auto left = genExpr(lhs);
+	if(op == resolve::PrimitiveOp::And) {
+		// For and, we can early-out if the first condition is false.
+		builder.CreateCondBr(left, rhsBlock, contBlock);
+	} else {
+		// For or, we can early-out if the first condition is true.
+		builder.CreateCondBr(left, contBlock, rhsBlock);
+	}
+
+	// Create the rhs condition.
+	builder.SetInsertPoint(rhsBlock);
+	auto right = genExpr(rhs);
+	builder.CreateBr(contBlock);
+
+	// Create the expression result.
+	builder.SetInsertPoint(contBlock);
+	auto result = builder.CreatePHI(left->getType(), 2);
+	result->addIncoming(builder.getInt1(op == resolve::PrimitiveOp::Or), lhsBlock);
+	result->addIncoming(right, rhsBlock);
+	return result;
 }
 
 Type* Generator::genLlvmType(resolve::TypeRef type) {
