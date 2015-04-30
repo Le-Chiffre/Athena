@@ -626,13 +626,8 @@ Expr* Parser::parseVarDecl(bool constant) {
 				}
 			}
 
-			if(token != Token::EndOfBlock) {
-				error("Expected end of statement block.");
-				return nullptr;
-			}
-
 			level.end();
-			eat();
+			if(token == Token::EndOfBlock) eat();
 			return build<MultiExpr>(list);
 		} else {
 			level.end();
@@ -654,7 +649,7 @@ Expr* Parser::parseDeclExpr(bool constant) {
 		eat();
 		if(token == Token::opEquals) {
 			eat();
-			if(auto expr = parseInfixExpr()) {
+			if(auto expr = parseTypedExpr()) {
 				return build<DeclExpr>(id, expr, constant);
 			} else {
 				error("Expected expression.");
