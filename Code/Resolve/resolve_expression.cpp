@@ -268,8 +268,12 @@ Expr* Resolver::resolveDecl(Scope& scope, ast::DeclExpr& expr) {
 		// Constants are registers, while variables are on the stack.
 		if(var->constant)
 			return build<AssignExpr>(*var, *content);
-		else
-			return build<StoreExpr>(*build<VarExpr>(var, types.getLV(type)), *content, type);
+		else {
+			// Declarations are themselves lvalues; this is needed for correct code generation.
+			// If we want to disallow this we need to do so explicitly.
+			auto ltype = types.getLV(type);
+			return build<StoreExpr>(*build<VarExpr>(var, ltype), *content, ltype);
+		}
 	} else {
 		return build<EmptyDeclExpr>(*var);
 	}

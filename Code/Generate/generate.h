@@ -36,7 +36,7 @@ struct Generator {
 	llvm::Function* genFunctionDecl(resolve::FunctionDecl& function);
 	llvm::BasicBlock* genScope(resolve::Scope& scope);
 	llvm::Value* genExpr(resolve::ExprRef expr);
-	llvm::Value* genLiteral(resolve::Literal& literal);
+	llvm::Value* genLiteral(resolve::Literal& literal, resolve::TypeRef type);
 	llvm::Value* genVar(resolve::Variable& var);
 	llvm::Value* genAssign(resolve::AssignExpr& assign);
 	llvm::Value* genLoad(resolve::Expr& target);

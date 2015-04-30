@@ -93,7 +93,7 @@ Value* Generator::genExpr(resolve::ExprRef expr) {
 		case resolve::Expr::Multi:
 			return genMulti((resolve::MultiExpr&)expr);
 		case resolve::Expr::Lit:
-			return genLiteral(((resolve::LitExpr&)expr).literal);
+			return genLiteral(((resolve::LitExpr&)expr).literal, ((resolve::LitExpr&)expr).type);
 		case resolve::Expr::Var:
 			return genVar(*((resolve::VarExpr&)expr).var);
 		case resolve::Expr::Load:
@@ -130,11 +130,12 @@ Value* Generator::genExpr(resolve::ExprRef expr) {
 	}
 }
 
-Value* Generator::genLiteral(resolve::Literal& literal) {
+Value* Generator::genLiteral(resolve::Literal& literal, resolve::TypeRef type) {
+	auto lltype = getType(type);
 	switch(literal.type) {
-		case resolve::Literal::Float: return ConstantFP::get(builder.getFloatTy(), literal.f);
-		case resolve::Literal::Int: return ConstantInt::get(builder.getInt32Ty(), literal.i);
-		case resolve::Literal::Char: return ConstantInt::get(builder.getInt8Ty(), literal.c);
+		case resolve::Literal::Float: return ConstantFP::get(lltype, literal.f);
+		case resolve::Literal::Int: return ConstantInt::get(lltype, literal.i);
+		case resolve::Literal::Char: return ConstantInt::get(lltype, literal.c);
 		case resolve::Literal::String: {
 			auto str = ccontext.Find(literal.s).name;
 			return builder.CreateGlobalStringPtr(StringRef(str.ptr, str.length));
