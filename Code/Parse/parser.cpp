@@ -158,6 +158,41 @@ void Parser::parseDecl() {
 
 void Parser::parseDataDecl() {
 	/*
+	 * datadecl		→	data simpletype = constrs
+	 * constrs		→	constr1 | … | constrn		(n ≥ 1)
+	 * constr		→	conid atype1 … atypen
+	 */
+	if(token == Token::kwData) {
+		eat();
+		auto type = parseSimpleType();
+		if(token == Token::opEquals) {
+			eat();
+			auto cs = build<ConstrList>(parseConstr());
+			if(!cs->item) {
+				error("expected at least one constructor");
+			}
+
+			auto p = cs;
+			while(token == Token::opBar) {
+				eat();
+				p->next = build<ConstrList>(parseConstr());
+				p = p->next;
+				if(!p->item) {
+					error("expected a constructor definition");
+				}
+			}
+
+			module.declarations += build<DataDecl>(type, cs);
+		} else {
+			error("Expected '=' after type name");
+		}
+	}
+}
+
+void Parser::parseStructDecl() {
+	// This is currently unused.
+
+	/*
 	 * datadecl		→	data varid = fields
 	 * fields		→	field0, ..., fieldn 	(n >= 0)
 	 * field		→	var varid = expr
@@ -798,6 +833,31 @@ Type* Parser::parseType() {
 	return nullptr;
 }
 
+SimpleType* Parser::parseSimpleType() {
+	if(token == Token::ConID) {
+		auto id = token.data.id;
+		eat();
+
+		ASTList<Id>* kinds = nullptr;
+		if(token == Token::VarID) {
+			kinds = build<ASTList<Id>>(token.data.id);
+			auto p = kinds;
+			eat();
+			while(token == Token::VarID) {
+				p->next = build<ASTList<Id>>(token.data.id);
+				eat();
+				p = p->next;
+			}
+		}
+
+		return build<SimpleType>(id, kinds);
+	} else {
+		error("expected type name");
+	}
+
+	return nullptr;
+}
+
 Type* Parser::parseTupleType() {
     /*
      * tuptype  →   { tupfield1, ..., tupfieldn }       (n ≥ 0)
@@ -997,6 +1057,32 @@ Expr* Parser::parseElse() {
 	} else {
 		return nullptr;
 	}
+}
+
+Constr* Parser::parseConstr() {
+	/*
+	 * constr		→	conid atype1 … atypen		(n ≥ 0)
+	 */
+	if(token == Token::ConID) {
+		auto name = token.data.id;
+		eat();
+
+		TypeList* types = nullptr;
+		if(auto t = tryParse(Parser::parseType)) {
+			types = build<TypeList>(t);
+			auto p = types;
+			while(t = tryParse(Parser::parseType)) {
+				p->next = build<TypeList>(t);
+				p = p->next;
+			}
+		}
+
+		return build<Constr>(name, types);
+	} else {
+		error("expected constructor name");
+	}
+
+	return nullptr;
 }
 
 nullptr_t Parser::error(const char* text) {

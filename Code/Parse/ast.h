@@ -92,6 +92,12 @@ struct Literal {
     Type type;
 };
 
+struct SimpleType {
+	SimpleType(Id name, ASTList<Id>* kind) : name(name), kind(kind) {}
+	Id name;
+	ASTList<Id>* kind;
+};
+
 struct Type {
 	enum Kind {
 		Unit, // The empty unit type.
@@ -316,12 +322,20 @@ struct Field {
 	bool constant;
 };
 
+typedef ASTList<const Type*> TypeList;
+
+struct Constr {
+	Id name;
+	TypeList* types;
+};
+
+typedef ASTList<const Constr*> ConstrList;
 typedef ASTList<const Field*> FieldList;
 
 struct DataDecl : Decl {
-	DataDecl(Id name, FieldList* fields) : Decl(Data), fields(fields), name(name) {}
-	FieldList* fields;
-	Id name;
+	DataDecl(SimpleType* type, ConstrList* constrs) : Decl(Data), constrs(constrs), type(type) {}
+	ConstrList* constrs;
+	SimpleType* type;
 };
 
 

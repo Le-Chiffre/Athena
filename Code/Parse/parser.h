@@ -44,6 +44,7 @@ struct Parser {
 	void parseModule();
 	void parseDecl();
 	void parseDataDecl();
+	void parseStructDecl();
 	void parseTypeDecl();
 	void parseForeignDecl();
 
@@ -69,12 +70,14 @@ struct Parser {
 	Maybe<Id> parseQop();
 
 	Type* parseType();
+	SimpleType* parseSimpleType();
     Maybe<TupleField> parseTupleField();
 	Maybe<TupleField> parseTupleConstructField();
 	Type* parseTupleType();
 	Expr* parseTupleConstruct();
 	Field* parseField();
 	Expr* parseElse();
+	Constr* parseConstr();
 
 	void addFixity(Fixity f);
 	nullptr_t error(const char* text);
