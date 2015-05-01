@@ -105,8 +105,8 @@ struct Resolver {
 	Expr* resolvePrimitiveConstruct(Scope& scope, TypeRef type, ast::ConstructExpr);
 	
 	TypeRef resolveAlias(Scope& scope, AliasType* type);
-    void resolveAggregate(Scope& scope, AggType* type);
 	TypeRef resolveTuple(Scope& scope, ast::TupleType& type);
+	TypeRef resolveVariant(Scope& scope, VarType* type);
 	ExprList* resolveExpressions(Scope& scope, ast::ExprList* list);
 
     /// Resolves a binary operation on two primitive types.

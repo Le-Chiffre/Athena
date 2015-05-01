@@ -47,8 +47,8 @@ void Mangler::mangleType(TypeRef type) {
 		mangleType(((PrimType*)type)->type);
 	else if(type->isPointer())
 		mangleType((PtrType*)type);
-	else if(type->kind == Type::Agg)
-		mangleType((AggType*)type);
+	else if(type->isVariant())
+		mangleType((VarType*)type);
 }
 
 void Mangler::mangleType(PrimitiveType type) {
@@ -65,7 +65,7 @@ void Mangler::mangleType(const PtrType* type) {
 	mangleType(type->type);
 }
 
-void Mangler::mangleType(const AggType* type) {
+void Mangler::mangleType(const VarType* type) {
 	auto name = context.Find(type->name);
 	mangleQualifier(&name);
 }

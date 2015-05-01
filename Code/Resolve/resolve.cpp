@@ -47,7 +47,7 @@ Module* Resolver::resolve() {
 				name = ((ast::TypeDecl*)decl)->name;
 			} else {
 				ASSERT(decl->kind == ast::Decl::Data);
-				name = ((ast::DataDecl*)decl)->name;
+				name = ((ast::DataDecl*)decl)->type->name;
 			}
 			
 			TypeRef* type;
@@ -60,7 +60,7 @@ Module* Resolver::resolve() {
 				if(decl->kind == ast::Decl::Type) {
 					*type = build<AliasType>(name, (ast::TypeDecl*)decl);
 				} else {
-					*type = build<AggType>(name, (ast::DataDecl*)decl);
+					*type = build<VarType>(name, (ast::DataDecl*)decl);
 				}
 			}
 		}
@@ -76,10 +76,10 @@ Module* Resolver::resolve() {
             if(a->astDecl) {
                 t = resolveAlias(*module, a);
             }
-        } else if(t->kind == Type::Agg) {
-            auto a = (AggType*)t;
+        } else if(t->kind == Type::Var) {
+            auto a = (VarType*)t;
             if(a->astDecl) {
-                resolveAggregate(*module, a);
+                resolveVariant(*module, a);
             }
         }
 	});

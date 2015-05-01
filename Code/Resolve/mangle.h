@@ -23,7 +23,7 @@ struct Mangler {
 	void mangleType(TypeRef type);
 	void mangleType(PrimitiveType type);
 	void mangleType(const PtrType* type);
-	void mangleType(const AggType* type);
+	void mangleType(const VarType* type);
 
 private:
 	ast::CompileContext& context;

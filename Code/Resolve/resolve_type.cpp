@@ -11,19 +11,8 @@ TypeRef Resolver::resolveAlias(Scope& scope, AliasType* type) {
 	return target;
 }
 
-void Resolver::resolveAggregate(Scope& scope, AggType* type) {
-	ASSERT(type->astDecl);
-
-	// A type may have no fields (this is used a lot in variant types).
-	if(type->astDecl->fields) {
-		uint index = 0;
-		for(auto i : *type->astDecl->fields) {
-			type->fields += resolveField(scope, type, index, i);
-			index++;
-		}
-	}
-
-	type->astDecl = nullptr;
+TypeRef Resolver::resolveVariant(Scope& scope, VarType* type) {
+	return type;
 }
 
 TypeRef Resolver::resolveTuple(Scope& scope, ast::TupleType& type) {

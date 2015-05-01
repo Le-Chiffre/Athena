@@ -208,7 +208,6 @@ struct Type {
         Alias,
 		Unit,
 		Tuple,
-		Agg,
 		Var,
 		Array,
 		Map,
@@ -231,6 +230,7 @@ struct Type {
     bool isAlias() const {return kind == Alias;}
 	bool isBool() const;
 	bool isLvalue() const {return kind == Lvalue;}
+	bool isVariant() const {return kind == Var;}
 
 	Type(Kind kind) : kind(kind) {}
 };
@@ -257,7 +257,11 @@ struct LVType : Type {
 	TypeRef type;
 };
 	
-inline bool Type::isTupleOrIndirect() const {return isTuple() || (kind == Ptr && ((PtrType*)this)->type->isTuple());}
+inline bool Type::isTupleOrIndirect() const {
+	return isTuple()
+		|| (kind == Ptr && ((PtrType*)this)->type->isTuple())
+		|| (kind == Lvalue && ((LVType*)this)->type->isTuple());
+}
 
 struct Field {
 	Field(Id name, uint index, TypeRef type, TypeRef container, Expr* content, bool constant) :
@@ -285,10 +289,9 @@ struct TupleType : Type {
 	}
 };
 
-struct AggType : Type {
-	AggType(Id name, ast::DataDecl* astDecl) : Type(Agg), name(name), astDecl(astDecl) {}
+struct VarType : Type {
+	VarType(Id name, ast::DataDecl* astDecl) : Type(Var), name(name), astDecl(astDecl) {}
 	Id name;
-	FieldList fields;
 	ast::DataDecl* astDecl;
 };
 
