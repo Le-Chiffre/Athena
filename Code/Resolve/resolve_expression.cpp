@@ -360,7 +360,16 @@ Expr* Resolver::resolveField(Scope& scope, ast::FieldExpr& expr, ast::ExprList* 
 	// For types with named fields, this is a field expression if the target is a VarExpr,
 	// and the type has a field with that name.
 	if(target->type->isTupleOrIndirect() && expr.field->type == ast::Expr::Var) {
-		auto tupType = target->type->isTuple() ? (TupleType*)target->type : (TupleType*)((PtrType*)target->type)->type;
+		TupleType* tupType;
+		if(target->type->isTuple()) {
+			tupType = (TupleType*)target->type;
+		} else if(target->type->isPointer()) {
+			tupType = (TupleType*)((PtrType*)target->type)->type;
+		} else {
+			ASSERT(target->type->isLvalue());
+			tupType = (TupleType*)((LVType*)target->type)->type;
+		}
+
 		if(auto f = tupType->findField(((ast::VarExpr*)expr.field)->name)) {
 			auto fexpr = build<FieldExpr>(*target, f, constant ? f->type : types.getLV(f->type));
 			if(args) {
