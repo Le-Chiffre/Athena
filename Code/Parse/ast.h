@@ -325,6 +325,7 @@ struct Field {
 typedef ASTList<const Type*> TypeList;
 
 struct Constr {
+	Constr(Id name, TypeList* types) : name(name), types(types) {}
 	Id name;
 	TypeList* types;
 };

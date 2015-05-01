@@ -278,14 +278,13 @@ private:
 
 	void toString(const DataDecl& e) {
 		string += "DataDecl ";
-		auto name = context.Find(e.name).name;
-		string.Append(name.ptr, name.length);
+		toString(*e.type);
 		makeLevel();
-		auto field = e.fields;
-		while(field) {
-			if(field->next) toString(*field->item, false);
-			else toString(*field->item, true);
-			field = field->next;
+		auto con = e.constrs;
+		while(con) {
+			if(con->next) toString(*con->item, false);
+			else toString(*con->item, true);
+			con = con->next;
 		}
 		removeLevel();
 	}
@@ -326,6 +325,23 @@ private:
 			string += "LitExpr \"";
 			string.Append(name.ptr, name.length);
 			string += '"';
+		}
+	}
+
+	void toString(const SimpleType& t) {
+		auto name = context.Find(t.name).name;
+		if(name.length) {
+			string.Append(name.ptr, name.length);
+			string += ' ';
+		}
+	}
+
+	void toString(const Constr& c, bool last) {
+		auto name = context.Find(c.name).name;
+		if(name.length) {
+			toStringIntro(last);
+			string += "Constructor ";
+			string.Append(name.ptr, name.length);
 		}
 	}
 

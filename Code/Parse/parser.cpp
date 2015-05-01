@@ -220,7 +220,7 @@ void Parser::parseStructDecl() {
 					level.end();
 					if(token == Token::EndOfBlock) {
 						eat();
-						module.declarations += build<DataDecl>(id, list);
+						//module.declarations += build<DataDecl>(id, list);
 					} else {
 						error("Expected end of block.");
 					}
@@ -817,6 +817,10 @@ Type* Parser::parseType() {
 		auto id = token.data.id;
 		eat();
 		return build<Type>(Type::Con, id);
+	} else if(token == Token::VarID) {
+		auto id = token.data.id;
+		eat();
+		return build<Type>(Type::Gen, id);
 	} else if(token == Token::BraceL) {
 		// Also handles unit type.
         auto tup = parseTupleType();
@@ -1071,7 +1075,7 @@ Constr* Parser::parseConstr() {
 		if(auto t = tryParse(Parser::parseType)) {
 			types = build<TypeList>(t);
 			auto p = types;
-			while(t = tryParse(Parser::parseType)) {
+			while((t = tryParse(Parser::parseType))) {
 				p->next = build<TypeList>(t);
 				p = p->next;
 			}
