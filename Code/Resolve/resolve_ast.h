@@ -18,6 +18,7 @@ struct Expr;
 struct Alt;
 struct Type;
 struct Resolver;
+struct VarConstructor;
 
 typedef Scope& ScopeRef;
 typedef FunctionDecl& FuncRef;
@@ -31,6 +32,7 @@ typedef Core::Array<Type*> TypeList;
 typedef ast::ASTList<Scope*> ScopeList;
 typedef ast::ASTList<Alt*> AltList;
 typedef Core::NumberMap<TypeRef, Id> TypeMap;
+typedef Core::NumberMap<VarConstructor*, Id> ConMap;
 typedef Core::NumberMap<FunctionDecl*, Id> FunMap;
 typedef ast::ForeignConvention ForeignConvention;
 
@@ -42,6 +44,7 @@ struct Scope {
 	Variable* findLocalVar(Id name);
 
     TypeRef findType(Id name);
+	VarConstructor* findConstructor(Id name);
 
 	// The base name of this scope (determines type visibility).
 	Id name;
@@ -63,6 +66,9 @@ struct Scope {
 
     // The types that were declared in this scope.
     TypeMap types;
+
+	// The constructor names that were declared in this scope.
+	ConMap constructors;
 };
 
 typedef Scope Module;
@@ -289,10 +295,25 @@ struct TupleType : Type {
 	}
 };
 
+struct VarConstructor {
+	VarConstructor(Id name, TypeRef type, ast::TypeList* astDecl) : name(name), type(type), astDecl(astDecl) {}
+
+	Id name;
+	TypeRef type;
+	ast::TypeList* astDecl;
+	TypeList contents;
+	void* codegen = nullptr;
+};
+
+typedef Core::Array<VarConstructor> VarConstructorList;
+
 struct VarType : Type {
 	VarType(Id name, ast::DataDecl* astDecl) : Type(Var), name(name), astDecl(astDecl) {}
 	Id name;
 	ast::DataDecl* astDecl;
+	VarConstructorList list;
+	uint8 selectorBits = 0;
+	bool isEnum = false;
 };
 
 struct ArrayType : Type {
@@ -500,8 +521,11 @@ struct ConstructArg {
 };
 
 struct ConstructExpr : Expr {
-	ConstructExpr(TypeRef type) : Expr(Construct, type) {}
+	ConstructExpr(TypeRef type, VarConstructor* con = nullptr) : Expr(Construct, type), con(con) {}
 	Core::Array<ConstructArg> args;
+
+	// Only set if the type is a variant.
+	VarConstructor* con;
 };
 
 /// A temporary expression that represents an unfinished declaration.

@@ -34,18 +34,21 @@ Variable* Scope::findLocalVar(Id name) {
     return nullptr;
 }
 
-TypeRef Scope::findType(Id name) {
+template<class T>
+inline T* findHelper(Scope* scope, Core::NumberMap<T*, Id> Scope::*map, Id name) {
     // Type names are unique, although a generic type may have specializations.
     // Generic types are handled separately.
-    auto scope = this;
     while(scope) {
         // Even if the type name exists, it may not have been resolved yet.
         // This is handled by the caller.
-        if(auto t = scope->types.Get(name)) return *t;
+        if(auto t = (scope->*map).Get(name)) return *t;
         scope = scope->parent;
     }
 
     return nullptr;
 }
+
+TypeRef Scope::findType(Id name) { return findHelper(this, &Scope::types, name); }
+VarConstructor* Scope::findConstructor(Id name) { return findHelper(this, &Scope::constructors, name); }
 
 }} // namespace athena::resolve

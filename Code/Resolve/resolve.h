@@ -101,8 +101,7 @@ struct Resolver {
 	Expr* resolveCoerce(Scope& scope, ast::CoerceExpr& expr);
 	Expr* resolveField(Scope& scope, ast::FieldExpr& expr, ast::ExprList* args = nullptr);
 	Expr* resolveConstruct(Scope& scope, ast::ConstructExpr& expr);
-	Expr* resolveAnonConstruct(Scope& scope, ast::ConstructExpr& expr);
-	Expr* resolvePrimitiveConstruct(Scope& scope, TypeRef type, ast::ConstructExpr);
+	Expr* resolveAnonConstruct(Scope& scope, ast::TupleConstructExpr& expr);
 	
 	TypeRef resolveAlias(Scope& scope, AliasType* type);
 	TypeRef resolveTuple(Scope& scope, ast::TupleType& type);
@@ -124,7 +123,8 @@ struct Resolver {
 	Expr* resolveCondition(ScopeRef scope, ast::ExprRef expr);
 
 	/// Retrieves or creates a concrete type.
-	TypeRef resolveType(ScopeRef scope, ast::TypeRef type);
+	/// @param constructor If set, the provided type is interpreted as a constructor instead of a type.
+	TypeRef resolveType(ScopeRef scope, ast::TypeRef type, bool constructor = false);
 
 	TypeRef getBinaryOpType(PrimitiveOp, PrimitiveType, PrimitiveType);
 	TypeRef getPtrOpType(PrimitiveOp, PtrType*, PrimitiveType);

@@ -47,6 +47,8 @@ Expr* Resolver::resolveExpression(Scope& scope, ast::ExprRef expr) {
 			return resolveField(scope, *(ast::FieldExpr*)expr);
 		case ast::Expr::Construct:
 			return resolveConstruct(scope, *(ast::ConstructExpr*)expr);
+		case ast::Expr::TupleConstruct:
+			return resolveAnonConstruct(scope, *(ast::TupleConstructExpr*)expr);
 		default:
 			FatalError("Unsupported expression type.");
 	}
@@ -389,52 +391,77 @@ Expr* Resolver::resolveField(Scope& scope, ast::FieldExpr& expr, ast::ExprList* 
 }
 
 Expr* Resolver::resolveConstruct(Scope& scope, ast::ConstructExpr& expr) {
-	// If no type is provided, we create a tuple from the arguments.
-	Type* type;
-	if(expr.type) {
-		type = resolveType(scope, expr.type);
-	} else {
-		return resolveAnonConstruct(scope, expr);
+	Type* type = resolveType(scope, expr.type, true);
+
+	if(type->isPrimitive()) {
+		// Primitive types other than Bool have a single constructor of the same name.
+		// Bool has the built-in constructors True and False.
+		if(type->isBool()) {
+			auto name = context.Find(expr.type->con).name;
+
+			Literal lit;
+			lit.type = Literal::Bool;
+			if(name == "True") lit.i = 1;
+			else if(name == "False") lit.i = 0;
+			else error("not a valid constructor for Bool");
+
+			return build<LitExpr>(lit, types.getBool());
+		} else {
+			if(!expr.args || expr.args->next) {
+				error("primitive types take a single constructor argument");
+				return nullptr;
+			}
+
+			return implicitCoerce(*resolveExpression(scope, expr.args->item), type);
+		}
 	}
 
-	if(type->isPrimitive()) return resolvePrimitiveConstruct(scope, type, expr);
+	if(type->isVariant()) {
+		auto con = scope.findConstructor(expr.type->con);
+		auto cone = build<ConstructExpr>(type, con);
+		auto f = expr.args;
+		uint counter = 0;
+		while(f) {
+			auto e = getRV(*resolveExpression(scope, f->item));
+			auto t = con->contents[counter];
+			if(!typeCheck.compatible(*e, t)) {
+				error("incompatible constructor argument type");
+			}
+
+			cone->args += ConstructArg{counter, *implicitCoerce(*e, t)};
+			f = f->next;
+			counter++;
+		}
+
+		if(counter != con->contents.Count()) error("constructor argument count does not match type");
+		return cone;
+	}
 
 	if(type->isTuple()) {
 		auto ttype = (TupleType*)type;
 		auto con = build<ConstructExpr>(type);
 		auto f = expr.args;
 		uint counter = 0;
-		uint total = 0;
 		while(f) {
-			uint index = 0;
-			if(f->item.name) {
-				if(auto fi = ttype->findField(f->item.name()))
-					index = fi->index;
-				else
-					error("constructor-provided field does not exist");
-			} else {
-				index = counter;
-				counter++;
-			}
-
-			total++;
-			auto e = getRV(*resolveExpression(scope, f->item.defaultValue));
-			if(!typeCheck.compatible(*e, ttype->fields[index].type)) {
+			auto e = getRV(*resolveExpression(scope, f->item));
+			auto t = ttype->fields[counter].type;
+			if(!typeCheck.compatible(*e, t)) {
 				error("incompatible constructor argument type");
 			}
 
-			con->args += ConstructArg{index, *e};
+			con->args += ConstructArg{counter, *implicitCoerce(*e, t)};
 			f = f->next;
+			counter++;
 		}
 
-		if(total != ttype->fields.Count()) error("constructor argument count does not match type");
+		if(counter != ttype->fields.Count()) error("constructor argument count does not match type");
 		return con;
 	}
 	
 	return nullptr;
 }
 
-Expr* Resolver::resolveAnonConstruct(Scope& scope, ast::ConstructExpr& expr) {
+Expr* Resolver::resolveAnonConstruct(Scope& scope, ast::TupleConstructExpr& expr) {
 	// Generate a hash for the fields.
 	Core::Hasher h;
 	auto f = expr.args;
@@ -468,10 +495,6 @@ Expr* Resolver::resolveAnonConstruct(Scope& scope, ast::ConstructExpr& expr) {
 	}
 	con->type = result;
 	return con;
-}
-
-Expr* Resolver::resolvePrimitiveConstruct(Scope& scope, TypeRef type, ast::ConstructExpr) {
-	return nullptr;
 }
 
 Expr* Resolver::resolveCondition(ScopeRef scope, ast::ExprRef expr) {

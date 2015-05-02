@@ -1,3 +1,4 @@
+#include <CoreMath.h>
 #include "resolve.h"
 
 namespace athena {
@@ -59,8 +60,32 @@ Module* Resolver::resolve() {
 				// Insert the unresolved type.
 				if(decl->kind == ast::Decl::Type) {
 					*type = build<AliasType>(name, (ast::TypeDecl*)decl);
+				} else if(decl->kind == ast::Decl::Data) {
+					auto t = build<VarType>(name, (ast::DataDecl*)decl);
+
+					// The constructors can be declared here, but are resolved later.
+					auto con = ((ast::DataDecl*)decl)->constrs;
+					bool isEnum = true;
+					while(con) {
+						if(con->item->types) isEnum = false;
+						t->list += VarConstructor{con->item->name, t, con->item->types};
+						VarConstructor** constr;
+						if(module->constructors.AddGet(con->item->name, constr)) {
+							// This constructor was already declared in this scope.
+							// Ignore the constructor that was defined last.
+							error("redefinition of type constructor '%@'", context.Find(name).name);
+						} else {
+							*constr = &t->list.Back();
+						}
+						con = con->next;
+					}
+					t->isEnum = isEnum;
+					t->selectorBits = t->list.Count() ? Core::Math::FindLastBit(t->list.Count() - 1) + 1 : 0;
+
+					ASSERT(t->list.Count() >= 1);
+					*type = t;
 				} else {
-					*type = build<VarType>(name, (ast::DataDecl*)decl);
+					DebugError("Not implemented");
 				}
 			}
 		}
@@ -78,6 +103,8 @@ Module* Resolver::resolve() {
             }
         } else if(t->kind == Type::Var) {
             auto a = (VarType*)t;
+
+			// This is valid, since variants have at least one constructor.
             if(a->astDecl) {
                 resolveVariant(*module, a);
             }
