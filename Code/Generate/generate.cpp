@@ -140,6 +140,7 @@ Value* Generator::genLiteral(resolve::Literal& literal, resolve::TypeRef type) {
 			auto str = ccontext.Find(literal.s).name;
 			return builder.CreateGlobalStringPtr(StringRef(str.ptr, str.length));
 		}
+		case resolve::Literal::Bool: return ConstantInt::get(lltype, literal.i);
 	}
 
 	FatalError("Unsupported literal type.");
@@ -551,6 +552,41 @@ Value* Generator::genConstruct(resolve::ConstructExpr& expr) {
 			v = builder.CreateInsertValue(v, genExpr(a.expr), a.index);
 		}
 		return v;
+	} else if(expr.type->isVariant()) {
+		auto var = (resolve::VarType*)expr.type;
+		auto type = getType(expr.type);
+
+		// There are several types of variants with differing semantics:
+		// - Enum variants have multiple constructors without any data. They are represented as a single index.
+		// - Single-constructor variants work just like the equivalent tuple, but are distinct types.
+		// - General variants have multiple constructors with data. These are the most complex ones.
+		if(var->isEnum) {
+			// Enum variants are constructed as the index of their constructor.
+			return ConstantInt::get(type, expr.con->index, false);
+		} else if(var->list.Count() == 1) {
+			// Single-constructor variants are constructed like the equivalent tuple.
+			Value* v = UndefValue::get(type);
+			for(auto a : expr.args) {
+				v = builder.CreateInsertValue(v, genExpr(a.expr), a.index);
+			}
+			return v;
+		} else {
+			// General variants are always stack-allocated, as they need to be bitcasted.
+			auto pointer = builder.CreateAlloca(type);
+			auto stype = (StructType*)type;
+
+			// Set the constructor index.
+			auto last = stype->getStructNumElements() - 1;
+			builder.CreateStore(ConstantInt::get(stype->getStructElementType(last), last), builder.CreateGEP(pointer, builder.getInt32(last)));
+
+			// Set the constructor-specific data.
+			auto conData = builder.CreatePointerCast(pointer, (Type*)expr.con->codegen);
+			for(auto& i : expr.args) {
+				builder.CreateStore(genExpr(i.expr), builder.CreateGEP(conData, builder.getInt32(i.index)));
+			}
+
+			return pointer;
+		}
 	} else {
 		DebugError("Not implemented");
 		return nullptr;
@@ -625,6 +661,61 @@ Type* Generator::genLlvmType(resolve::TypeRef type) {
 
 		auto llType = StructType::create(context, {fields, fCount}, "tuple");
 		return llType;
+	} else if(type->isVariant()) {
+		auto var = (resolve::VarType*)type;
+		auto selectorTy = builder.getIntNTy(var->selectorBits);
+
+		if(var->isEnum) {
+			return selectorTy;
+		} else {
+			// Start by generating a type for each constructor.
+			uint totalSize = 0;
+			uint totalAlignment = 0;
+			Type* baseType;
+			uint baseSize;
+			for (auto& con : var->list) {
+				auto fCount = con.contents.Count();
+				if (fCount) {
+					auto fields = (Type**)StackAlloc(sizeof(Type*) * fCount);
+					for (uint i = 0; i < fCount; i++) {
+						fields[i] = getType(con.contents[i]);
+					}
+					auto s = StructType::create(context, {fields, fCount}, "constructor");
+					auto dl = module.getDataLayout();
+					auto layout = dl->getStructLayout(s);
+					if(layout->getAlignment() > totalAlignment ||
+							(layout->getAlignment() == totalAlignment && layout->getSizeInBytes() > totalSize)) {
+						totalAlignment = layout->getAlignment();
+						baseType = s;
+						baseSize = layout->getSizeInBytes();
+					}
+
+					totalSize = Core::Max(totalSize, (uint)layout->getSizeInBytes());
+					con.codegen = s;
+				} else {
+					con.codegen = nullptr;
+				}
+			}
+
+			if (var->list.Count() == 1) {
+				// Variants with a single constructor are represented as that constructor.
+				return (Type*)var->list[0].codegen;
+			} else {
+				// Variants are represented as the type with the highest alignment and an array that fits the size of each constructor.
+				if(totalSize == baseSize) {
+					Type* fields[2];
+					fields[0] = baseType;
+					fields[1] = selectorTy;
+					return StructType::create(context, {fields, 2}, "variant");
+				} else {
+					Type* fields[3];
+					fields[0] = baseType;
+					fields[1] = ArrayType::get(builder.getInt32Ty(), (totalSize - baseSize + 3) / 4);
+					fields[2] = selectorTy;
+					return StructType::create(context, {fields, 3}, "variant");
+				}
+			}
+		}
 	}
 
 	FatalError("Unsupported type.");
