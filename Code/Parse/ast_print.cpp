@@ -25,6 +25,7 @@ struct Printer {
 			case Expr::Coerce: toString((const CoerceExpr&)expr); break;
 			case Expr::Field: toString((const FieldExpr&)expr); break;
 			case Expr::Construct: toString((const ConstructExpr&)expr); break;
+			case Expr::TupleConstruct: toString((const TupleConstructExpr&)expr); break;
 			case Expr::Format: toString((const FormatExpr&)expr); break;
 		}
 		return string;
@@ -228,6 +229,12 @@ private:
 
 	void toString(const ConstructExpr& e) {
 		string += "ConstructExpr ";
+		//auto name = context.Find(e.name).name;
+		//string.Append(name.ptr, name.length);
+	}
+
+	void toString(const TupleConstructExpr& e) {
+		string += "TupleConstructExpr ";
 		//auto name = context.Find(e.name).name;
 		//string.Append(name.ptr, name.length);
 	}

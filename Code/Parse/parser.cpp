@@ -521,6 +521,11 @@ Expr* Parser::parseLeftExpr() {
 Expr* Parser::parseCallExpr() {
 	/*
 	 * fexp		→	[fexp] aexp		(function application)
+	 *
+	 * This function contains a special case;
+	 * a bexp can be a construction expression, which looks like a normal function call.
+	 * Instead of making the resolver search for patterns of "CallExpr (ConstructExpr type) args",
+	 * we simply put the arguments inside the constructor.
 	 */
 	if(auto callee = parseAppExpr()) {
 		// Parse any arguments applied to the callee.
@@ -534,7 +539,13 @@ Expr* Parser::parseCallExpr() {
 				p = l;
 			}
 
-			return build<AppExpr>(callee, list);
+			// Special case for construction; see above.
+			if(callee->type == Expr::Construct) {
+				((ConstructExpr*)callee)->args = list;
+				return callee;
+			} else {
+				return build<AppExpr>(callee, list);
+			}
 		} else {
 			return callee;
 		}
@@ -930,7 +941,7 @@ Expr* Parser::parseTupleConstruct() {
 
 			if(token == Token::BraceR) {
 				eat();
-				return build<ConstructExpr>(nullptr, list);
+				return build<TupleConstructExpr>(nullptr, list);
 			} else {
 				error("Expected '}");
 			}

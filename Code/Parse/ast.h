@@ -79,7 +79,8 @@ struct Literal {
         Float,
         Int,
         Char,
-        String
+        String,
+		Bool
     };
 
     union {
@@ -153,6 +154,7 @@ struct Expr {
 		Coerce,
 		Field,
 		Construct,
+		TupleConstruct,
 		Format
 	} type;
 
@@ -245,10 +247,16 @@ struct FieldExpr : Expr {
 	ExprRef field;  // Field to apply to.
 };
 
-struct ConstructExpr : Expr {
-	ConstructExpr(TypeRef type, TupleFieldList* args) : Expr(Construct), type(type), args(args) {}
+struct TupleConstructExpr : Expr {
+	TupleConstructExpr(TypeRef type, TupleFieldList* args) : Expr(TupleConstruct), type(type), args(args) {}
 	TypeRef type;
 	TupleFieldList* args;
+};
+
+struct ConstructExpr : Expr {
+	ConstructExpr(TypeRef type, ExprList* args) : Expr(Construct), type(type), args(args) {}
+	TypeRef type;
+	ExprList* args;
 };
 
 /// Formatted strings are divided into chunks.
