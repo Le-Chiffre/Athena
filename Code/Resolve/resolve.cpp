@@ -66,9 +66,10 @@ Module* Resolver::resolve() {
 					// The constructors can be declared here, but are resolved later.
 					auto con = ((ast::DataDecl*)decl)->constrs;
 					bool isEnum = true;
+					uint index = 0;
 					while(con) {
 						if(con->item->types) isEnum = false;
-						t->list += VarConstructor{con->item->name, t, con->item->types};
+						t->list += VarConstructor{con->item->name, index, t, con->item->types};
 						VarConstructor** constr;
 						if(module->constructors.AddGet(con->item->name, constr)) {
 							// This constructor was already declared in this scope.
@@ -78,6 +79,7 @@ Module* Resolver::resolve() {
 							*constr = &t->list.Back();
 						}
 						con = con->next;
+						index++;
 					}
 					t->isEnum = isEnum;
 					t->selectorBits = t->list.Count() ? Core::Math::FindLastBit(t->list.Count() - 1) + 1 : 0;

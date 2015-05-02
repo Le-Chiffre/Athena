@@ -67,7 +67,8 @@ TypeRef Resolver::resolveType(ScopeRef scope, ast::TypeRef type, bool constructo
 	} else {
 		// Check if this type has been defined in this scope.
 		if(constructor) {
-			if (auto t = scope.findConstructor(type->con)) return t->type;
+			if (auto t = scope.findConstructor(type->con))
+				return t->type;
 
 			// TODO: This is kind of a hack.
 			// The Bool primitive type has separate constructors.

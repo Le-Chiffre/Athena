@@ -296,9 +296,10 @@ struct TupleType : Type {
 };
 
 struct VarConstructor {
-	VarConstructor(Id name, TypeRef type, ast::TypeList* astDecl) : name(name), type(type), astDecl(astDecl) {}
+	VarConstructor(Id name, uint index, TypeRef type, ast::TypeList* astDecl) : name(name), index(index), type(type), astDecl(astDecl) {}
 
 	Id name;
+	uint index;
 	TypeRef type;
 	ast::TypeList* astDecl;
 	TypeList contents;
