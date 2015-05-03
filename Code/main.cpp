@@ -88,8 +88,12 @@ type Float2 = {x: Float, y: Float}
 dot {a: Float2, b: Float2} =
 	var res = a.x * b.x + a.y * b.y
 	res
-	
+
 stuff {x: *Float2} = x.y
+
+main {x: Float} =
+	let a = {x, 6: Float}
+	dot a {1: Float, 6: Float}
 )s";
 	
 	auto test5 = R"s(
@@ -104,10 +108,45 @@ foreign import "strlen" stringLength : {*U8} -> Int
 foreign import "printf" print : {str: *U8} -> Int
 
 fluff = print "hello world!"
+;)s";
+
+	auto memtest = R"s(
+copyMem {src: *U8, dst: *U8, count: Int} =
+	var p = 0
+	while p < count do
+		*(src+p) = *(dst+p)
+		p = p + 1
+
+fillMem {mem: *U8, count: Int, pattern: U8} =
+	var p = 0
+	while p < count do
+		*(mem+p) = pattern
+		p = p + 1
+
+zeroMem {mem: *U8, count: Int} = fillMem mem count 0
+
+compareMem {a: *U8, b: *U8, count: Int} =
+	var p = 0
+	while p < count `and` *(a+p) == *(b+p) do p = p + 1
+	*(a+p) - *(b+p)
+
+strlen {str: *U8} =
+	var str, l = 0
+	while *str > 0 do
+		str = str + 1
+		l = l + 1
+	l
+)s";
+
+	auto gentest = R"s(
+data MaybeInt = Nothing | Just Int | Stuff Float Float Float | MoreStuff Double
+
+script {a: MaybeInt} = var b = Just 2
+
 )s";
 
 	athena::ast::Module module;
-	athena::ast::Parser p(context, module, foreigntest);
+	athena::ast::Parser p(context, module, gentest);
 	p.parseModule();
 
 	{
@@ -117,13 +156,15 @@ fluff = print "hello world!"
 		f.Write({str.ptr, str.length});
 	}
 
-	Core::Terminal << athena::ast::toString(module, context);
+	//Core::Terminal << athena::ast::toString(module, context);
 
 	athena::resolve::Resolver resolver{context, module};
 	auto resolved = resolver.resolve();
 
 	llvm::LLVMContext& llcontext = llvm::getGlobalContext();
 	llvm::Module* llmodule = new llvm::Module("top", llcontext);
+	llmodule->setDataLayout("e-S128");
+	llmodule->setTargetTriple(LLVM_HOST_TRIPLE);
 
 	athena::gen::Generator gen{context, llcontext, *llmodule};
 	gen.generate(*resolved);
