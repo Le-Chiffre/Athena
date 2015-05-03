@@ -14,12 +14,12 @@ TypeRef Resolver::resolveAlias(Scope& scope, AliasType* type) {
 TypeRef Resolver::resolveVariant(Scope& scope, VarType* type) {
 	// Resolve each declared constructor.
 	for(auto& c : type->list) {
-		auto t = c.astDecl;
+		auto t = c->astDecl;
 		while(t) {
-			c.contents += resolveType(scope, t->item);
+			c->contents += resolveType(scope, t->item);
 			t = t->next;
 		}
-		c.astDecl = nullptr;
+		c->astDecl = nullptr;
 	}
 	type->astDecl = nullptr;
 	return type;

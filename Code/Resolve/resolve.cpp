@@ -69,14 +69,14 @@ Module* Resolver::resolve() {
 					uint index = 0;
 					while(con) {
 						if(con->item->types) isEnum = false;
-						t->list += VarConstructor{con->item->name, index, t, con->item->types};
-						VarConstructor** constr;
+						VarConstructor* constr;
 						if(module->constructors.AddGet(con->item->name, constr)) {
 							// This constructor was already declared in this scope.
 							// Ignore the constructor that was defined last.
 							error("redefinition of type constructor '%@'", context.Find(name).name);
 						} else {
-							*constr = &t->list.Back();
+							new (constr) VarConstructor{con->item->name, index, t, con->item->types};
+							t->list += constr;
 						}
 						con = con->next;
 						index++;

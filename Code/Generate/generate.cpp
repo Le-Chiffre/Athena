@@ -577,12 +577,15 @@ Value* Generator::genConstruct(resolve::ConstructExpr& expr) {
 
 			// Set the constructor index.
 			auto last = stype->getStructNumElements() - 1;
-			builder.CreateStore(ConstantInt::get(stype->getStructElementType(last), last), builder.CreateGEP(pointer, builder.getInt32(last)));
+			auto conIndex = ConstantInt::get(stype->getStructElementType(last), last);
+			auto idPointer = builder.CreateStructGEP(pointer, last);
+			builder.CreateStore(conIndex, idPointer);
 
 			// Set the constructor-specific data.
-			auto conData = builder.CreatePointerCast(pointer, (Type*)expr.con->codegen);
+			auto conData = builder.CreatePointerCast(pointer, PointerType::getUnqual((Type*)expr.con->codegen));
 			for(auto& i : expr.args) {
-				builder.CreateStore(genExpr(i.expr), builder.CreateGEP(conData, builder.getInt32(i.index)));
+				auto argPointer = builder.CreateStructGEP(conData, i.index);
+				builder.CreateStore(genExpr(i.expr), argPointer);
 			}
 
 			return pointer;
@@ -674,11 +677,11 @@ Type* Generator::genLlvmType(resolve::TypeRef type) {
 			Type* baseType;
 			uint baseSize;
 			for (auto& con : var->list) {
-				auto fCount = con.contents.Count();
+				auto fCount = con->contents.Count();
 				if (fCount) {
 					auto fields = (Type**)StackAlloc(sizeof(Type*) * fCount);
 					for (uint i = 0; i < fCount; i++) {
-						fields[i] = getType(con.contents[i]);
+						fields[i] = getType(con->contents[i]);
 					}
 					auto s = StructType::create(context, {fields, fCount}, "constructor");
 					auto dl = module.getDataLayout();
@@ -691,15 +694,15 @@ Type* Generator::genLlvmType(resolve::TypeRef type) {
 					}
 
 					totalSize = Core::Max(totalSize, (uint)layout->getSizeInBytes());
-					con.codegen = s;
+					con->codegen = s;
 				} else {
-					con.codegen = nullptr;
+					con->codegen = nullptr;
 				}
 			}
 
 			if (var->list.Count() == 1) {
 				// Variants with a single constructor are represented as that constructor.
-				return (Type*)var->list[0].codegen;
+				return (Type*)var->list[0]->codegen;
 			} else {
 				// Variants are represented as the type with the highest alignment and an array that fits the size of each constructor.
 				if(totalSize == baseSize) {

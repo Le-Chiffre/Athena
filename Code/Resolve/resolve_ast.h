@@ -32,9 +32,20 @@ typedef Core::Array<Type*> TypeList;
 typedef ast::ASTList<Scope*> ScopeList;
 typedef ast::ASTList<Alt*> AltList;
 typedef Core::NumberMap<TypeRef, Id> TypeMap;
-typedef Core::NumberMap<VarConstructor*, Id> ConMap;
+typedef Core::NumberMap<VarConstructor, Id> ConMap;
 typedef Core::NumberMap<FunctionDecl*, Id> FunMap;
 typedef ast::ForeignConvention ForeignConvention;
+
+struct VarConstructor {
+	VarConstructor(Id name, uint index, TypeRef type, ast::TypeList* astDecl) : name(name), index(index), type(type), astDecl(astDecl) {}
+
+	Id name;
+	uint index;
+	TypeRef type;
+	ast::TypeList* astDecl;
+	TypeList contents;
+	void* codegen = nullptr;
+};
 
 struct Scope {
 	/// Finds any variable with the provided name that is visible in this scope.
@@ -295,18 +306,7 @@ struct TupleType : Type {
 	}
 };
 
-struct VarConstructor {
-	VarConstructor(Id name, uint index, TypeRef type, ast::TypeList* astDecl) : name(name), index(index), type(type), astDecl(astDecl) {}
-
-	Id name;
-	uint index;
-	TypeRef type;
-	ast::TypeList* astDecl;
-	TypeList contents;
-	void* codegen = nullptr;
-};
-
-typedef Core::Array<VarConstructor> VarConstructorList;
+typedef Core::Array<VarConstructor*> VarConstructorList;
 
 struct VarType : Type {
 	VarType(Id name, ast::DataDecl* astDecl) : Type(Var), name(name), astDecl(astDecl) {}
