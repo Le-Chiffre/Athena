@@ -274,6 +274,46 @@ struct FormatExpr : Expr {
 	FormatList format;
 };
 
+
+
+struct Pattern {
+	enum Kind {
+		Var,
+		Lit,
+		Any,
+		Tup,
+		Con
+	};
+
+	Id asVar;
+	Kind kind;
+
+	Pattern(Kind k, Id asVar = 0) : asVar(asVar), kind(k) {}
+};
+
+typedef ASTList<Pattern*> PatList;
+
+struct VarPattern : Pattern {
+	VarPattern(Id var, Id asVar = 0) : Pattern(Var, asVar), var(var) {}
+	Id var;
+};
+
+struct LitPattern : Pattern {
+	LitPattern(Literal lit, Id asVar = 0) : Pattern(Lit, asVar), lit(lit) {}
+	Literal lit;
+};
+
+struct TupPattern : Pattern {
+	TupPattern(TupleFieldList* fields, Id asVar = 0) : Pattern(Tup, asVar), fields(fields) {}
+	TupleFieldList* fields;
+};
+
+struct ConPattern : Pattern {
+	ConPattern(Id constructor, PatList* patterns) : Pattern(Con), constructor(constructor), patterns(patterns) {}
+	Id constructor;
+	PatList* patterns;
+};
+
 struct Decl {
 	enum Kind {
 		Function,

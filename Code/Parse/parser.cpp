@@ -1083,10 +1083,10 @@ Constr* Parser::parseConstr() {
 		eat();
 
 		TypeList* types = nullptr;
-		if(auto t = tryParse(Parser::parseType)) {
+		if(auto t = tryParse(&Parser::parseType)) {
 			types = build<TypeList>(t);
 			auto p = types;
-			while((t = tryParse(Parser::parseType))) {
+			while((t = tryParse(&Parser::parseType))) {
 				p->next = build<TypeList>(t);
 				p = p->next;
 			}
@@ -1098,6 +1098,75 @@ Constr* Parser::parseConstr() {
 	}
 
 	return nullptr;
+}
+
+Pattern* Parser::parseLeftPattern() {
+	if(token == Token::Literal) {
+		auto p = build<LitPattern>(toLiteral(token));
+		eat();
+		return p;
+	} else if(token == Token::kw_) {
+		eat();
+		return build<Pattern>(Pattern::Any);
+	} else if(token == Token::VarID) {
+		Id var = token.data.id;
+		eat();
+		if(token == Token::opAt) {
+			eat();
+			auto pat = parseLeftPattern();
+			pat->asVar = var;
+			return pat;
+		} else {
+			return build<VarPattern>(var);
+		}
+	} else if(token == Token::ParenL) {
+		auto pat = parsePattern();
+		if(token == Token::ParenR) eat();
+		else error("expected ')'");
+
+		return pat;
+	} else if(token == Token::ConID) {
+		// lpat can only contain a single constructor name.
+		auto id = token.data.id;
+		eat();
+		return build<ConPattern>(id, nullptr);
+	} else {
+		error("expected pattern");
+		return nullptr;
+	}
+}
+
+Pattern* Parser::parsePattern() {
+	if(token.singleMinus) {
+		eat();
+		if(token == Token::Integer || token == Token::Float) {
+			auto lit = toLiteral(token);
+			if(token == Token::Integer) lit.i = -lit.i;
+			else lit.f = -lit.f;
+			eat();
+			return build<LitPattern>(lit);
+		} else {
+			error("expected integer or float literal");
+			return nullptr;
+		}
+	} else if(token == Token::ConID) {
+		auto id = token.data.id;
+		eat();
+
+		// Parse a pattern for each constructor element.
+		PatList* list = nullptr;
+		auto pat = tryParse(&Parser::parseLeftPattern);
+		list = build<PatList>(pat);
+		auto l = list;
+		while((pat = tryParse(&Parser::parseLeftPattern))) {
+			l->next = build<PatList>(pat);
+			l = l->next;
+		}
+
+		return build<ConPattern>(id, list);
+	} else {
+		return parseLeftPattern();
+	}
 }
 
 nullptr_t Parser::error(const char* text) {

@@ -79,6 +79,9 @@ struct Parser {
 	Expr* parseElse();
 	Constr* parseConstr();
 
+	Pattern* parseLeftPattern();
+	Pattern* parsePattern();
+
 	void addFixity(Fixity f);
 	nullptr_t error(const char* text);
 
