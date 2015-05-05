@@ -55,6 +55,7 @@ struct Parser {
 	Expr* parseLeftExpr();
 	Expr* parseCallExpr();
 	Expr* parseAppExpr();
+	Expr* parseCaseExpr();
 	Expr* parseBaseExpr();
 
 	/// Parses a literal token. The caller should ensure that the token is a literal.
@@ -66,6 +67,7 @@ struct Parser {
 	Expr* parseVarDecl(bool constant);
 	Expr* parseDeclExpr(bool constant);
 	void parseFixity();
+	Maybe<Alt> parseAlt();
 	Maybe<Id> parseVar();
 	Maybe<Id> parseQop();
 

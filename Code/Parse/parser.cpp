@@ -466,17 +466,7 @@ Expr* Parser::parseLeftExpr() {
 		eat();
 		return parseVarDecl(false);
 	} else if(token == Token::kwCase) {
-		eat();
-		if(auto exp = parseInfixExpr()) {
-			if(token == Token::kwOf) {
-				eat();
-				// TODO: Parse alts.
-			} else {
-				error("Expected 'of' after case-expression.");
-			}
-		} else {
-			error("Expected an expression after 'case'.");
-		}
+		return parseCaseExpr();
 	} else if(token == Token::kwIf) {
 		eat();
 		if(auto cond = parseInfixExpr()) {
@@ -571,6 +561,43 @@ Expr* Parser::parseAppExpr() {
 	} else {
 		return e;
 	}
+}
+
+Expr* Parser::parseCaseExpr() {
+	/*
+	 * expr → 	case expr of alts
+	 * alts	→	alt1 ; … ; altn	    		(n ≥ 1)
+	 * alt	→	pat -> exp [where decls]
+	 * 		|	pat gdpat [where decls]
+	 * 		|		    					(empty alternative)
+	 */
+	if(token == Token::kwCase) {
+		eat();
+		if(auto exp = parseTypedExpr()) {
+			if(token == Token::kwOf) {
+				eat();
+				AltList* alts = nullptr;
+				if(auto a = parseAlt()) {
+					alts = build<AltList>(a());
+					auto p = alts;
+					while((a = parseAlt())) {
+						p->next = build<AltList>(a());
+						p = p->next;
+					}
+				}
+
+				return build<CaseExpr>(exp, alts);
+			} else {
+				error("Expected 'of' after case-expression.");
+			}
+		} else {
+			error("Expected an expression after 'case'.");
+		}
+	} else {
+		error("expected 'case'");
+	}
+	
+	return nullptr;
 }
 
 Expr* Parser::parseBaseExpr() {
@@ -764,6 +791,24 @@ void Parser::addFixity(Fixity f) {
 	} else {
 		error("Expected one or more operators after a fixity declaration or ','.");
 	}
+}
+
+Maybe<Alt> Parser::parseAlt() {
+	/*
+	 * alt	→	pat -> exp [where decls]
+	 * 		|	pat gdpat [where decls]
+	 * 		|		    					(empty alternative)
+	 */
+	auto pat = parsePattern();
+	if(!pat) return Nothing;
+
+	if(token == Token::opArrowR) eat();
+	else {error("expected '->'"); return Nothing;}
+
+	auto exp = parseTypedExpr();
+	if(!exp) return Nothing;
+
+	return Alt{pat, exp};
 }
 
 Maybe<Id> Parser::parseVar() {
@@ -1155,12 +1200,13 @@ Pattern* Parser::parsePattern() {
 
 		// Parse a pattern for each constructor element.
 		PatList* list = nullptr;
-		auto pat = tryParse(&Parser::parseLeftPattern);
-		list = build<PatList>(pat);
-		auto l = list;
-		while((pat = tryParse(&Parser::parseLeftPattern))) {
-			l->next = build<PatList>(pat);
-			l = l->next;
+		if(auto pat = tryParse(&Parser::parseLeftPattern)) {
+			list = build<PatList>(pat);
+			auto l = list;
+			while((pat = tryParse(&Parser::parseLeftPattern))) {
+				l->next = build<PatList>(pat);
+				l = l->next;
+			}
 		}
 
 		return build<ConPattern>(id, list);

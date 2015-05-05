@@ -155,7 +155,8 @@ struct Expr {
 		Field,
 		Construct,
 		TupleConstruct,
-		Format
+		Format,
+		Case
 	} type;
 
 	Expr(Type t) : type(t) {}
@@ -313,6 +314,21 @@ struct ConPattern : Pattern {
 	Id constructor;
 	PatList* patterns;
 };
+
+
+struct Alt {
+	Pattern* pattern;
+	ExprRef expr;
+};
+
+typedef ASTList<Alt> AltList;
+
+struct CaseExpr : Expr {
+	CaseExpr(ExprRef pivot, AltList* alts) : Expr(Case), pivot(pivot), alts(alts) {}
+	ExprRef pivot;
+	AltList* alts;
+};
+
 
 struct Decl {
 	enum Kind {

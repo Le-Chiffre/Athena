@@ -27,6 +27,7 @@ struct Printer {
 			case Expr::Construct: toString((const ConstructExpr&)expr); break;
 			case Expr::TupleConstruct: toString((const TupleConstructExpr&)expr); break;
 			case Expr::Format: toString((const FormatExpr&)expr); break;
+			case Expr::Case: toString((const CaseExpr&)expr); break;
 		}
 		return string;
 	}
@@ -248,6 +249,24 @@ private:
 			chunk = chunk->next;
 		}
 		removeLevel();
+	}
+	
+	void toString(const CaseExpr& e) {
+		string += "CaseExpr ";
+		makeLevel();
+		auto a = e.alts;
+		while(a) {
+			if(a->next) toString(a->item, false);
+			else toString(a->item, true);
+			a = a->next;
+		}
+		removeLevel();
+	}
+	
+	void toString(const Alt& alt, bool last) {
+		toStringIntro(last);
+		string += "alt: ";
+		toString(*alt.expr);
 	}
 
 	void toString(const FunDecl& e) {
