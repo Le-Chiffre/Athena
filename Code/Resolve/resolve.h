@@ -87,7 +87,7 @@ struct Resolver {
 	Expr* resolveExpression(Scope& scope, ast::ExprRef expr);
 	Expr* resolveMulti(Scope& scope, ast::MultiExpr& expr);
 	Expr* resolveMultiWithRet(Scope& scope, ast::MultiExpr& expr);
-    Expr* resolveLiteral(Scope& scope, ast::LitExpr& expr);
+    Expr* resolveLiteral(Scope& scope, ast::Literal& expr);
 	Expr* resolveInfix(Scope& scope, ast::InfixExpr& expr);
 	Expr* resolvePrefix(Scope& scope, ast::PrefixExpr& expr);
 	Expr* resolveBinaryCall(Scope& scope, Id function, ExprRef lhs, ExprRef rhs);
@@ -102,11 +102,13 @@ struct Resolver {
 	Expr* resolveField(Scope& scope, ast::FieldExpr& expr, ast::ExprList* args = nullptr);
 	Expr* resolveConstruct(Scope& scope, ast::ConstructExpr& expr);
 	Expr* resolveAnonConstruct(Scope& scope, ast::TupleConstructExpr& expr);
-	
+	Expr* resolveCase(Scope& scope, ast::CaseExpr& expr);
+
 	TypeRef resolveAlias(Scope& scope, AliasType* type);
 	TypeRef resolveTuple(Scope& scope, ast::TupleType& type);
 	TypeRef resolveVariant(Scope& scope, VarType* type);
 	ExprList* resolveExpressions(Scope& scope, ast::ExprList* list);
+	Expr* resolvePattern(Scope& scope, ExprRef pivot, ast::Pattern& pat);
 
     /// Resolves a binary operation on two primitive types.
     /// *lhs* and *rhs* must be primitives.
@@ -133,6 +135,12 @@ struct Resolver {
 
 	/// Creates a return of the provided expression.
 	Expr* createRet(ExprRef);
+
+	/// Creates a constant true value.
+	Expr* createTrue();
+
+	/// Creates a comparison between two values.
+	Expr* createCompare(Scope& scope, ExprRef left, ExprRef right);
 
 	/// Makes sure the provided expression is an rvalue.
 	Expr* getRV(ExprRef);

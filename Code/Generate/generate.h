@@ -27,6 +27,15 @@ struct SaveInsert {
 	llvm::BasicBlock::iterator insert;
 	llvm::BasicBlock* block;
 };
+
+struct VariantData {
+	int selectorIndex = -1;
+};
+
+struct TypeData {
+	llvm::Type* llType;
+	void* data;
+};
 	
 struct Generator {
 	Generator(ast::CompileContext& ccontext, llvm::LLVMContext& context, llvm::Module& target);
@@ -63,12 +72,12 @@ struct Generator {
 		return builder.GetInsertBlock()->getParent();
 	}
 
-	llvm::Type* getType(resolve::TypeRef type) {
+	TypeData* getType(resolve::TypeRef type) {
 		if(!type->codegen) {
 			type->codegen = genLlvmType(type);
 		}
 
-		return (llvm::Type*)type->codegen;
+		return (TypeData*)type->codegen;
 	}
 
 	uint getCconv(resolve::ForeignConvention conv) {
@@ -87,7 +96,7 @@ struct Generator {
 	}
 
 private:
-	llvm::Type* genLlvmType(resolve::TypeRef type);
+	TypeData* genLlvmType(resolve::TypeRef type);
 
 	llvm::LLVMContext& context;
 	llvm::Module& module;

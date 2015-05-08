@@ -26,10 +26,10 @@ Function* Generator::genFunctionDecl(resolve::FunctionDecl& function) {
 	auto argCount = function.arguments.Count();
 	auto argTypes = (Type**)StackAlloc(sizeof(Type*) * argCount);
 	for(uint i=0; i<argCount; i++) {
-		argTypes[i] = getType(function.arguments[i]->type);
+		argTypes[i] = getType(function.arguments[i]->type)->llType;
 	}
 	
-	auto type = FunctionType::get(getType(function.type), ArrayRef<Type*>(argTypes, argCount), false);
+	auto type = FunctionType::get(getType(function.type)->llType, ArrayRef<Type*>(argTypes, argCount), false);
 	if(function.isForeign) {
 		auto &ff = (resolve::ForeignFunction&)function;
 		auto func = Function::Create(type, Function::ExternalLinkage, toRef(ccontext.Find(ff.importName).name), &module);
@@ -74,14 +74,14 @@ BasicBlock* Generator::genScope(resolve::Scope& scope) {
 	// Constant variables are generated lazily as registers.
 	for(auto v : scope.shadows) {
 		if(v->isVar()) {
-			auto var = builder.CreateAlloca(getType(v->type), nullptr, toRef(ccontext.Find(v->name).name));
+			auto var = builder.CreateAlloca(getType(v->type)->llType, nullptr, toRef(ccontext.Find(v->name).name));
 			v->codegen = var;
 		}
 	}
 
 	for(auto v : scope.variables) {
 		if(v->isVar()) {
-			auto var = builder.CreateAlloca(getType(v->type), nullptr, toRef(ccontext.Find(v->name).name));
+			auto var = builder.CreateAlloca(getType(v->type)->llType, nullptr, toRef(ccontext.Find(v->name).name));
 			v->codegen = var;
 		}
 	}
@@ -131,7 +131,7 @@ Value* Generator::genExpr(resolve::ExprRef expr) {
 }
 
 Value* Generator::genLiteral(resolve::Literal& literal, resolve::TypeRef type) {
-	auto lltype = getType(type);
+	auto lltype = getType(type)->llType;
 	switch(literal.type) {
 		case resolve::Literal::Float: return ConstantFP::get(lltype, literal.f);
 		case resolve::Literal::Int: return ConstantInt::get(lltype, literal.i);
@@ -410,7 +410,7 @@ Value* Generator::genIf(resolve::IfExpr& ife) {
 	builder.SetInsertPoint(contBlock);
 	if(ife.returnResult && !ife.then.type->isUnit()) {
 		ASSERT(ife.otherwise && ife.then.type == ife.otherwise->type);
-		auto phi = builder.CreatePHI(getType(ife.then.type), 2);
+		auto phi = builder.CreatePHI(getType(ife.then.type)->llType, 2);
 		phi->addIncoming(thenValue, thenBlock);
 		phi->addIncoming(elseValue, elseBlock);
 		return phi;
@@ -422,8 +422,8 @@ Value* Generator::genIf(resolve::IfExpr& ife) {
 
 Value* Generator::genCoerce(const resolve::Expr& srce, resolve::Type* dst) {
 	auto src = srce.type;
-	auto llSrc = getType(src);
-	auto llDst = getType(dst);
+	auto llSrc = getType(src)->llType;
+	auto llDst = getType(dst)->llType;
 	auto expr = genExpr(srce);
 
 	if(src == dst) return expr;
@@ -533,12 +533,29 @@ Value* Generator::genWhile(resolve::WhileExpr& expr) {
 }
 
 Value* Generator::genField(resolve::FieldExpr& expr) {
-	auto container = genExpr(expr.container);
-	if(container->getType()->isPointerTy()) {
-		return builder.CreateStructGEP(container, expr.field->index);
+	if(expr.type->isVariant()) {
+		auto var = (resolve::VarType*)expr.type;
+		if(expr.constructor == -1) {
+			int index = ((VariantData*)getType(expr.container.type)->data)->selectorIndex;
+			if(index == -1) {
+				return builder.getInt32(0);
+			} else if(var->isEnum) {
+				return genExpr(expr.container);
+			} else {
+				return builder.CreateStructGEP(genExpr(expr.container), (uint)index);
+			}
+		} else {
+			ASSERT(!var->isEnum);
+			return builder.CreatePointerCast(genExpr(expr.container), (Type*)var->list[expr.constructor]->codegen);
+		}
 	} else {
-		ASSERT(container->getType()->isAggregateType());
-		return builder.CreateExtractValue(container, expr.field->index);
+		auto container = genExpr(expr.container);
+		if(container->getType()->isPointerTy()) {
+			return builder.CreateStructGEP(container, expr.field->index);
+		} else {
+			ASSERT(container->getType()->isAggregateType());
+			return builder.CreateExtractValue(container, expr.field->index);
+		}
 	}
 }
 
@@ -546,7 +563,7 @@ Value* Generator::genConstruct(resolve::ConstructExpr& expr) {
 	if(expr.type->isPtrOrPrim()) {
 		return genCoerce(expr.args[0].expr, expr.type);
 	} else if(expr.type->isTuple()) {
-		auto type = getType(expr.type);
+		auto type = getType(expr.type)->llType;
 		Value* v = UndefValue::get(type);
 		for(auto a : expr.args) {
 			v = builder.CreateInsertValue(v, genExpr(a.expr), a.index);
@@ -562,17 +579,17 @@ Value* Generator::genConstruct(resolve::ConstructExpr& expr) {
 		// - General variants have multiple constructors with data. These are the most complex ones.
 		if(var->isEnum) {
 			// Enum variants are constructed as the index of their constructor.
-			return ConstantInt::get(type, expr.con->index, false);
+			return ConstantInt::get(type->llType, expr.con->index, false);
 		} else if(var->list.Count() == 1) {
 			// Single-constructor variants are constructed like the equivalent tuple.
-			Value* v = UndefValue::get(type);
+			Value* v = UndefValue::get(type->llType);
 			for(auto a : expr.args) {
 				v = builder.CreateInsertValue(v, genExpr(a.expr), a.index);
 			}
 			return v;
 		} else {
 			// General variants are always stack-allocated, as they need to be bitcasted.
-			auto pointer = builder.CreateAlloca(type);
+			auto pointer = builder.CreateAlloca(type->llType);
 			auto stype = (StructType*)type;
 
 			// Set the constructor index.
@@ -627,30 +644,34 @@ Value* Generator::genLazyCond(resolve::PrimitiveOp op, resolve::ExprRef lhs, res
 	return result;
 }
 
-Type* Generator::genLlvmType(resolve::TypeRef type) {
-	if(type->isUnit()) return builder.getVoidTy();
+TypeData* Generator::genLlvmType(resolve::TypeRef type) {
+	TypeData* data = new TypeData;
+	data->data = nullptr;
+	if(type->isUnit()) {data->llType = builder.getVoidTy(); return data;}
 	if(type->isPrimitive()) {
 		switch(((const resolve::PrimType*)type)->type) {
-			case resolve::PrimitiveType::I64: return builder.getInt64Ty();
-			case resolve::PrimitiveType::I32: return builder.getInt32Ty();
-			case resolve::PrimitiveType::I16: return builder.getInt16Ty();
-			case resolve::PrimitiveType::I8 : return builder.getInt8Ty();
+			case resolve::PrimitiveType::I64: data->llType = builder.getInt64Ty(); break;
+			case resolve::PrimitiveType::I32: data->llType = builder.getInt32Ty(); break;
+			case resolve::PrimitiveType::I16: data->llType = builder.getInt16Ty(); break;
+			case resolve::PrimitiveType::I8 : data->llType = builder.getInt8Ty(); break;
 
-			case resolve::PrimitiveType::U64: return builder.getInt64Ty();
-			case resolve::PrimitiveType::U32: return builder.getInt32Ty();
-			case resolve::PrimitiveType::U16: return builder.getInt16Ty();
-			case resolve::PrimitiveType::U8 : return builder.getInt8Ty();
+			case resolve::PrimitiveType::U64: data->llType = builder.getInt64Ty(); break;
+			case resolve::PrimitiveType::U32: data->llType = builder.getInt32Ty(); break;
+			case resolve::PrimitiveType::U16: data->llType = builder.getInt16Ty(); break;
+			case resolve::PrimitiveType::U8 : data->llType = builder.getInt8Ty(); break;
 
-			case resolve::PrimitiveType::F64: return builder.getDoubleTy();
-			case resolve::PrimitiveType::F32: return builder.getFloatTy();
-			case resolve::PrimitiveType::F16: return builder.getHalfTy();
+			case resolve::PrimitiveType::F64: data->llType = builder.getDoubleTy(); break;
+			case resolve::PrimitiveType::F32: data->llType = builder.getFloatTy(); break;
+			case resolve::PrimitiveType::F16: data->llType = builder.getHalfTy(); break;
 
-			case resolve::PrimitiveType::Bool: return builder.getInt1Ty();
+			case resolve::PrimitiveType::Bool: data->llType = builder.getInt1Ty(); break;
 			default: FatalError("Unsupported primitive type."); return nullptr;
 		}
+		return data;
 	} else if(type->isPointer()) {
 		auto llType = getType(((const resolve::PtrType*)type)->type);
-		return PointerType::getUnqual(llType);
+		data->llType = PointerType::getUnqual(llType->llType);
+		return data;
 	} else if(type->isTuple()) {
 		// Each tuple type is unique, so we can always generate and put it here.
 		auto tuple = (resolve::TupleType*)type;
@@ -659,29 +680,32 @@ Type* Generator::genLlvmType(resolve::TypeRef type) {
 		auto fCount = tuple->fields.Count();
 		auto fields = (Type**)StackAlloc(sizeof(Type*) * fCount);
 		for(uint i=0; i<fCount; i++) {
-			fields[i] = getType(tuple->fields[i].type);
+			fields[i] = getType(tuple->fields[i].type)->llType;
 		}
 
-		auto llType = StructType::create(context, {fields, fCount}, "tuple");
-		return llType;
+		data->llType = StructType::create(context, {fields, fCount}, "tuple");
+		return data;
 	} else if(type->isVariant()) {
 		auto var = (resolve::VarType*)type;
 		auto selectorTy = builder.getIntNTy(var->selectorBits);
+		VariantData* varData = new VariantData;
+		data->data = varData;
 
 		if(var->isEnum) {
-			return selectorTy;
+			varData->selectorIndex = 0;
+			data->llType = selectorTy;
 		} else {
 			// Start by generating a type for each constructor.
 			uint totalSize = 0;
 			uint totalAlignment = 0;
 			Type* baseType;
-			uint baseSize;
+			uint baseSize = 0;
 			for (auto& con : var->list) {
 				auto fCount = con->contents.Count();
 				if (fCount) {
 					auto fields = (Type**)StackAlloc(sizeof(Type*) * fCount);
 					for (uint i = 0; i < fCount; i++) {
-						fields[i] = getType(con->contents[i]);
+						fields[i] = getType(con->contents[i])->llType;
 					}
 					auto s = StructType::create(context, {fields, fCount}, "constructor");
 					auto dl = module.getDataLayout();
@@ -690,7 +714,7 @@ Type* Generator::genLlvmType(resolve::TypeRef type) {
 							(layout->getAlignment() == totalAlignment && layout->getSizeInBytes() > totalSize)) {
 						totalAlignment = layout->getAlignment();
 						baseType = s;
-						baseSize = layout->getSizeInBytes();
+						baseSize = (uint)layout->getSizeInBytes();
 					}
 
 					totalSize = Core::Max(totalSize, (uint)layout->getSizeInBytes());
@@ -702,23 +726,27 @@ Type* Generator::genLlvmType(resolve::TypeRef type) {
 
 			if (var->list.Count() == 1) {
 				// Variants with a single constructor are represented as that constructor.
-				return (Type*)var->list[0]->codegen;
+				data->llType = (Type*)var->list[0]->codegen;
+				varData->selectorIndex = -1;
 			} else {
 				// Variants are represented as the type with the highest alignment and an array that fits the size of each constructor.
 				if(totalSize == baseSize) {
 					Type* fields[2];
 					fields[0] = baseType;
 					fields[1] = selectorTy;
-					return StructType::create(context, {fields, 2}, "variant");
+					data->llType = StructType::create(context, {fields, 2}, "variant");
+					varData->selectorIndex = 1;
 				} else {
 					Type* fields[3];
 					fields[0] = baseType;
 					fields[1] = ArrayType::get(builder.getInt32Ty(), (totalSize - baseSize + 3) / 4);
 					fields[2] = selectorTy;
-					return StructType::create(context, {fields, 3}, "variant");
+					data->llType = StructType::create(context, {fields, 3}, "variant");
+					varData->selectorIndex = 2;
 				}
 			}
 		}
+		return data;
 	}
 
 	FatalError("Unsupported type.");

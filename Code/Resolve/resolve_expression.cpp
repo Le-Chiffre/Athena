@@ -21,7 +21,7 @@ Expr* Resolver::resolveExpression(Scope& scope, ast::ExprRef expr) {
 		case ast::Expr::Multi:
 			return resolveMulti(scope, *(ast::MultiExpr*)expr);
 		case ast::Expr::Lit:
-			return resolveLiteral(scope, *(ast::LitExpr*)expr);
+			return resolveLiteral(scope, ((ast::LitExpr*)expr)->literal);
 		case ast::Expr::Infix:
 			return resolveInfix(scope, *(ast::InfixExpr*)expr);
 		case ast::Expr::Prefix:
@@ -49,6 +49,8 @@ Expr* Resolver::resolveExpression(Scope& scope, ast::ExprRef expr) {
 			return resolveConstruct(scope, *(ast::ConstructExpr*)expr);
 		case ast::Expr::TupleConstruct:
 			return resolveAnonConstruct(scope, *(ast::TupleConstructExpr*)expr);
+		case ast::Expr::Case:
+			return resolveCase(scope, *(ast::CaseExpr*)expr);
 		default:
 			FatalError("Unsupported expression type.");
 	}
@@ -89,8 +91,8 @@ Expr* Resolver::resolveMultiWithRet(Scope& scope, ast::MultiExpr& expr) {
 	}
 }
 	
-Expr* Resolver::resolveLiteral(Scope& scope, ast::LitExpr& expr) {
-	return build<LitExpr>(expr.literal, getLiteralType(types, expr.literal));
+Expr* Resolver::resolveLiteral(Scope& scope, ast::Literal& literal) {
+	return build<LitExpr>(literal, getLiteralType(types, literal));
 }
 
 Expr* Resolver::resolveInfix(Scope& scope, ast::InfixExpr& expr) {
@@ -495,6 +497,65 @@ Expr* Resolver::resolveAnonConstruct(Scope& scope, ast::TupleConstructExpr& expr
 	}
 	con->type = result;
 	return con;
+}
+
+Expr* Resolver::resolveCase(Scope& scope, ast::CaseExpr& expr) {
+	auto alt = expr.alts;
+	if(alt) {
+		auto pivot = resolveExpression(scope, expr.pivot);
+		
+		ScopedExpr* test;
+		ScopedExpr* first_test;
+
+		test = build<ScopedExpr>(scope);
+		auto pat = resolvePattern(test->scope, *pivot, *alt->item.pattern);
+		auto result = resolveExpression(test->scope, alt->item.expr);
+		
+		test->contents = build<IfExpr>(*pat, *result, nullptr, result->type, true);
+		test->type = test->contents->type;
+		first_test = test;
+		alt = alt->next;
+
+		while(alt) {
+			auto s = build<ScopedExpr>(scope);
+			pat = resolvePattern(s->scope, *pivot, *alt->item.pattern);
+			result = resolveExpression(s->scope, alt->item.expr);
+			s->contents = build<IfExpr>(*pat, *result, nullptr, result->type, true);
+			s->type = s->contents->type;
+			((IfExpr*)test->contents)->otherwise = s;
+			test = s;
+			alt = alt->next;
+		}
+
+		return first_test;
+	} else {
+		return build<EmptyExpr>(types.getUnit());
+	}
+}
+
+Expr* Resolver::resolvePattern(Scope& scope, ExprRef pivot, ast::Pattern& pat) {
+	switch(pat.kind) {
+		case ast::Pattern::Var: {
+			auto var = build<Variable>(((ast::VarPattern&)pat).var, pivot.type, scope, true);
+			scope.variables += var;
+			auto m = build<MultiExpr>(build<AssignExpr>(*var, *getRV(pivot)));
+			m->next = build<MultiExpr>(createTrue());
+			m->type = types.getBool();
+			return m;
+		}
+		case ast::Pattern::Lit:
+			return createCompare(scope, *getRV(pivot), *resolveLiteral(scope, ((ast::LitPattern&)pat).lit));
+		case ast::Pattern::Any:
+			return createTrue();
+		case ast::Pattern::Tup:
+			return nullptr;
+		case ast::Pattern::Con: {
+			auto l = build<Literal>();
+			l->i = scope.findConstructor(((ast::ConPattern&)pat).constructor)->index;
+			l->type = Literal::Int;
+			return createCompare(scope, *build<FieldExpr>(pivot, -1, types.getInt()), *resolveLiteral(scope, *l));
+		}
+	}
 }
 
 Expr* Resolver::resolveCondition(ScopeRef scope, ast::ExprRef expr) {

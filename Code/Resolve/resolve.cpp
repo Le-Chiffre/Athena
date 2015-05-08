@@ -178,6 +178,17 @@ Expr* Resolver::createRet(ExprRef e) {
 	return build<RetExpr>(*getRV(e));
 }
 
+Expr* Resolver::createTrue() {
+	Literal lit;
+	lit.i = 1;
+	lit.type = Literal::Bool;
+	return build<LitExpr>(lit, types.getBool());
+}
+
+Expr* Resolver::createCompare(Scope& scope, ExprRef left, ExprRef right) {
+	return resolveBinaryCall(scope, context.AddUnqualifiedName("=="), left, right);
+}
+
 Expr* Resolver::getRV(ExprRef e) {
 	if(e.type->isLvalue()) {
 		return build<CoerceLVExpr>(e, types.getRV(e.type));

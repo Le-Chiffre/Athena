@@ -410,6 +410,7 @@ struct Expr {
 		Field,
 		Ret,
 		Construct,
+		Scoped,
 
 		// The following expressions are only used while resolving or for error handling.
 		// They are removed before the resolve stage finishes.
@@ -507,8 +508,15 @@ struct CoerceLVExpr : Expr {
 
 struct FieldExpr : Expr {
 	FieldExpr(ExprRef container, ::athena::resolve::Field* field, TypeRef type) : Expr(Field, type), container(container), field(field) {}
+	FieldExpr(ExprRef container, int constructor, TypeRef type) : Expr(Field, type), container(container), constructor(constructor) {}
 	ExprRef container;
-	::athena::resolve::Field* field;
+	union {
+		// When the type is a structure.
+		::athena::resolve::Field *field;
+
+		// When the type is a variant. -1 indicates the index field.
+		int constructor;
+	};
 };
 	
 struct RetExpr : Expr {
@@ -527,6 +535,12 @@ struct ConstructExpr : Expr {
 
 	// Only set if the type is a variant.
 	VarConstructor* con;
+};
+
+struct ScopedExpr : Expr {
+	ScopedExpr(Scope& parent) : Expr(Scoped, nullptr) {scope.parent = &parent;}
+	Expr* contents = nullptr;
+	Scope scope;
 };
 
 /// A temporary expression that represents an unfinished declaration.
