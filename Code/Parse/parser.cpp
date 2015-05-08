@@ -576,15 +576,25 @@ Expr* Parser::parseCaseExpr() {
 		if(auto exp = parseTypedExpr()) {
 			if(token == Token::kwOf) {
 				eat();
+				IndentLevel level{token, lexer};
 				AltList* alts = nullptr;
 				if(auto a = parseAlt()) {
 					alts = build<AltList>(a());
 					auto p = alts;
-					while((a = parseAlt())) {
+					while(token == Token::EndOfStmt) {
+						eat();
+						a = parseAlt();
+						if(!a) {
+							error("expected case alternative");
+							return nullptr;
+						}
 						p->next = build<AltList>(a());
 						p = p->next;
 					}
 				}
+
+				if(token == Token::EndOfBlock) eat();
+				level.end();
 
 				return build<CaseExpr>(exp, alts);
 			} else {
