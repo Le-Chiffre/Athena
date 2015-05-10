@@ -67,7 +67,7 @@ void Generator::genFunction(Function* func, resolve::Function& function) {
 }
 
 BasicBlock* Generator::genScope(resolve::Scope& scope) {
-	auto block = BasicBlock::Create(context, "");
+	auto block = BasicBlock::Create(context, "scope");
 	SaveInsert save{builder};
 	builder.SetInsertPoint(block);
 	// Generate the variables used in this scope (excluding function parameters).
@@ -124,6 +124,8 @@ Value* Generator::genExpr(resolve::ExprRef expr) {
 			return genRet((resolve::RetExpr&)expr);
 		case resolve::Expr::Construct:
 			return genConstruct((resolve::ConstructExpr&)expr);
+		case resolve::Expr::Scoped:
+			return genScoped((resolve::ScopedExpr&)expr);
         default:
             FatalError("Unsupported expression type.");
             return nullptr;
@@ -184,7 +186,10 @@ Value* Generator::genMulti(resolve::MultiExpr& expr) {
 	
 Value* Generator::genRet(resolve::RetExpr& expr) {
 	auto e = genExpr(expr.expr);
-	return builder.CreateRet(e);
+	if(expr.type->isUnit())
+		return builder.CreateRetVoid();
+	else
+		return builder.CreateRet(e);
 }
 
 Value* Generator::genCall(resolve::FunctionDecl& function, resolve::ExprList* argList) {
@@ -609,6 +614,23 @@ Value* Generator::genConstruct(resolve::ConstructExpr& expr) {
 		}
 	} else {
 		DebugError("Not implemented");
+		return nullptr;
+	}
+}
+
+Value* Generator::genScoped(resolve::ScopedExpr& expr) {
+	auto scope = genScope(expr.scope);
+
+	// Discard the scope if it is empty.
+	if(!scope->empty()) {
+		scope->insertInto(getFunction());
+		builder.CreateBr(scope);
+		builder.SetInsertPoint(scope);
+	}
+
+	if (expr.contents) {
+		return genExpr(*expr.contents);
+	} else {
 		return nullptr;
 	}
 }
