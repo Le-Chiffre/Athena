@@ -510,21 +510,34 @@ Expr* Resolver::resolveCase(Scope& scope, ast::CaseExpr& expr) {
 		test = build<ScopedExpr>(scope);
 		auto pat = resolvePattern(test->scope, *pivot, *alt->item.pattern);
 		auto result = resolveExpression(test->scope, alt->item.expr);
-		
-		test->contents = build<IfExpr>(*pat, *result, nullptr, result->type, true);
-		test->type = test->contents->type;
-		first_test = test;
-		alt = alt->next;
+
+		if(alwaysTrue(*pat)) {
+			test->contents = build<MultiExpr>(pat, build<MultiExpr>(result));
+			test->type = result->type;
+			return test;
+		} else {
+			test->contents = build<IfExpr>(*pat, *result, nullptr, result->type, true);
+			test->type = test->contents->type;
+			first_test = test;
+			alt = alt->next;
+		}
 
 		while(alt) {
 			auto s = build<ScopedExpr>(scope);
 			pat = resolvePattern(s->scope, *pivot, *alt->item.pattern);
 			result = resolveExpression(s->scope, alt->item.expr);
-			s->contents = build<IfExpr>(*pat, *result, nullptr, result->type, true);
-			s->type = s->contents->type;
-			((IfExpr*)test->contents)->otherwise = s;
-			test = s;
-			alt = alt->next;
+			if(alwaysTrue(*pat)) {
+				s->contents = build<MultiExpr>(pat, build<MultiExpr>(result));
+				s->type = result->type;
+				((IfExpr*)test->contents)->otherwise = s;
+				return first_test;
+			} else {
+				s->contents = build<IfExpr>(*pat, *result, nullptr, result->type, true);
+				s->type = s->contents->type;
+				((IfExpr*)test->contents)->otherwise = s;
+				test = s;
+				alt = alt->next;
+			}
 		}
 
 		return first_test;
@@ -604,6 +617,21 @@ ast::InfixExpr& Resolver::reorder(ast::InfixExpr& expr) {
 		e = rhs;
 	}
 	return *res;
+}
+
+bool Resolver::alwaysTrue(ExprRef expr) {
+	// TODO: Perform constant folding.
+	if(expr.kind == Expr::Multi) {
+		auto e = ((MultiExpr*)&expr);
+		// Find the last expression in the chain.
+		while(e->next) {
+			e = e->next;
+		}
+	}
+
+	return expr.kind == Expr::Lit
+		   && ((LitExpr&)expr).literal.type == Literal::Bool
+		   && ((LitExpr&)expr).literal.i == 1;
 }
 
 }} // namespace athena::resolve

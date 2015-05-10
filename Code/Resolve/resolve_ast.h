@@ -57,6 +57,8 @@ struct Scope {
     TypeRef findType(Id name);
 	VarConstructor* findConstructor(Id name);
 
+	bool hasVariables();
+
 	// The base name of this scope (determines type visibility).
 	Id name;
 
@@ -426,9 +428,9 @@ struct Expr {
 };
 	
 struct MultiExpr : Expr {
-	MultiExpr(Expr* expr) : Expr(Multi, expr->type), expr(expr) {}
+	MultiExpr(Expr* expr, MultiExpr* next = nullptr) : Expr(Multi, expr->type), expr(expr), next(next) {}
 	Expr* expr;
-	MultiExpr* next = nullptr;
+	MultiExpr* next;
 };
 
 struct LitExpr : Expr {

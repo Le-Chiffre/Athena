@@ -184,6 +184,9 @@ struct Resolver {
 	/// Reorders the provided chain of infix operators according to the operator precedence table.
 	ast::InfixExpr& reorder(ast::InfixExpr& expr);
 
+	/// Checks if the provided expression always evaluates to a true constant.
+	bool alwaysTrue(ExprRef expr);
+
 	nullptr_t error(const char*);
 
 	template<class P, class... Ps>

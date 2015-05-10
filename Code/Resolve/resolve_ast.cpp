@@ -51,4 +51,16 @@ inline T* findHelper(Scope* scope, Core::NumberMap<T, Id> Scope::*map, Id name) 
 TypeRef Scope::findType(Id name) { auto t = findHelper(this, &Scope::types, name); return t ? *t : nullptr; }
 VarConstructor* Scope::findConstructor(Id name) { return findHelper(this, &Scope::constructors, name); }
 
+bool Scope::hasVariables() {
+    for(auto v : shadows) {
+        if(v->isVar()) return true;
+    }
+
+    for(auto v : variables) {
+        if(v->isVar()) return true;
+    }
+
+    return false;
+}
+
 }} // namespace athena::resolve
