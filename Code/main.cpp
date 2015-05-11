@@ -11,6 +11,7 @@
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/ExecutionEngine/Interpreter.h>
 #include <llvm/Support/raw_os_ostream.h>
+#include <llvm/IR/Verifier.h>
 #include <core.h>
 #include <Terminal.h>
 #include <File.h>
@@ -139,14 +140,15 @@ strlen {str: *U8} =
 )s";
 
 	auto gentest = R"s(
-data MaybeInt = Nothing | Just Int | Stuff Float Float Float | MoreStuff Double
-
-script {a: MaybeInt} = var b = Just 2
-
+f {a: Int} =
+	case a of
+		7 -> True
+		5 -> True
+		_ -> False
 )s";
 
 	athena::ast::Module module;
-	athena::ast::Parser p(context, module, gentest);
+	athena::ast::Parser p(context, module, memtest);
 	p.parseModule();
 
 	{
@@ -173,6 +175,7 @@ script {a: MaybeInt} = var b = Just 2
 	ss.open("out.ll", std::ios::out | std::ios::trunc);
 	llvm::raw_os_ostream stream{ss};
 	llmodule->print(stream, nullptr);
+	llvm::verifyModule(*llmodule, &stream);
 
 	Core::Terminal.WaitForInput();
 }
