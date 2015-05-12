@@ -153,6 +153,10 @@ Expr* Resolver::implicitLoad(ExprRef target) {
 Expr* Resolver::implicitCoerce(ExprRef src, TypeRef dst) {
 	if(src.type == dst) return (Expr*)&src;
 
+	if(src.isLiteral()) {
+		return literalCoerce(((LitExpr&)src).literal, dst);
+	}
+	
 	if(typeCheck.implicitCoerce(src.type, dst, Nothing)) {
 		// Lvalue to Rvalue conversion is so common that we implement it as a special instruction.
 		// This also allows for a simpler code generator.

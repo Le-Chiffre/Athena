@@ -117,6 +117,8 @@ Expr* Resolver::resolveBinaryCall(Scope& scope, Id function, ExprRef lt, ExprRef
 	// Otherwise, create a normal function call.
 	auto args = build<ExprList>(&lt, build<ExprList>(&rt));
 	if(auto func = findFunction(scope, function, args)) {
+		args->item = implicitCoerce(*args->item, func->arguments[0]->type);
+		args->next->item = implicitCoerce(*args->next->item, func->arguments[1]->type);
 		return build<AppExpr>(*func, args);
 	} else {
 		// No need for an error; this is done by findFunction.
@@ -139,6 +141,7 @@ Expr* Resolver::resolveUnaryCall(Scope& scope, Id function, ExprRef target) {
 	// Otherwise, create a normal function call.
 	auto args = build<ExprList>(&target);
 	if(auto func = findFunction(scope, function, args)) {
+		args->item = implicitCoerce(*args->item, func->arguments[0]->type);
 		return build<AppExpr>(*func, args);
 	} else {
 		// No need for an error; this is done by findFunction.
@@ -175,6 +178,11 @@ Expr* Resolver::resolveCall(Scope& scope, ast::AppExpr& expr) {
 
 	// Find the function to call.
 	if(auto fun = findFunction(scope, expr.callee, args)) {
+		auto a = args;
+		for(auto b : fun->arguments) {
+			a->item = implicitCoerce(*a->item, b->type);
+			a = a->next;
+		}
 		return build<AppExpr>(*fun, args);
 	}
 

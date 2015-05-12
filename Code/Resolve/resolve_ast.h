@@ -422,6 +422,7 @@ struct Expr {
 	} kind;
 
 	bool isTemp() const {return kind < FirstTemporary;}
+	bool isLiteral() const {return kind == Lit;}
 
 	TypeRef type;
 	Expr(Kind k, TypeRef type) : kind(k), type(type) {}
