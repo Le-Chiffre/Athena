@@ -76,7 +76,8 @@ uint count(const ASTList<T>* l) {
 enum class ForeignConvention {
 	CCall,
 	Stdcall,
-	Cpp
+	Cpp,
+	JS
 };
 
 struct Fixity {

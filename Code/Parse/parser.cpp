@@ -197,7 +197,7 @@ void Parser::parseForeignDecl() {
 	 * topdecl	→	foreign fdecl
 	 * fdecl	→	import callconv [safety] impent var : ftype	   	 	(define variable)
 	 * 			|	export callconv expent var : ftype	    			(expose variable)
-	 * callconv	→	ccall | stdcall | cplusplus	    					(calling convention)
+	 * callconv	→	ccall | stdcall | cplusplus | js	    			(calling convention)
 	 * impent	→	[string]
 	 * expent	→	[string]
 	 * safety	→	unsafe | safe
@@ -217,6 +217,8 @@ void Parser::parseForeignDecl() {
 					convention = ForeignConvention::Stdcall;
 				} else if(name.name == "cpp") {
 					convention = ForeignConvention::Cpp;
+				} else if(name.name == "js") {
+					convention = ForeignConvention::JS;
 				} else {
 					error("unknown calling convention.");
 				}
