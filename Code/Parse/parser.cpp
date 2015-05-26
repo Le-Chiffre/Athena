@@ -70,24 +70,15 @@ void Parser::parseDecl() {
 		parseDataDecl();
 	} else if(token == Token::kwForeign) {
 		parseForeignDecl();
-	} else if(auto var = tryParse(&Parser::parseVar)) {
+	} else if(auto var = tryParse([=] {return parseVar();})) {
 		if(token == Token::opColon) {
 			eat();
 
 			// Parse zero or more arguments.
-			TupleFieldList* arg = nullptr;
-			if(token == Token::VarID) {
-				arg = build<TupleFieldList>(TupleField{nullptr, token.data.id, nullptr});
-				auto p = arg;
-				eat();
-				while(token == Token::VarID) {
-					auto pp = build<TupleFieldList>(TupleField{nullptr, token.data.id, nullptr});
-					eat();
-					p->next = pp;
-					p = pp;
-				}
-			}
-			TupleType* args = build<TupleType>(arg);
+			auto args = build<TupleType>(many1([=] {
+				if(token == Token::VarID) return just(TupleField{nullptr, token.data.id, nullptr});
+				else return nothing<TupleField>();
+			}));
 
 			if(token == Token::opEquals) {
 				eat();
@@ -167,75 +158,12 @@ void Parser::parseDataDecl() {
 		auto type = parseSimpleType();
 		if(token == Token::opEquals) {
 			eat();
-			auto cs = build<ConstrList>(parseConstr());
-			if(!cs->item) {
-				error("expected at least one constructor");
-			}
-
-			auto p = cs;
-			while(token == Token::opBar) {
-				eat();
-				p->next = build<ConstrList>(parseConstr());
-				p = p->next;
-				if(!p->item) {
-					error("expected a constructor definition");
-				}
-			}
-
-			module.declarations += build<DataDecl>(type, cs);
+			auto cs = sepBy1([=] {return parseConstr();}, Token::opBar);
+			if(!cs) error("expected at least one constructor definition");
+			else module.declarations += build<DataDecl>(type, cs);
 		} else {
 			error("Expected '=' after type name");
 		}
-	}
-}
-
-void Parser::parseStructDecl() {
-	// This is currently unused.
-
-	/*
-	 * datadecl		→	data varid = fields
-	 * fields		→	field0, ..., fieldn 	(n >= 0)
-	 * field		→	var varid = expr
-	 * 				|	var varid : type
-	 * 				|	let varid = expr
-	 * 				|	let varid : type
-	 */
-	if(token == Token::kwData) {
-		eat();
-		if(token == Token::ConID) {
-			auto id = token.data.id;
-			eat();
-			if(token == Token::opEquals) {
-				eat();
-				IndentLevel level{token, lexer};
-				if(token == Token::kwLet || token == Token::kwVar) {
-					auto list = build<FieldList>(parseField());
-					auto p = list;
-					while(token == Token::EndOfStmt) {
-						eat();
-						p->next = build<FieldList>(parseField());
-						p = p->next;
-					}
-
-					level.end();
-					if(token == Token::EndOfBlock) {
-						eat();
-						//module.declarations += build<DataDecl>(id, list);
-					} else {
-						error("Expected end of block.");
-					}
-				} else {
-					// TODO: Parse methods.
-					error("Expected field declaration.");
-				}
-			} else {
-				error("Expected '=' after 'data name'");
-			}
-		} else {
-			error("Expected identifier after 'data'.");
-		}
-	} else {
-		error("Expected 'data'.");
 	}
 }
 
@@ -245,13 +173,11 @@ void Parser::parseTypeDecl() {
 	 */
 	if(token == Token::kwType) {
 		eat();
-		if(token == Token::ConID) {
-			auto id = token.data.id;
-			eat();
+		if(auto t = parseSimpleType()) {
 			if(token == Token::opEquals) {
 				eat();
 				if(auto type = parseType()) {
-					module.declarations += build<TypeDecl>(id, type);
+					module.declarations += build<TypeDecl>(t, type);
 				} else {
 					error("expected type after 'type t ='.");
 				}
@@ -259,7 +185,7 @@ void Parser::parseTypeDecl() {
 				error("expected type after 'type t'.");
 			}
 		} else {
-			error("expected identifier after 'type'.");
+			error("expected simple type after 'type'.");
 		}
 	} else {
 		error("expected 'type'.");
@@ -335,34 +261,10 @@ Expr* Parser::parseExpr() {
 	 * expr			→	typedexpr
 	 * 				|	typedexpr0, …, typedexprn	(statements, n ≥ 2)
 	 */
-
-	// Start a new indentation block.
-	IndentLevel level{token, lexer};
-	if(auto expr = parseTypedExpr()) {
-		if(token == Token::EndOfStmt) {
-			auto list = build<ExprList>(expr);
-			auto p = list;
-			while (token == Token::EndOfStmt) {
-				eat();
-				if((expr = parseTypedExpr())) {
-					p->next = build<ExprList>(expr);
-					p = p->next;
-				} else {
-					return (Expr*)error("Expected an expression.");
-				}
-			}
-
-			level.end();
-			if(token == Token::EndOfBlock) eat();
-			return build<MultiExpr>(list);
-		} else {
-			level.end();
-			if(token == Token::EndOfBlock) eat();
-			return expr;
-		}
-	} else {
-		return (Expr*)error("Expected an expression.");
-	}
+	auto list = withLevel([=] {return sepBy1([=] {return parseTypedExpr();}, Token::EndOfStmt);});
+	if(!list) return error("Expected an expression");
+	else if(!list->next) return list->item;
+	else return build<MultiExpr>(list);
 }
 
 Expr* Parser::parseTypedExpr() {
@@ -407,24 +309,24 @@ Expr* Parser::parseInfixExpr() {
 		} else if(token == Token::opDollar) {
 			eat();
 			if(auto value = parseInfixExpr()) {
-				return build<AppExpr>(lhs, build<ExprList>(value));
+				return build<AppExpr>(lhs, list(value));
 			} else {
 				error("Expected a right-hand side for a binary operator.");
 				return nullptr;
 			}
-		} else if(auto op = tryParse(&Parser::parseQop)) {
+		} else if(auto op = tryParse([=] {return parseQop();})) {
 			// Binary operator.
 			if(auto rhs = parseInfixExpr()) {
 				return build<InfixExpr>(op(), lhs, rhs);
 			} else {
-				return (Expr*)error("Expected a right-hand side for a binary operator.");
+				return error("Expected a right-hand side for a binary operator.");
 			}
 		} else {
 			// Single expression.
 			return lhs;
 		}
 	} else {
-		return (Expr*)error("Expected an expression.");
+		return error("Expected an expression.");
 	}
 }
 
@@ -441,7 +343,7 @@ Expr* Parser::parsePrefixExpr() {
 		if(auto expr = parseLeftExpr()) {
 			return build<PrefixExpr>(op, expr);
 		} else {
-			return (Expr*)error("Expected expression after a prefix operator.");
+			return error("Expected expression after a prefix operator.");
 		}
 	} else {
 		return parseLeftExpr();
@@ -477,7 +379,7 @@ Expr* Parser::parseLeftExpr() {
 				eat();
 				if(auto then = parseExpr()) {
 					// else is optional.
-					return build<IfExpr>(cond, then, tryParse(&Parser::parseElse));
+					return build<IfExpr>(cond, then, tryParse([=] {return parseElse();}));
 				}
 			} else {
 				error("Expected 'then' after if-expression.");
@@ -488,7 +390,7 @@ Expr* Parser::parseLeftExpr() {
 	} else if(token == Token::kwWhile) {
 		eat();
 		if(auto cond = parseInfixExpr()) {
-			if(token == Token::kwDo) {
+			if(token == Token::opArrowR) {
 				eat();
 				if(auto loop = parseExpr()) {
 					return build<WhileExpr>(cond, loop);
@@ -519,16 +421,7 @@ Expr* Parser::parseCallExpr() {
 	 */
 	if(auto callee = parseAppExpr()) {
 		// Parse any arguments applied to the callee.
-		if(auto app = tryParse(&Parser::parseAppExpr)) {
-			auto list = build<ExprList>(app);
-			auto p = list;
-
-			while((app = tryParse(&Parser::parseAppExpr))) {
-				auto l = build<ExprList>(app);
-				p->next = l;
-				p = l;
-			}
-
+		if(auto list = many([=] {return parseAppExpr();})) {
 			// Special case for construction; see above.
 			if(callee->type == Expr::Construct) {
 				((ConstructExpr*)callee)->args = list;
@@ -540,7 +433,7 @@ Expr* Parser::parseCallExpr() {
 			return callee;
 		}
 	} else {
-		return (Expr*)error("Expected an expression.");
+		return error("Expected an expression.");
 	}
 }
 
@@ -576,26 +469,7 @@ Expr* Parser::parseCaseExpr() {
 		if(auto exp = parseTypedExpr()) {
 			if(token == Token::kwOf) {
 				eat();
-				IndentLevel level{token, lexer};
-				AltList* alts = nullptr;
-				if(auto a = parseAlt()) {
-					alts = build<AltList>(a());
-					auto p = alts;
-					while(token == Token::EndOfStmt) {
-						eat();
-						a = parseAlt();
-						if(!a) {
-							error("expected case alternative");
-							return nullptr;
-						}
-						p->next = build<AltList>(a());
-						p = p->next;
-					}
-				}
-
-				if(token == Token::EndOfBlock) eat();
-				level.end();
-
+				auto alts = withLevel([=] {return sepBy1([=] {return parseAlt();}, Token::EndOfStmt);});
 				return build<CaseExpr>(exp, alts);
 			} else {
 				error("Expected 'of' after case-expression.");
@@ -628,10 +502,10 @@ Expr* Parser::parseBaseExpr() {
 				// Parenthesized expressions have a separate type to preserve ordering constraints.
 				return build<NestedExpr>(exp);
 			} else {
-				return (Expr*)error("Expected ')' after '(' and an expression.");
+				return error("Expected ')' after '(' and an expression.");
 			}
 		} else {
-			return (Expr*)error("Expected expression after '('.");
+			return error("Expected expression after '('.");
 		}
 	} else if(token == Token::BraceL) {
 		return parseTupleConstruct();
@@ -639,10 +513,10 @@ Expr* Parser::parseBaseExpr() {
 		auto name = token.data.id;
 		eat();
 		return build<ConstructExpr>(build<Type>(Type::Con, name), nullptr);
-	} else if(auto var = tryParse(&Parser::parseVar)) {
+	} else if(auto var = tryParse([=] {return parseVar();} )) {
 		return build<VarExpr>(var());
 	} else {
-		return (Expr*)error("Expected an expression.");
+		return error("Expected an expression.");
 	}
 }
 
@@ -675,7 +549,7 @@ Expr* Parser::parseStringLiteral() {
 				return nullptr;
 
 			if(token != Token::EndOfFormat)
-				return (Expr*)error("Expected end of string format after this expression.");
+				return error("Expected end of string format after this expression.");
 
 			eat();
 			ASSERT(token == Token::String);
@@ -692,35 +566,10 @@ Expr* Parser::parseStringLiteral() {
 
 Expr* Parser::parseVarDecl(bool constant) {
 	// Parse one or more declarations, separated as statements.
-	IndentLevel level(token, lexer);
-
-	if(auto expr = parseDeclExpr(constant)) {
-		if(token == Token::EndOfStmt) {
-			auto list = build<ExprList>(expr);
-			auto p = list;
-			while(token == Token::EndOfStmt) {
-				eat();
-				if((expr = parseDeclExpr(constant))) {
-					p->next = build<ExprList>(expr);
-					p = p->next;
-				} else {
-					error("Expected declaration after 'var' or 'let'.");
-					return nullptr;
-				}
-			}
-
-			level.end();
-			if(token == Token::EndOfBlock) eat();
-			return build<MultiExpr>(list);
-		} else {
-			level.end();
-			if(token == Token::EndOfBlock) eat();
-			return expr;
-		}
-	} else {
-		error("Expected declaration after 'var' or 'let'.");
-		return nullptr;
-	}
+	auto list = withLevel([=] {return sepBy1([=] {return parseDeclExpr(constant);}, Token::EndOfStmt);});
+	if(!list) return error("Expected declaration after 'var' or 'let'");
+	else if(!list->next) return list->item;
+	else return build<MultiExpr>(list);
 }
 
 Expr* Parser::parseDeclExpr(bool constant) {
@@ -882,7 +731,11 @@ Type* Parser::parseType() {
 	} else if(token == Token::ConID) {
 		auto id = token.data.id;
 		eat();
-		return build<Type>(Type::Con, id);
+		auto ty = build<Type>(Type::Con, id);
+		
+		// Parse zero or more type applications.
+		if(auto list = many([=] {return parseType();})) return build<AppType>(ty, list);
+		else return ty;
 	} else if(token == Token::VarID) {
 		auto id = token.data.id;
 		eat();
@@ -897,7 +750,14 @@ Type* Parser::parseType() {
 		} else {
 			return tup;
 		}
-    }
+	} else if(token == Token::ParenL) {
+		eat();
+		auto t = parseType();
+		if(token == Token::ParenR) eat();
+		else error("expected ')'");
+		
+		return t;
+	}
 
 	error("Expected a type.");
 	return nullptr;
@@ -932,82 +792,25 @@ Type* Parser::parseTupleType() {
     /*
      * tuptype  →   { tupfield1, ..., tupfieldn }       (n ≥ 0)
      */
+	auto type = between([=] {
+		auto l = sepBy([=] {return parseTupleField();}, Token::Comma);
+		if(l) return (Type*)build<TupleType>(l);
+		else return build<Type>(Type::Unit);
+	}, Token::BraceL, Token::BraceR);
 
-	if(token == Token::BraceL) {
-		eat();
-
-		// Check for empty tuple.
-		if(token == Token::BraceR) {
-			eat();
-			return build<Type>(Type::Unit);
-		}
-
-        if(auto f = parseTupleField()) {
-            auto list = build<TupleFieldList>(f());
-            auto p = list;
-
-            while(token == Token::Comma) {
-                eat();
-                auto field = parseTupleField();
-                if(!field) return nullptr;
-
-                p->next = build<TupleFieldList>(field());
-                p = p->next;
-            }
-
-            if(token == Token::BraceR) {
-                eat();
-                return build<TupleType>(list);
-            } else {
-                error("Expected '}");
-            }
-        } else {
-            error("Expected one or more tuple fields");
-        }
-	} else {
-		error("Expected '{'");
-	}
-
-	return nullptr;
+	if(type) return type;
+	else return (Type*)error("Expected one or more tuple fields");
 }
 
 Expr* Parser::parseTupleConstruct() {
-	if(token == Token::BraceL) {
-		eat();
+	auto expr = between([=] {
+		auto l = sepBy([=] {return parseTupleConstructField();}, Token::Comma);
+		if(l) return (Expr*)build<TupleConstructExpr>(nullptr, l);
+		else return build<Expr>(Expr::Unit);
+	}, Token::BraceL, Token::BraceR);
 
-		// Check for empty tuple.
-		if(token == Token::BraceR) {
-			eat();
-			return build<Expr>(Expr::Unit);
-		}
-
-		if(auto f = parseTupleConstructField()) {
-			auto list = build<TupleFieldList>(f());
-			auto p = list;
-
-			while(token == Token::Comma) {
-				eat();
-				auto field = parseTupleConstructField();
-				if(!field) return nullptr;
-
-				p->next = build<TupleFieldList>(field());
-				p = p->next;
-			}
-
-			if(token == Token::BraceR) {
-				eat();
-				return build<TupleConstructExpr>(nullptr, list);
-			} else {
-				error("Expected '}");
-			}
-		} else {
-			error("Expected one or more tuple fields");
-		}
-	} else {
-		error("Expected '{'");
-	}
-
-	return nullptr;
+	if(expr) return expr;
+	else return error("Expected one or more tuple fields");
 }
 
 Maybe<TupleField> Parser::parseTupleField() {
@@ -1136,17 +939,7 @@ Constr* Parser::parseConstr() {
 	if(token == Token::ConID) {
 		auto name = token.data.id;
 		eat();
-
-		TypeList* types = nullptr;
-		if(auto t = tryParse(&Parser::parseType)) {
-			types = build<TypeList>(t);
-			auto p = types;
-			while((t = tryParse(&Parser::parseType))) {
-				p->next = build<TypeList>(t);
-				p = p->next;
-			}
-		}
-
+		auto types = many([=] {return parseType();});
 		return build<Constr>(name, types);
 	} else {
 		error("expected constructor name");
@@ -1209,23 +1002,14 @@ Pattern* Parser::parsePattern() {
 		eat();
 
 		// Parse a pattern for each constructor element.
-		PatList* list = nullptr;
-		if(auto pat = tryParse(&Parser::parseLeftPattern)) {
-			list = build<PatList>(pat);
-			auto l = list;
-			while((pat = tryParse(&Parser::parseLeftPattern))) {
-				l->next = build<PatList>(pat);
-				l = l->next;
-			}
-		}
-
+		auto list = many([=] {return parseLeftPattern();});
 		return build<ConPattern>(id, list);
 	} else {
 		return parseLeftPattern();
 	}
 }
 
-nullptr_t Parser::error(const char* text) {
+Expr* Parser::error(const char* text) {
 	Core::LogError(text);
 	return nullptr;
 }
