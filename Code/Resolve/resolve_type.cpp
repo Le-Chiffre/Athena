@@ -6,7 +6,7 @@ namespace resolve {
 
 TypeRef Resolver::resolveAlias(Scope& scope, AliasType* type) {
 	ASSERT(type->astDecl);
-	auto target = resolveType(scope, type->astDecl->target);
+	auto target = resolveTypeDef(scope, *type->astDecl->type, type->astDecl->target);
 	type->astDecl = nullptr;
 	return target;
 }
@@ -14,28 +14,24 @@ TypeRef Resolver::resolveAlias(Scope& scope, AliasType* type) {
 TypeRef Resolver::resolveVariant(Scope& scope, VarType* type) {
 	// Resolve each declared constructor.
 	for(auto& c : type->list) {
-		auto t = c->astDecl;
-		while(t) {
-			c->contents += resolveType(scope, t->item);
-			t = t->next;
-		}
+		ast::walk(c->astDecl, [&](auto i) {
+			c->contents += this->resolveTypeDef(scope, *type->astDecl->type, i);
+		});
 		c->astDecl = nullptr;
 	}
 	type->astDecl = nullptr;
 	return type;
 }
 
-TypeRef Resolver::resolveTuple(Scope& scope, ast::TupleType& type) {
+TypeRef Resolver::resolveTuple(Scope& scope, ast::SimpleType& tscope, ast::TupleType& type) {
 	// Generate a hash for the fields.
 	Core::Hasher h;
-	auto f = type.fields;
-	while(f) {
-		auto t = resolveType(scope, f->item.type);
+	ast::walk(type.fields, [&](auto i) {
+		auto t = this->resolveTypeDef(scope, tscope, i.type);
 		h.Add(t);
-		// Include the name to ensure that tuples with the same memory layout are not exactly the same.
-		if(f->item.name) h.Add(f->item.name());
-		f = f->next;
-	}
+		// Include the name to ensure that different tuples with the same memory layout are not exactly the same.
+		if(i.name) h.Add(i.name());
+	});
 
 	// Check if this kind of tuple has been used already.
 	TupleType* result = nullptr;
@@ -43,27 +39,64 @@ TypeRef Resolver::resolveTuple(Scope& scope, ast::TupleType& type) {
 		// Otherwise, create the type.
 		new (result) TupleType;
 		uint i = 0;
-		f = type.fields;
-		while(f) {
-			auto t = resolveType(scope, f->item.type);
-			result->fields += Field{f->item.name ? f->item.name() : 0, i, t, result, nullptr, true};
-			f = f->next;
+		bool resolved = true;
+		ast::walk(type.fields, [&](auto it) {
+			auto t = this->resolveTypeDef(scope, tscope, it.type);
+			if(!t->resolved) resolved = false;
+			result->fields += Field{it.name ? it.name() : 0, i, t, result, nullptr, true};
 			i++;
-		}
+		});
+
+		result->resolved = resolved;
 	}
 
 	return result;
 }
-	
-TypeRef Resolver::resolveType(ScopeRef scope, ast::TypeRef type, bool constructor) {
+
+inline Maybe<uint> getGenIndex(ast::SimpleType& type, Id name) {
+	auto t = type.kind;
+	uint i = 0;
+	while(t) {
+		if(t->item == name) return i;
+		i++;
+		t = t->next;
+	}
+
+	return Nothing;
+}
+
+TypeRef Resolver::resolveType(ScopeRef scope, ast::SimpleType& tscope, ast::TypeRef type, bool constructor) {
 	// Check if this is a primitive type.
 	if(type->kind == ast::Type::Unit) {
 		return types.getUnit();
 	} else if(type->kind == ast::Type::Ptr) {
 		ast::Type t{ast::Type::Con, type->con};
-		return types.getPtr(resolveType(scope, &t));
+		return types.getPtr(resolveType(scope, tscope, &t));
 	} else if(type->kind == ast::Type::Tup) {
-		return resolveTuple(scope, *(ast::TupleType*)type);
+		return resolveTuple(scope, tscope, *(ast::TupleType*)type);
+	} else if(type->kind == ast::Type::Gen) {
+		auto i = getGenIndex(tscope, type->con);
+		if(i) {
+			auto g = build<GenType>(i());
+			g->resolved = false;
+			return g;
+		} else {
+			error("undefined generic type");
+			return types.getUnknown();
+		}
+	} else if(type->kind == ast::Type::App) {
+		// Find the base type and instantiate it for these arguments.
+		auto base = resolveType(scope, tscope, ((ast::AppType*)type)->base, constructor);
+		if(base->isGeneric()) {
+			auto t = build<AppType>(((GenType*)base)->index);
+			auto a = ((ast::AppType*)type)->apps;
+			while(a) {
+				t->apps += resolveType(scope, tscope, type, constructor);
+				a = a->next;
+			}
+		} else {
+			return instantiateType(scope, base, ((ast::AppType*)type)->apps);
+		}
 	} else {
 		// Check if this type has been defined in this scope.
 		if(constructor) {
@@ -89,6 +122,54 @@ TypeRef Resolver::resolveType(ScopeRef scope, ast::TypeRef type, bool constructo
 		}
 
 		return types.getUnknown();
+	}
+}
+
+TypeRef Resolver::resolveTypeDef(ScopeRef scope, ast::SimpleType& tscope, ast::TypeRef type) {
+	// Check if this is a primitive type.
+	if(type->kind == ast::Type::Unit) {
+		return types.getUnit();
+	} else if(type->kind == ast::Type::Ptr) {
+		ast::Type t{ast::Type::Con, type->con};
+		return types.getPtr(resolveTypeDef(scope, tscope, &t));
+	} else if(type->kind == ast::Type::Tup) {
+		return resolveTuple(scope, tscope, *(ast::TupleType*)type);
+	} else if(type->kind == ast::Type::Gen) {
+		auto i = getGenIndex(tscope, type->con);
+		if(i) {
+			auto g = build<GenType>(i());
+			g->resolved = false;
+			return g;
+		} else {
+			error("undefined generic type");
+			return types.getUnknown();
+		}
+	} else if(type->kind == ast::Type::App) {
+		// Find the base type and instantiate it for these arguments.
+		auto base = resolveTypeDef(scope, tscope, ((ast::AppType*)type)->base);
+		if(base->isGeneric()) {
+			auto t = build<AppType>(((GenType*)base)->index);
+			auto a = ((ast::AppType*)type)->apps;
+			while(a) {
+				t->apps += resolveTypeDef(scope, tscope, type);
+				a = a->next;
+			}
+		} else {
+			return instantiateType(scope, base, ((ast::AppType*)type)->apps);
+		}
+	} else {
+		if (auto t = scope.findType(type->con)) return t;
+		// Check if this is a primitive type.
+		if (auto t = types.primMap.Get(type->con)) return *t;
+
+		return types.getUnknown();
+	}
+}
+
+TypeRef Resolver::instantiateType(ScopeRef scope, TypeRef base, ast::TypeList* apps) {
+	bool resolved = true;
+	while(apps) {
+
 	}
 }
 

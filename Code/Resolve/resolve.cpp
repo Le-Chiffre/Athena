@@ -45,7 +45,7 @@ Module* Resolver::resolve() {
 			// Type names have to be unique - give an error and ignore any repeated definitions.
 			Id name;
 			if(decl->kind == ast::Decl::Type) {
-				name = ((ast::TypeDecl*)decl)->name;
+				name = ((ast::TypeDecl*)decl)->type->name;
 			} else {
 				ASSERT(decl->kind == ast::Decl::Data);
 				name = ((ast::DataDecl*)decl)->type->name;

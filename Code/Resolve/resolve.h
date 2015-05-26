@@ -14,6 +14,7 @@ typedef Core::NumberMap<PrimitiveOp, Id> PrimOpMap;
 
 struct TypeManager {
     TypeManager() {
+		unknownType.resolved = false;
         for(uint i=0; i<(uint)PrimitiveType::TypeCount; i++) {
             prims += PrimType{(PrimitiveType)i};
         }
@@ -34,16 +35,20 @@ struct TypeManager {
 
     TypeRef getArray(TypeRef content) {
         ArrayType* type;
-        if(!arrays.AddGet(content, type))
-            new (type) ArrayType{content};
+        if(!arrays.AddGet(content, type)) {
+			new(type) ArrayType{content};
+			type->resolved = content->resolved;
+		}
 
         return type;
     }
 
 	TypeRef getPtr(TypeRef content) {
 		PtrType* type;
-		if(!ptrs.AddGet(content, type))
-			new (type) PtrType{content};
+		if(!ptrs.AddGet(content, type)) {
+			new(type) PtrType{content};
+			type->resolved = content->resolved;
+		}
 
 		return type;
 	}
@@ -54,8 +59,10 @@ struct TypeManager {
 
 	TypeRef getLV(TypeRef t) {
 		LVType* type;
-		if(!lvalues.AddGet(t, type))
-			new (type) LVType(t);
+		if(!lvalues.AddGet(t, type)) {
+			new(type) LVType(t);
+			type->resolved = t->resolved;
+		}
 
 		return type;
 	}
@@ -105,7 +112,7 @@ struct Resolver {
 	Expr* resolveCase(Scope& scope, ast::CaseExpr& expr);
 
 	TypeRef resolveAlias(Scope& scope, AliasType* type);
-	TypeRef resolveTuple(Scope& scope, ast::TupleType& type);
+	TypeRef resolveTuple(Scope& scope, ast::SimpleType& tscope, ast::TupleType& type);
 	TypeRef resolveVariant(Scope& scope, VarType* type);
 	ExprList* resolveExpressions(Scope& scope, ast::ExprList* list);
 	Expr* resolvePattern(Scope& scope, ExprRef pivot, ast::Pattern& pat);
@@ -126,7 +133,11 @@ struct Resolver {
 
 	/// Retrieves or creates a concrete type.
 	/// @param constructor If set, the provided type is interpreted as a constructor instead of a type.
-	TypeRef resolveType(ScopeRef scope, ast::TypeRef type, bool constructor = false);
+	TypeRef resolveType(ScopeRef scope, ast::SimpleType& tscope, ast::TypeRef type, bool constructor = false);
+	TypeRef resolveTypeDef(ScopeRef scope, ast::SimpleType& tscope, ast::TypeRef type);
+
+	/// Instantiates a generic type.
+	TypeRef instantiateType(ScopeRef scope, TypeRef base, ast::TypeList* apps);
 
 	TypeRef getBinaryOpType(PrimitiveOp, PrimitiveType, PrimitiveType);
 	TypeRef getPtrOpType(PrimitiveOp, PtrType*, PrimitiveType);
