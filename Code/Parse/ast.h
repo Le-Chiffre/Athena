@@ -20,17 +20,6 @@ struct ASTList
 	ASTList() {}
 	ASTList(const T& i) : item(i) {}
 	ASTList(const T& i, ASTList<T>* n) : item(i), next(n) {}
-
-	struct It {
-		const ASTList<T>* curr;
-		It operator ++ () {curr = curr->next; return *this;}
-		bool hasNext() const {return curr->next != nullptr;}
-		const T& operator * () const {return curr->item;}
-		bool operator != (const It& i) const {return curr != i.curr;}
-	};
-
-	It begin() const {return {this};}
-	It end() const {return {nullptr};}
 };
 
 template<class T>
@@ -41,22 +30,6 @@ struct ASTList<T*>
 
 	ASTList(T* i) : item(i) {}
 	ASTList(T* i, ASTList<T*>* n) : next(n), item(i) {}
-
-	struct It {
-		const ASTList<T*>* curr;
-		It operator ++ () {curr = curr->next; return *this;}
-		bool hasNext() const {return curr->next != nullptr;}
-		const T& operator * () const {return *curr->item;}
-		bool operator != (const It& i) const {return curr != i.curr;}
-	};
-
-	It begin() const {return {this};}
-	It end() const {return {nullptr};}
-
-	uint_ptr count() {
-		if(next) return 1 + next->count();
-		else return 1;
-	}
 };
 
 template<class T, class F>
@@ -69,7 +42,7 @@ void walk(ASTList<T>* l, F&& f) {
 
 template<class T>
 uint count(const ASTList<T>* l) {
-	if(l) return 0;
+	if(!l) return 0;
 	else return 1 + count(l->next);
 }
 

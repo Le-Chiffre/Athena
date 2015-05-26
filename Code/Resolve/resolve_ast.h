@@ -231,6 +231,8 @@ struct Type {
 		Array,
 		Map,
 		Lvalue,
+		Gen,
+		App,
 
 		// These are often checked for together, so we let them share a single bit.
 		Prim = 0x10,
@@ -238,6 +240,10 @@ struct Type {
 
 		// When adding new types, make sure no other types have bit 4 set.
 	} kind;
+
+	// If set, this type is completely resolved and contains only concrete data.
+	// If not, it still contains generic data.
+	bool resolved = true;
 
 	bool isPointer() const {return kind == Ptr;}
     bool isPrimitive() const {return kind == Prim;}
@@ -250,6 +256,8 @@ struct Type {
 	bool isBool() const;
 	bool isLvalue() const {return kind == Lvalue;}
 	bool isVariant() const {return kind == Var;}
+	bool isGeneric() const {return kind == Gen;}
+	bool isApplication() const {return kind == App;}
 
 	Type(Kind kind) : kind(kind) {}
 };
@@ -311,9 +319,10 @@ struct TupleType : Type {
 typedef Core::Array<VarConstructor*> VarConstructorList;
 
 struct VarType : Type {
-	VarType(Id name, ast::DataDecl* astDecl) : Type(Var), name(name), astDecl(astDecl) {}
-	Id name;
+	VarType(Id name, ast::DataDecl* astDecl) : Type(Var), astDecl(astDecl), name(name) {}
 	ast::DataDecl* astDecl;
+	Id name;
+	uint generics = ast::count(astDecl->type->kind);
 	VarConstructorList list;
 	uint8 selectorBits = 0;
 	bool isEnum = false;
@@ -330,12 +339,22 @@ struct MapType : Type {
 	TypeRef to;
 };
 
-// This type is just a placeholder. It is put in place of alias declarations while type names are still being resolved.
-// When all names exist, the aliases are replaced with their target types.
+struct GenType : Type {
+	GenType(uint index) : Type(Gen), index(index) {}
+	uint index;
+};
+
+struct AppType : Type {
+	AppType(uint baseIndex) : Type(App), baseIndex(baseIndex) {resolved = false;}
+	uint baseIndex;
+	TypeList apps;
+};
+
 struct AliasType : Type {
-    AliasType(Id name, ast::TypeDecl* astDecl) : Type(Alias), name(name), astDecl(astDecl) {}
-	Id name;
+    AliasType(Id name, ast::TypeDecl* astDecl) : Type(Alias), astDecl(astDecl), name(name) {}
 	ast::TypeDecl* astDecl;
+	Id name;
+	uint generics = ast::count(astDecl->type->kind);
 };
 
 /// Operations that can be applied to primitive types.
