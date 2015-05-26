@@ -296,7 +296,7 @@ private:
 
 	void toString(const TypeDecl& e) {
 		string += "TypeDecl ";
-		auto name = context.Find(e.name).name;
+		auto name = context.Find(e.type->name).name;
 		string.Append(name.ptr, name.length);
 		string += " = ";
 		toString(e.target);
@@ -395,6 +395,9 @@ private:
 			string += "tuple";
 		} else if(type->kind == Type::Fun) {
 			string += "fun";
+		} else if(type->kind == Type::App) {
+			string += "app ";
+			toString(((AppType*)type)->base);
 		} else {
 			if(type->kind == Type::Ptr)
 				string += Parser::kPointerSigil;

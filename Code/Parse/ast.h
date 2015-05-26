@@ -59,6 +59,20 @@ struct ASTList<T*>
 	}
 };
 
+template<class T, class F>
+void walk(ASTList<T>* l, F&& f) {
+	while(l) {
+		f(l->item);
+		l = l->next;
+	}
+}
+
+template<class T>
+uint count(const ASTList<T>* l) {
+	if(l) return 0;
+	else return 1 + count(l->next);
+}
+
 enum class ForeignConvention {
 	CCall,
 	Stdcall,
@@ -107,6 +121,7 @@ struct Type {
         Gen,  // A generic or polymorphic named type.
         Tup,  // A tuple type with optionally named fields.
 		Fun,  // A function type.
+		App   // Application of higher-kinded type.
 	} kind;
 	Id con = 0;
 
@@ -125,6 +140,7 @@ struct TupleField {
 };
 
 typedef ASTList<TupleField> TupleFieldList;
+typedef ASTList<Type*> TypeList;
 
 struct TupleType : Type {
     TupleType(TupleFieldList* fields) : Type(Tup), fields(fields) {}
@@ -135,6 +151,12 @@ struct FunType : Type {
 	FunType(TupleFieldList* params, TypeRef ret) : Type(Fun), params(params), returnType(ret) {}
 	TupleFieldList* params;
 	TypeRef returnType;
+};
+
+struct AppType : Type {
+	AppType(TypeRef base, TypeList* apps) : Type(App), base(base), apps(apps) {}
+	TypeRef base;
+	TypeList* apps;
 };
 
 struct Expr {
@@ -360,8 +382,8 @@ struct FunDecl : Decl {
 };
 
 struct TypeDecl : Decl {
-	TypeDecl(Id name, TypeRef target) : Decl(Type), name(name), target(target) {}
-	Id name;
+	TypeDecl(SimpleType* type, TypeRef target) : Decl(Type), type(type), target(target) {}
+	SimpleType* type;
 	TypeRef target;
 };
 
@@ -386,16 +408,13 @@ struct Field {
 	bool constant;
 };
 
-typedef ASTList<const Type*> TypeList;
-
 struct Constr {
 	Constr(Id name, TypeList* types) : name(name), types(types) {}
 	Id name;
 	TypeList* types;
 };
 
-typedef ASTList<const Constr*> ConstrList;
-typedef ASTList<const Field*> FieldList;
+typedef ASTList<Constr*> ConstrList;
 
 struct DataDecl : Decl {
 	DataDecl(SimpleType* type, ConstrList* constrs) : Decl(Data), constrs(constrs), type(type) {}
