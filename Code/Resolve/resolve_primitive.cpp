@@ -97,7 +97,7 @@ Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, resolve::ExprRe
 	if(lhs.type->isPointer()) {
 		auto lt = (PtrType*)lhs.type;
 		if(rhs.type->isPointer()) {
-			auto rt = (PtrType*)lhs.type;
+			auto rt = (PtrType*)rhs.type;
 			if(auto type = getPtrOpType(op, lt, rt)) {
 				auto list = build<ExprList>(&lhs, build<ExprList>(&rhs));
 				return build<AppPExpr>(op, list, type);

@@ -25,7 +25,7 @@ bool TypeCheck::implicitCoerce(TypeRef src, TypeRef dst, Maybe<Diagnostics*> dia
 	if(src->isPrimitive() && dst->isPrimitive()) {
 		auto s = ((PrimType*)src)->type;
 		auto d = ((PrimType*)dst)->type;
-		if(category(s) == category(d) && d >= s) {
+		if(category(s) == category(d) && d <= s) {
 			return true;
 		} else {
 			error(diag, "a primitive type can only be implicitly converted to a larger type");

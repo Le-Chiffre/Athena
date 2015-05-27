@@ -45,12 +45,17 @@ bool Resolver::resolveFunction(Scope& scope, Function& fun) {
     if(decl.ret) {
         fun.type = resolveType(scope, decl.ret);
     }
+
+    auto expr = resolveExpression(fun.scope, decl.body);
+    if(fun.type) {
+        expr = implicitCoerce(*expr, fun.type);
+    }
 	
 	// When the function parameters have been resolved, it is finished enough to be called.
 	// This must be done before resolving the expression to support recursive functions.
 	fun.astDecl = nullptr;
 	fun.name = mangler.mangleId(&fun);
-    fun.expression = createRet(*resolveExpression(fun.scope, decl.body));
+    fun.expression = createRet(*expr);
 
     // If no type was defined or inferred before, we simply take the type of the last expression.
     if(!fun.type) {
