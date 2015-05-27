@@ -33,6 +33,8 @@ Expr* Resolver::resolveExpression(Scope& scope, ast::ExprRef expr) {
 			return resolveVar(scope, ((ast::VarExpr*)expr)->name);
 		case ast::Expr::If:
 			return resolveIf(scope, *(ast::IfExpr*)expr);
+		case ast::Expr::MultiIf:
+			return resolveMultiIf(scope, *(ast::MultiIfExpr*)expr);
 		case ast::Expr::Decl:
 			return resolveDecl(scope, *(ast::DeclExpr*)expr);
 		case ast::Expr::Assign:
@@ -212,6 +214,32 @@ Expr* Resolver::resolveIf(Scope& scope, ast::IfExpr& expr) {
 	}
 
 	return build<IfExpr>(cond, then, otherwise, type, useResult);
+}
+
+Expr* Resolver::resolveMultiIf(Scope& scope, ast::MultiIfExpr& expr) {
+	// Create a chain of ifs.
+	if(expr.cases) {
+		auto cases = expr.cases;
+		IfExpr* list = build<IfExpr>(*resolveExpression(scope, cases->item.cond), *resolveExpression(scope, cases->item.then));
+		IfExpr* current = list;
+		cases = cases->next;
+		while(cases) {
+			auto cond = resolveExpression(scope, cases->item.cond);
+			if(alwaysTrue(*cond)) {
+				current->otherwise = resolveExpression(scope, cases->item.then);
+				break;
+			} else {
+				current->otherwise = build<IfExpr>(*cond, *resolveExpression(scope, cases->item.then));
+				current = (IfExpr*)current->otherwise;
+			}
+
+			cases = cases->next;
+		}
+
+		return list;
+	}
+
+	return nullptr;
 }
 
 Expr* Resolver::resolveDecl(Scope& scope, ast::DeclExpr& expr) {

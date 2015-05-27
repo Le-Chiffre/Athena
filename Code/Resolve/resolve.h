@@ -101,6 +101,7 @@ struct Resolver {
 	Expr* resolveCall(Scope& scope, ast::AppExpr& expr);
     Expr* resolveVar(Scope& scope, Id var);
     Expr* resolveIf(Scope& scope, ast::IfExpr& expr);
+	Expr* resolveMultiIf(Scope& scope, ast::MultiIfExpr& expr);
 	Expr* resolveDecl(Scope& scope, ast::DeclExpr& expr);
 	Expr* resolveAssign(Scope& scope, ast::AssignExpr& expr);
 	Expr* resolveWhile(Scope& scope, ast::WhileExpr& expr);
