@@ -50,13 +50,7 @@ bool Resolver::resolveFunction(Scope& scope, Function& fun) {
 	// This must be done before resolving the expression to support recursive functions.
 	fun.astDecl = nullptr;
 	fun.name = mangler.mangleId(&fun);
-	
-	// For multi-expressions, we return the last expression in the list.
-	if(decl.body->type == ast::Expr::Multi) {
-		fun.expression = resolveMultiWithRet(fun.scope, *(ast::MultiExpr*)decl.body);
-	} else {
-		fun.expression = createRet(*resolveExpression(fun.scope, decl.body));
-	}
+    fun.expression = createRet(*resolveExpression(fun.scope, decl.body));
 
     // If no type was defined or inferred before, we simply take the type of the last expression.
     if(!fun.type) {

@@ -175,12 +175,9 @@ Value* Generator::genStore(resolve::StoreExpr& expr) {
 }
 
 Value* Generator::genMulti(resolve::MultiExpr& expr) {
-	auto e = &expr;
 	Value* v = nullptr;
-	while(e) {
-		v = genExpr(*e->expr);
-		e = e->next;
-	}
+	for(auto i : expr.es)
+		v = genExpr(*i);
 	return v;
 }
 	
@@ -388,7 +385,7 @@ Value* Generator::genIf(resolve::IfExpr& ife) {
 	// Don't restore the previous one, as the next expression needs to be put in the continuation block.
 	auto function = getFunction();
 	auto thenBlock = BasicBlock::Create(context, "then", function);
-	auto elseBlock = ife.otherwise ? BasicBlock::Create(context, "else", function) : nullptr;
+	BasicBlock* elseBlock = ife.otherwise ? BasicBlock::Create(context, "else", function) : nullptr;
 	auto contBlock = BasicBlock::Create(context, "cont", function);
 
 	// Create condition.

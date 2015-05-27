@@ -100,16 +100,11 @@ Module* Resolver::resolve() {
 		if(t->kind == Type::Alias) {
 			// Alias types are completely replaced by their contents, since they are equivalent.
             auto a = (AliasType*)t;
-            if(a->astDecl) {
-                t = resolveAlias(*module, a);
-            }
+            if(a->astDecl) t = resolveAlias(*module, a);
         } else if(t->kind == Type::Var) {
-            auto a = (VarType*)t;
-
 			// This is valid, since variants have at least one constructor.
-            if(a->astDecl) {
-                resolveVariant(*module, a);
-            }
+			auto a = (VarType*)t;
+            if(a->astDecl) resolveVariant(*module, a);
         }
 	});
 
@@ -153,9 +148,8 @@ Expr* Resolver::implicitLoad(ExprRef target) {
 Expr* Resolver::implicitCoerce(ExprRef src, TypeRef dst) {
 	if(src.type == dst) return (Expr*)&src;
 
-	if(src.isLiteral()) {
+	if(src.isLiteral())
 		return literalCoerce(((LitExpr&)src).literal, dst);
-	}
 	
 	if(typeCheck.implicitCoerce(src.type, dst, Nothing)) {
 		// Lvalue to Rvalue conversion is so common that we implement it as a special instruction.

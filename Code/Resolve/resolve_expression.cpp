@@ -59,36 +59,9 @@ Expr* Resolver::resolveExpression(Scope& scope, ast::ExprRef expr) {
 }
 
 Expr* Resolver::resolveMulti(Scope& scope, ast::MultiExpr& expr) {
-	MultiExpr* start = build<MultiExpr>(resolveExpression(scope, expr.exprs->item));
-	auto current = start;
-	auto e = expr.exprs->next;
-	auto type = start->type;
-	while(e) {
-		current->next = build<MultiExpr>(resolveExpression(scope, e->item));
-		current = current->next;
-		type = current->type;
-		e = e->next;
-	}
-	start->type = type;
-	return start;
-}
-	
-Expr* Resolver::resolveMultiWithRet(Scope& scope, ast::MultiExpr& expr) {
-	MultiExpr* start = build<MultiExpr>(resolveExpression(scope, expr.exprs->item));
-	auto current = start;
-	auto e = expr.exprs->next;
-	while(1) {
-		// If this is the last expression, insert a return.
-		if(e->next) {
-			current->next = build<MultiExpr>(resolveExpression(scope, e->item));
-			current = current->next;
-			e = e->next;
-		} else {
-			current->next = build<MultiExpr>(createRet(*resolveExpression(scope, e->item)));
-			start->type = current->next->type;
-			return start;
-		}
-	}
+	Exprs es;
+	ast::walk(expr.exprs, [&](auto i) {es += resolveExpression(scope, i);});
+	return build<MultiExpr>(Core::Move(es));
 }
 	
 Expr* Resolver::resolveLiteral(Scope& scope, ast::Literal& literal) {
@@ -559,10 +532,7 @@ Expr* Resolver::resolvePattern(Scope& scope, ExprRef pivot, ast::Pattern& pat) {
 		case ast::Pattern::Var: {
 			auto var = build<Variable>(((ast::VarPattern&)pat).var, pivot.type, scope, true);
 			scope.variables += var;
-			auto m = build<MultiExpr>(build<AssignExpr>(*var, *getRV(pivot)));
-			m->next = build<MultiExpr>(createTrue());
-			m->type = types.getBool();
-			return m;
+			return build<MultiExpr>(Exprs{build<AssignExpr>(*var, *getRV(pivot)), createTrue()});
 		}
 		case ast::Pattern::Lit:
 			return createCompare(scope, *getRV(pivot), *resolveLiteral(scope, ((ast::LitPattern&)pat).lit));
@@ -629,17 +599,12 @@ ast::InfixExpr& Resolver::reorder(ast::InfixExpr& expr) {
 
 bool Resolver::alwaysTrue(ExprRef expr) {
 	// TODO: Perform constant folding.
-	if(expr.kind == Expr::Multi) {
-		auto e = ((MultiExpr*)&expr);
-		// Find the last expression in the chain.
-		while(e->next) {
-			e = e->next;
-		}
-	}
+	auto e = &expr;
+	if(expr.kind == Expr::Multi) e = ((MultiExpr*)e)->es.Back();
 
-	return expr.kind == Expr::Lit
-		   && ((LitExpr&)expr).literal.type == Literal::Bool
-		   && ((LitExpr&)expr).literal.i == 1;
+	return e->kind == Expr::Lit
+		   && ((LitExpr*)e)->literal.type == Literal::Bool
+		   && ((LitExpr*)e)->literal.i == 1;
 }
 
 }} // namespace athena::resolve

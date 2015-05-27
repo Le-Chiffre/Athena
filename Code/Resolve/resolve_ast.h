@@ -446,11 +446,12 @@ struct Expr {
 	TypeRef type;
 	Expr(Kind k, TypeRef type) : kind(k), type(type) {}
 };
-	
+
+typedef Core::Array<Expr*> Exprs;
+
 struct MultiExpr : Expr {
-	MultiExpr(Expr* expr, MultiExpr* next = nullptr) : Expr(Multi, expr->type), expr(expr), next(next) {}
-	Expr* expr;
-	MultiExpr* next;
+	MultiExpr(Exprs&& es) : Expr(Multi, es.Back()->type), es(Core::Move(es)) {}
+	Exprs es;
 };
 
 struct LitExpr : Expr {
