@@ -10,6 +10,7 @@ inline TypeRef getLiteralType(TypeManager& m, const Literal& l) {
 		case Literal::Float: return m.getFloat();
 		case Literal::Char: return m.getU8();
 		case Literal::String: return m.getString();
+		case Literal::Bool: return m.getBool();
 		default: FatalError("Unknown literal type."); return nullptr;
 	}
 }

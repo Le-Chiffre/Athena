@@ -375,7 +375,7 @@ Expr* Parser::parseLeftExpr() {
 		eat();
 		if(token == Token::opBar) {
 			// Multi-way if (erlang style).
-			auto list = sepBy([=] {
+			auto list = withLevel([=]{ return sepBy([=] {
 				if(token == Token::opBar) eat();
 				else return (IfCase*)error("expected '|'");
 				Expr* cond;
@@ -385,9 +385,12 @@ Expr* Parser::parseLeftExpr() {
 				} else {
 					cond = parseInfixExpr();
 				}
+
+				if(token == Token::opArrowR) eat();
+				else return (IfCase*)error("expected '->'");
 				auto then = parseExpr();
 				return build<IfCase>(cond, then);
-			}, Token::EndOfStmt);
+			}, Token::EndOfStmt);});
 			return build<MultiIfExpr>(list);
 		} else {
 			if(auto cond = parseInfixExpr()) {

@@ -18,6 +18,7 @@ struct Printer {
 			case Expr::Infix: toString((const InfixExpr&)expr); break;
 			case Expr::Prefix: toString((const PrefixExpr&)expr); break;
 			case Expr::If: toString((const IfExpr&)expr); break;
+			case Expr::MultiIf: toString((const MultiIfExpr&)expr); break;
 			case Expr::Decl: toString((const DeclExpr&)expr); break;
 			case Expr::While: toString((const WhileExpr&)expr); break;
 			case Expr::Assign: toString((const AssignExpr&)expr); break;
@@ -169,6 +170,18 @@ private:
 			toString(*e.otherwise, true);
 		} else {
 			toString(*e.then, true);
+		}
+		removeLevel();
+	}
+
+	void toString(const MultiIfExpr& e) {
+		string += "MultiIfExpr ";
+		makeLevel();
+		auto a = e.cases;
+		while(a) {
+			if(a->next) toString(*a->item, false);
+			else toString(*a->item, true);
+			a = a->next;
 		}
 		removeLevel();
 	}
@@ -352,6 +365,15 @@ private:
 			string.Append(name.ptr, name.length);
 			string += '"';
 		}
+	}
+
+	void toString(const IfCase& c, bool last) {
+		toStringIntro(last);
+		string += "IfCase ";
+		makeLevel();
+		toString(*c.cond, false);
+		toString(*c.then, true);
+		removeLevel();
 	}
 
 	void toString(const SimpleType& t) {
