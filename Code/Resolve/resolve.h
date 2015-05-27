@@ -57,6 +57,30 @@ struct TypeManager {
 		return tuples.AddGet(hash, type);
 	}
 
+	TypeRef getTuple(const FieldList& fields) {
+		Core::Hasher h;
+		for(auto& f : fields) {
+			h.Add(f.type);
+			if(f.name) h.Add(f.name);
+		}
+
+		// Check if this kind of tuple has been used already.
+		TupleType* result = nullptr;
+		if(!getTuple(h, result)) {
+			// Otherwise, create the type.
+			new (result) TupleType;
+			bool resolved = true;
+			result->fields.Reserve(fields.Count());
+			for(auto& f : fields) {
+				if(!f.type->resolved) resolved = false;
+				result->fields += f;
+			}
+			result->resolved = resolved;
+		}
+
+		return result;
+	}
+
 	TypeRef getLV(TypeRef t) {
 		LVType* type;
 		if(!lvalues.AddGet(t, type)) {
@@ -101,7 +125,7 @@ struct Resolver {
 	Expr* resolveCall(Scope& scope, ast::AppExpr& expr);
     Expr* resolveVar(Scope& scope, Id var);
     Expr* resolveIf(Scope& scope, ast::IfExpr& expr);
-	Expr* resolveMultiIf(Scope& scope, ast::MultiIfExpr& expr);
+	Expr* resolveMultiIf(Scope& scope, ast::IfCaseList* cases);
 	Expr* resolveDecl(Scope& scope, ast::DeclExpr& expr);
 	Expr* resolveAssign(Scope& scope, ast::AssignExpr& expr);
 	Expr* resolveWhile(Scope& scope, ast::WhileExpr& expr);
@@ -110,9 +134,10 @@ struct Resolver {
 	Expr* resolveConstruct(Scope& scope, ast::ConstructExpr& expr);
 	Expr* resolveAnonConstruct(Scope& scope, ast::TupleConstructExpr& expr);
 	Expr* resolveCase(Scope& scope, ast::CaseExpr& expr);
+	Expr* resolveAlt(Scope& scope, ExprRef pivot, ast::AltList* alt);
 
 	TypeRef resolveAlias(Scope& scope, AliasType* type);
-	TypeRef resolveTuple(Scope& scope, ast::SimpleType& tscope, ast::TupleType& type);
+	TypeRef resolveTuple(Scope& scope, ast::TupleType& type, ast::SimpleType* tscope = nullptr);
 	TypeRef resolveVariant(Scope& scope, VarType* type);
 	ExprList* resolveExpressions(Scope& scope, ast::ExprList* list);
 	Expr* resolvePattern(Scope& scope, ExprRef pivot, ast::Pattern& pat);
@@ -133,11 +158,13 @@ struct Resolver {
 
 	/// Retrieves or creates a concrete type.
 	/// @param constructor If set, the provided type is interpreted as a constructor instead of a type.
-	TypeRef resolveType(ScopeRef scope, ast::SimpleType& tscope, ast::TypeRef type, bool constructor = false);
-	TypeRef resolveTypeDef(ScopeRef scope, ast::SimpleType& tscope, ast::TypeRef type);
+	TypeRef resolveType(ScopeRef scope, ast::TypeRef type, bool constructor = false, ast::SimpleType* tscope = nullptr);
+
+	template<class F>
+	TypeRef mapType(F&& f, TypeRef type);
 
 	/// Instantiates a generic type.
-	TypeRef instantiateType(ScopeRef scope, TypeRef base, ast::TypeList* apps);
+	TypeRef instantiateType(ScopeRef scope, TypeRef base, ast::TypeList* apps, ast::SimpleType* tscope = nullptr);
 
 	TypeRef getBinaryOpType(PrimitiveOp, PrimitiveType, PrimitiveType);
 	TypeRef getPtrOpType(PrimitiveOp, PtrType*, PrimitiveType);
@@ -152,6 +179,9 @@ struct Resolver {
 
 	/// Creates a comparison between two values.
 	Expr* createCompare(Scope& scope, ExprRef left, ExprRef right);
+
+	/// Creates an if-expression.
+	Expr* createIf(ExprRef cond, ExprRef then, const Expr* otherwise);
 
 	/// Makes sure the provided expression is an rvalue.
 	Expr* getRV(ExprRef);

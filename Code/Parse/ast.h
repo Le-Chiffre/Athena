@@ -227,7 +227,7 @@ struct IfCase {
 	ExprRef then;
 };
 
-typedef ASTList<IfCase> IfCaseList;
+typedef ASTList<IfCase*> IfCaseList;
 
 struct MultiIfExpr : Expr {
 	MultiIfExpr(IfCaseList* cases) : Expr(MultiIf), cases(cases) {}

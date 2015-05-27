@@ -34,7 +34,7 @@ Expr* Resolver::resolveExpression(Scope& scope, ast::ExprRef expr) {
 		case ast::Expr::If:
 			return resolveIf(scope, *(ast::IfExpr*)expr);
 		case ast::Expr::MultiIf:
-			return resolveMultiIf(scope, *(ast::MultiIfExpr*)expr);
+			return resolveMultiIf(scope, ((ast::MultiIfExpr*)expr)->cases);
 		case ast::Expr::Decl:
 			return resolveDecl(scope, *(ast::DeclExpr*)expr);
 		case ast::Expr::Assign:
@@ -62,7 +62,7 @@ Expr* Resolver::resolveExpression(Scope& scope, ast::ExprRef expr) {
 
 Expr* Resolver::resolveMulti(Scope& scope, ast::MultiExpr& expr) {
 	Exprs es;
-	ast::walk(expr.exprs, [&](auto i) {es += resolveExpression(scope, i);});
+	ast::walk(expr.exprs, [&](auto i) {es += this->resolveExpression(scope, i);});
 	return build<MultiExpr>(Core::Move(es));
 }
 	
@@ -189,9 +189,16 @@ Expr* Resolver::resolveVar(Scope& scope, Id name) {
 }
 
 Expr* Resolver::resolveIf(Scope& scope, ast::IfExpr& expr) {
-	auto& cond = *resolveCondition(scope, expr.cond);
-	auto& then = *getRV(*resolveExpression(scope, expr.then));
-	auto otherwise = expr.otherwise ? getRV(*resolveExpression(scope, expr.otherwise)) : nullptr;
+	return createIf(
+			*resolveCondition(scope, expr.cond),
+			*resolveExpression(scope, expr.then),
+			expr.otherwise ? resolveExpression(scope, expr.otherwise) : nullptr);
+}
+
+Expr* Resolver::createIf(ExprRef cond_, ExprRef then_, const Expr* otherwise_) {
+	auto& cond = *getRV(cond_);
+	auto& then = *getRV(then_);
+	Expr* otherwise = otherwise_ ? getRV(*otherwise_) : nullptr;
 	bool useResult = false;
 
 	// Find the type of the expression.
@@ -216,30 +223,21 @@ Expr* Resolver::resolveIf(Scope& scope, ast::IfExpr& expr) {
 	return build<IfExpr>(cond, then, otherwise, type, useResult);
 }
 
-Expr* Resolver::resolveMultiIf(Scope& scope, ast::MultiIfExpr& expr) {
+Expr* Resolver::resolveMultiIf(Scope& scope, ast::IfCaseList* cases) {
 	// Create a chain of ifs.
-	if(expr.cases) {
-		auto cases = expr.cases;
-		IfExpr* list = build<IfExpr>(*resolveExpression(scope, cases->item.cond), *resolveExpression(scope, cases->item.then));
-		IfExpr* current = list;
-		cases = cases->next;
-		while(cases) {
-			auto cond = resolveExpression(scope, cases->item.cond);
-			if(alwaysTrue(*cond)) {
-				current->otherwise = resolveExpression(scope, cases->item.then);
-				break;
-			} else {
-				current->otherwise = build<IfExpr>(*cond, *resolveExpression(scope, cases->item.then));
-				current = (IfExpr*)current->otherwise;
-			}
-
-			cases = cases->next;
+	if(cases) {
+		auto cond = resolveExpression(scope, cases->item->cond);
+		if(alwaysTrue(*cond)) {
+			return resolveExpression(scope, cases->item->then);
+		} else {
+			return createIf(
+					*resolveExpression(scope, cases->item->cond),
+					*resolveExpression(scope, cases->item->then),
+					resolveMultiIf(scope, cases->next));
 		}
-
-		return list;
+	} else {
+		return nullptr;
 	}
-
-	return nullptr;
 }
 
 Expr* Resolver::resolveDecl(Scope& scope, ast::DeclExpr& expr) {
@@ -297,7 +295,6 @@ Expr* Resolver::resolveAssign(Scope& scope, ast::AssignExpr& expr) {
 	auto target = resolveExpression(scope, expr.target);
 	if(target->type->isLvalue()) {
 		auto value = getRV(*resolveExpression(scope, expr.value));
-		TypeRef type;
 
 		// Perform an implicit conversion if needed.
 		value = implicitCoerce(*value, ((LVType*)target->type)->type);
@@ -508,49 +505,31 @@ Expr* Resolver::resolveAnonConstruct(Scope& scope, ast::TupleConstructExpr& expr
 	return con;
 }
 
+Expr* Resolver::resolveAlt(Scope& scope, ExprRef pivot, ast::AltList* alt) {
+	if(alt) {
+		auto s = build<ScopedExpr>(scope);
+		auto pat = resolvePattern(s->scope, pivot, *alt->item.pattern);
+		auto result = resolveExpression(s->scope, alt->item.expr);
+		if(alwaysTrue(*pat)) {
+			s->contents = build<MultiExpr>(Exprs{pat, result});
+			s->type = result->type;
+		} else {
+			s->contents = createIf(*pat, *result, resolveAlt(scope, pivot, alt->next));
+			s->type = s->contents->type;
+		}
+		return s;
+	} else {
+		return nullptr;
+	}
+}
+
 Expr* Resolver::resolveCase(Scope& scope, ast::CaseExpr& expr) {
 	auto alt = expr.alts;
 	if(alt) {
 		auto pivot = resolveExpression(scope, expr.pivot);
-		
-		ScopedExpr* test;
-		ScopedExpr* first_test;
-
-		test = build<ScopedExpr>(scope);
-		auto pat = resolvePattern(test->scope, *pivot, *alt->item.pattern);
-		auto result = resolveExpression(test->scope, alt->item.expr);
-
-		if(alwaysTrue(*pat)) {
-			test->contents = build<MultiExpr>(pat, build<MultiExpr>(result));
-			test->type = result->type;
-			return test;
-		} else {
-			test->contents = build<IfExpr>(*pat, *result, nullptr, result->type, true);
-			test->type = test->contents->type;
-			first_test = test;
-			alt = alt->next;
-		}
-
-		while(alt) {
-			auto s = build<ScopedExpr>(scope);
-			pat = resolvePattern(s->scope, *pivot, *alt->item.pattern);
-			result = resolveExpression(s->scope, alt->item.expr);
-			if(alwaysTrue(*pat)) {
-				s->contents = build<MultiExpr>(pat, build<MultiExpr>(result));
-				s->type = result->type;
-				((IfExpr*)test->contents)->otherwise = s;
-				return first_test;
-			} else {
-				s->contents = build<IfExpr>(*pat, *result, nullptr, result->type, true);
-				s->type = s->contents->type;
-				((IfExpr*)test->contents)->otherwise = s;
-				test = s;
-				alt = alt->next;
-			}
-		}
-
-		return first_test;
+		return resolveAlt(scope, *pivot, expr.alts);
 	} else {
+		error("a case expression must have at least one alt");
 		return build<EmptyExpr>(types.getUnit());
 	}
 }
@@ -574,6 +553,9 @@ Expr* Resolver::resolvePattern(Scope& scope, ExprRef pivot, ast::Pattern& pat) {
 			l->type = Literal::Int;
 			return createCompare(scope, *build<FieldExpr>(pivot, -1, types.getInt()), *resolveLiteral(scope, *l));
 		}
+		default:
+			ASSERT(false);
+			return nullptr;
 	}
 }
 

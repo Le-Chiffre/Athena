@@ -90,6 +90,8 @@ struct Generator {
 			case resolve::ForeignConvention::Cpp:
 				// Cpp only affects name mangling.
 				return llvm::CallingConv::C;
+			case resolve::ForeignConvention::JS:
+				return llvm::CallingConv::WebKit_JS;
 		}
 
 		ASSERT(false);

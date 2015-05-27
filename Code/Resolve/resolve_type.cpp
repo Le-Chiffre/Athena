@@ -41,6 +41,7 @@ TypeRef Resolver::mapType(F&& f, TypeRef type) {
 			return f(type);
 		case Type::Ptr:
 			return types.getPtr(f(((PtrType*)type)->type));
+		default: ;
 	}
 
 	return type;
