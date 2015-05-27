@@ -115,7 +115,7 @@ Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, resolve::ExprRe
 		auto left = &lhs;
 		auto right = &rhs;
 
-		// If one of the expressions is a literal, it can be converted implicitly.
+		// If one of the expressions is a literal it can be converted implicitly.
 		if(lhs.kind == Expr::Lit) {
 			left = literalCoerce(((LitExpr&)lhs).literal, rhs.type);
 		} else if(rhs.kind == Expr::Lit) {
@@ -125,7 +125,7 @@ Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, resolve::ExprRe
 		auto lt = ((const PrimType*)left->type)->type;
 		auto rt = ((const PrimType*)right->type)->type;
 
-		if(auto type = getBinaryOpType(op, lt, rt)) {
+		if(auto type = getBinaryOpType(op, lt, rt, left, right)) {
 			auto list = build<ExprList>(left, build<ExprList>(right));
 			return build<AppPExpr>(op, list, type);
 		}
@@ -154,18 +154,22 @@ Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, resolve::ExprRe
 	return nullptr;
 }
 
-TypeRef Resolver::getBinaryOpType(PrimitiveOp op, PrimitiveType lhs, PrimitiveType rhs) {
+TypeRef Resolver::getBinaryOpType(PrimitiveOp op, PrimitiveType lhs, PrimitiveType rhs, const Expr*& left, const Expr*& right) {
+	auto type = types.getPrim(largest(lhs, rhs));
+	left = implicitCoerce(*left, type);
+	right = implicitCoerce(*right, type);
+
 	if(op < PrimitiveOp::FirstBit) {
 		// Arithmetic operators return the largest type.
 		if(arithCompatible(lhs, rhs)) {
-			return types.getPrim(largest(lhs, rhs));
+			return type;
 		} else {
 			error("arithmetic operator on incompatible primitive types");
 		}
 	} else if(op < PrimitiveOp::FirstCompare) {
 		// Bitwise operators return the largest type.
 		if(bitCompatible(lhs, rhs)) {
-			return types.getPrim(Core::Min(lhs, rhs));
+			return type;
 		} else {
 			error("bitwise operator on incompatible primitive types");
 		}

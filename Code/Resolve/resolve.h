@@ -170,7 +170,7 @@ struct Resolver {
 	/// Instantiates a generic type.
 	TypeRef instantiateType(ScopeRef scope, TypeRef base, ast::TypeList* apps, ast::SimpleType* tscope = nullptr);
 
-	TypeRef getBinaryOpType(PrimitiveOp, PrimitiveType, PrimitiveType);
+	TypeRef getBinaryOpType(PrimitiveOp, PrimitiveType, PrimitiveType, const Expr*&, const Expr*&);
 	TypeRef getPtrOpType(PrimitiveOp, PtrType*, PrimitiveType);
 	TypeRef getPtrOpType(PrimitiveOp, PtrType*, PtrType*);
 	TypeRef getUnaryOpType(PrimitiveOp, PrimitiveType);
