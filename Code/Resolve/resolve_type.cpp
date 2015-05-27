@@ -18,14 +18,14 @@ TypeRef Resolver::mapType(F&& f, TypeRef type) {
 			return types.getTuple(fields);
 		}
 		case Type::Var: {
-			/*auto t = (VarType*)type;
-			auto cs = t->list;
-			for(auto& c : cs) {
-				for(auto& i : c.contents) {
-					i = f(i);
+			auto t = build<VarType>(*(VarType*)type);
+			for(auto& c : t->list) {
+				c = build<VarConstructor>(*c);
+				for(auto& i : c->contents) {
+					i = mapType(f, i);
 				}
-			}*/
-			break;
+			}
+			return t;
 		}
 		case Type::Array:
 			// TODO
@@ -168,8 +168,11 @@ TypeRef Resolver::resolveType(ScopeRef scope, ast::TypeRef type, bool constructo
 }
 
 TypeRef Resolver::instantiateType(ScopeRef scope, TypeRef base, ast::TypeList* apps, ast::SimpleType* tscope) {
-	if(base->isAlias()) {
-		if(ast::count(apps) != ((AliasType*)base)->generics) {
+	if(base->isAlias() || base->isVariant()) {
+		uint generics;
+		if(base->isAlias()) generics = ((AliasType*)base)->generics;
+		else generics = ((VarType*)base)->generics;
+		if(ast::count(apps) != generics) {
 			error("number of generics in the type must be equal to the amount applied");
 			return base;
 		}

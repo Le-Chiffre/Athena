@@ -38,6 +38,7 @@ typedef ast::ForeignConvention ForeignConvention;
 
 struct VarConstructor {
 	VarConstructor(Id name, uint index, TypeRef type, ast::TypeList* astDecl) : name(name), index(index), type(type), astDecl(astDecl) {}
+	VarConstructor(const VarConstructor&) = default;
 
 	Id name;
 	uint index;
@@ -321,6 +322,8 @@ typedef Core::Array<VarConstructor*> VarConstructorList;
 struct VarType : Type {
 	VarType(Id name, ast::DataDecl* astDecl, Scope& scope) :
 			Type(Var), astDecl(astDecl), scope(scope), name(name) {}
+	VarType(const VarType&) = default;
+
 	ast::DataDecl* astDecl;
 	Scope& scope;
 	Id name;
