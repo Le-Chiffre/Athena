@@ -115,7 +115,7 @@ struct Parser {
 		IndentLevel level{token, lexer};
 		auto r = f();
 		level.end();
-		if(token == Token::EndOfBlock);
+		if(token == Token::EndOfBlock) eat();
 		return r;
 	}
 
