@@ -345,9 +345,9 @@ struct GenType : Type {
 };
 
 struct AppType : Type {
-	AppType(uint baseIndex) : Type(App), baseIndex(baseIndex) {resolved = false;}
+	AppType(uint baseIndex, ast::TypeList* apps) : Type(App), baseIndex(baseIndex), apps(apps) {resolved = false;}
 	uint baseIndex;
-	TypeList apps;
+	ast::TypeList* apps;
 };
 
 struct AliasType : Type {
@@ -355,6 +355,7 @@ struct AliasType : Type {
 	ast::TypeDecl* astDecl;
 	Id name;
 	uint generics = ast::count(astDecl->type->kind);
+	TypeRef target = nullptr;
 };
 
 /// Operations that can be applied to primitive types.
