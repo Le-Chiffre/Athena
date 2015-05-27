@@ -319,8 +319,10 @@ struct TupleType : Type {
 typedef Core::Array<VarConstructor*> VarConstructorList;
 
 struct VarType : Type {
-	VarType(Id name, ast::DataDecl* astDecl) : Type(Var), astDecl(astDecl), name(name) {}
+	VarType(Id name, ast::DataDecl* astDecl, Scope& scope) :
+			Type(Var), astDecl(astDecl), scope(scope), name(name) {}
 	ast::DataDecl* astDecl;
+	Scope& scope;
 	Id name;
 	uint generics = ast::count(astDecl->type->kind);
 	VarConstructorList list;
@@ -345,17 +347,20 @@ struct GenType : Type {
 };
 
 struct AppType : Type {
-	AppType(uint baseIndex, ast::TypeList* apps) : Type(App), baseIndex(baseIndex), apps(apps) {resolved = false;}
+	AppType(uint baseIndex, ast::TypeList* apps) :
+			Type(App), baseIndex(baseIndex), apps(apps) {resolved = false;}
 	uint baseIndex;
 	ast::TypeList* apps;
 };
 
 struct AliasType : Type {
-    AliasType(Id name, ast::TypeDecl* astDecl) : Type(Alias), astDecl(astDecl), name(name) {}
+    AliasType(Id name, ast::TypeDecl* astDecl, Scope& scope) :
+			Type(Alias), astDecl(astDecl), name(name), scope(scope) {resolved = generics == 0;}
 	ast::TypeDecl* astDecl;
 	Id name;
 	uint generics = ast::count(astDecl->type->kind);
 	TypeRef target = nullptr;
+	Scope& scope;
 };
 
 /// Operations that can be applied to primitive types.

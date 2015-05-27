@@ -13,7 +13,7 @@ TypeRef Resolver::mapType(F&& f, TypeRef type) {
 			auto t = (TupleType*)type;
 			auto fields = t->fields;
 			for(auto& field : fields) {
-				field.type = f(field.type);
+				field.type = mapType(f, field.type);
 			}
 			return types.getTuple(fields);
 		}
@@ -47,18 +47,19 @@ TypeRef Resolver::mapType(F&& f, TypeRef type) {
 	return type;
 }
 
-TypeRef Resolver::resolveAlias(Scope& scope, AliasType* type) {
+TypeRef Resolver::resolveAlias(AliasType* type) {
 	ASSERT(type->astDecl);
-	auto target = resolveType(scope, type->astDecl->target, false, type->astDecl->type);
+	type->target = resolveType(type->scope, type->astDecl->target, false, type->astDecl->type);
 	type->astDecl = nullptr;
-	return target;
+	return type->resolved ? type->target : type;
 }
 
-TypeRef Resolver::resolveVariant(Scope& scope, VarType* type) {
+TypeRef Resolver::resolveVariant(VarType* type) {
 	// Resolve each declared constructor.
+	ASSERT(type->astDecl);
 	for(auto& c : type->list) {
 		ast::walk(c->astDecl, [&](auto i) {
-			c->contents += this->resolveType(scope, i, false, type->astDecl->type);
+			c->contents += this->resolveType(type->scope, i, false, type->astDecl->type);
 		});
 		c->astDecl = nullptr;
 	}
@@ -157,9 +158,9 @@ TypeRef Resolver::resolveType(ScopeRef scope, ast::TypeRef type, bool constructo
 				if (auto t = types.primMap.Get(type->con)) return *t;
 			}
 		} else {
-			if (auto t = scope.findType(type->con)) return t;
+			if(auto t = scope.findType(type->con)) return lazyResolve(t);
 			// Check if this is a primitive type.
-			if (auto t = types.primMap.Get(type->con)) return *t;
+			if(auto t = types.primMap.Get(type->con)) return *t;
 		}
 
 		return types.getUnknown();
@@ -190,6 +191,15 @@ TypeRef Resolver::instantiateType(ScopeRef scope, TypeRef base, ast::TypeList* a
 		error("must be a generic type");
 		return base;
 	}
+}
+
+TypeRef Resolver::lazyResolve(TypeRef t) {
+	if(t->kind == Type::Alias && ((AliasType*)t)->astDecl) {
+		resolveAlias((AliasType*)t);
+	} else if(t->kind == Type::Var && ((VarType*)t)->astDecl) {
+		resolveVariant((VarType*)t);
+	}
+	return t;
 }
 
 }} // namespace athena::resolve

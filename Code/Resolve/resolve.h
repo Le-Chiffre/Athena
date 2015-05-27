@@ -136,9 +136,9 @@ struct Resolver {
 	Expr* resolveCase(Scope& scope, ast::CaseExpr& expr);
 	Expr* resolveAlt(Scope& scope, ExprRef pivot, ast::AltList* alt);
 
-	TypeRef resolveAlias(Scope& scope, AliasType* type);
+	TypeRef resolveAlias(AliasType* type);
 	TypeRef resolveTuple(Scope& scope, ast::TupleType& type, ast::SimpleType* tscope = nullptr);
-	TypeRef resolveVariant(Scope& scope, VarType* type);
+	TypeRef resolveVariant(VarType* type);
 	ExprList* resolveExpressions(Scope& scope, ast::ExprList* list);
 	Expr* resolvePattern(Scope& scope, ExprRef pivot, ast::Pattern& pat);
 
@@ -159,6 +159,10 @@ struct Resolver {
 	/// Retrieves or creates a concrete type.
 	/// @param constructor If set, the provided type is interpreted as a constructor instead of a type.
 	TypeRef resolveType(ScopeRef scope, ast::TypeRef type, bool constructor = false, ast::SimpleType* tscope = nullptr);
+
+	/// Ensures that the provided type has been converted from AST before use.
+	/// This is used to solve dependencies between types.
+	TypeRef lazyResolve(TypeRef);
 
 	template<class F>
 	TypeRef mapType(F&& f, TypeRef type);

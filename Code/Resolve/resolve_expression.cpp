@@ -363,7 +363,6 @@ Expr* Resolver::resolveCoerce(Scope& scope, ast::CoerceExpr& expr) {
 
 Expr* Resolver::resolveField(Scope& scope, ast::FieldExpr& expr, ast::ExprList* args) {
 	auto target = resolveExpression(scope, expr.target);
-	bool constant = target->kind == Expr::Var && ((VarExpr*)target)->var->constant && target->type->isTuple();
 
 	// Check if this is a field or function call expression.
 	// For types without named fields, this is always a function call.
@@ -381,7 +380,7 @@ Expr* Resolver::resolveField(Scope& scope, ast::FieldExpr& expr, ast::ExprList* 
 		}
 
 		if(auto f = tupType->findField(((ast::VarExpr*)expr.field)->name)) {
-			auto fexpr = build<FieldExpr>(*target, f, constant ? f->type : types.getLV(f->type));
+			auto fexpr = build<FieldExpr>(*target, f, target->type->isLvalue() ? f->type : types.getLV(f->type));
 			if(args) {
 				// TODO: Indirect calls.
 				//return resolveCall(scope, )

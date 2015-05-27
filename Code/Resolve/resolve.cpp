@@ -59,9 +59,9 @@ Module* Resolver::resolve() {
 			} else {
 				// Insert the unresolved type.
 				if(decl->kind == ast::Decl::Type) {
-					*type = build<AliasType>(name, (ast::TypeDecl*)decl);
+					*type = build<AliasType>(name, (ast::TypeDecl*)decl, *module);
 				} else if(decl->kind == ast::Decl::Data) {
-					auto t = build<VarType>(name, (ast::DataDecl*)decl);
+					auto t = build<VarType>(name, (ast::DataDecl*)decl, *module);
 
 					// The constructors can be declared here, but are resolved later.
 					auto con = ((ast::DataDecl*)decl)->constrs;
@@ -100,11 +100,11 @@ Module* Resolver::resolve() {
 		if(t->kind == Type::Alias) {
 			// Alias types are completely replaced by their contents, since they are equivalent.
             auto a = (AliasType*)t;
-            if(a->astDecl) t = resolveAlias(*module, a);
+            if(a->astDecl) t = resolveAlias(a);
         } else if(t->kind == Type::Var) {
 			// This is valid, since variants have at least one constructor.
 			auto a = (VarType*)t;
-            if(a->astDecl) resolveVariant(*module, a);
+            if(a->astDecl) resolveVariant(a);
         }
 	});
 
