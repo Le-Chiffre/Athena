@@ -101,7 +101,7 @@ void Parser::parseDecl() {
 			} else {
 				error("Expected a function body expression.");
 			}
-		} else if(token == Token::BraceL) {
+		} else if(token == Token::BracketL) {
             // Parse the function arguments as a tuple.
             auto args = (TupleType*)parseTupleType();
 			Type* type = nullptr;
@@ -530,7 +530,7 @@ Expr* Parser::parseBaseExpr() {
 		} else {
 			return error("Expected expression after '('.");
 		}
-	} else if(token == Token::BraceL) {
+	} else if(token == Token::BracketL) {
 		return parseTupleConstruct();
 	} else if(token == Token::ConID) {
 		auto name = token.data.id;
@@ -763,7 +763,7 @@ Type* Parser::parseType() {
 		auto id = token.data.id;
 		eat();
 		return build<Type>(Type::Gen, id);
-	} else if(token == Token::BraceL) {
+	} else if(token == Token::BracketL) {
 		// Also handles unit type.
         auto tup = parseTupleType();
 		if(token == Token::opArrowR) {
@@ -819,7 +819,7 @@ Type* Parser::parseTupleType() {
 		auto l = sepBy([=] {return parseTupleField();}, Token::Comma);
 		if(l) return (Type*)build<TupleType>(l);
 		else return build<Type>(Type::Unit);
-	}, Token::BraceL, Token::BraceR);
+	}, Token::BracketL, Token::BracketR);
 
 	if(type) return type;
 	else return (Type*)error("Expected one or more tuple fields");
@@ -830,7 +830,7 @@ Expr* Parser::parseTupleConstruct() {
 		auto l = sepBy([=] {return parseTupleConstructField();}, Token::Comma);
 		if(l) return (Expr*)build<TupleConstructExpr>(nullptr, l);
 		else return build<Expr>(Expr::Unit);
-	}, Token::BraceL, Token::BraceR);
+	}, Token::BracketL, Token::BracketR);
 
 	if(expr) return expr;
 	else return error("Expected one or more tuple fields");
