@@ -81,6 +81,13 @@ struct Literal {
     Type type;
 };
 
+inline Literal trueLit() {
+	Literal l;
+	l.type = Literal::Bool;
+	l.i = 1;
+	return l;
+}
+
 struct SimpleType {
 	SimpleType(Id name, ASTList<Id>* kind) : name(name), kind(kind) {}
 	Id name;
@@ -143,6 +150,7 @@ struct Expr {
 		Infix,
 		Prefix,
         If,
+		MultiIf,
 		Decl,
 		While,
 		Assign,
@@ -211,6 +219,19 @@ struct IfExpr : Expr {
     ExprRef cond;
     ExprRef then;
     Expr* otherwise;
+};
+
+struct IfCase {
+	IfCase(ExprRef cond, ExprRef then) : cond(cond), then(then) {}
+	ExprRef cond;
+	ExprRef then;
+};
+
+typedef ASTList<IfCase> IfCaseList;
+
+struct MultiIfExpr : Expr {
+	MultiIfExpr(IfCaseList* cases) : Expr(MultiIf), cases(cases) {}
+	IfCaseList* cases;
 };
 
 struct DeclExpr : Expr {

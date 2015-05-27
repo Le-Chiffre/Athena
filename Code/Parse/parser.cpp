@@ -373,21 +373,39 @@ Expr* Parser::parseLeftExpr() {
 		return parseCaseExpr();
 	} else if(token == Token::kwIf) {
 		eat();
-		if(auto cond = parseInfixExpr()) {
-			// Allow statement ends within an if-expression to allow then/else with the same indentation as if.
-			if(token == Token::EndOfStmt) eat();
+		if(token == Token::opBar) {
+			// Multi-way if (erlang style).
+			auto list = sepBy([=] {
+				if(token == Token::opBar) eat();
+				else return (IfCase*)error("expected '|'");
+				Expr* cond;
+				if(token == Token::kw_) {
+					eat();
+					cond = build<LitExpr>(trueLit());
+				} else {
+					cond = parseInfixExpr();
+				}
+				auto then = parseExpr();
+				return build<IfCase>(cond, then);
+			}, Token::EndOfStmt);
+			return build<MultiIfExpr>(list);
+		} else {
+			if(auto cond = parseInfixExpr()) {
+				// Allow statement ends within an if-expression to allow then/else with the same indentation as if.
+				if(token == Token::EndOfStmt) eat();
 
-			if(token == Token::kwThen) {
-				eat();
-				if(auto then = parseExpr()) {
-					// else is optional.
-					return build<IfExpr>(cond, then, tryParse([=] {return parseElse();}));
+				if(token == Token::kwThen) {
+					eat();
+					if(auto then = parseExpr()) {
+						// else is optional.
+						return build<IfExpr>(cond, then, tryParse([=] { return parseElse(); }));
+					}
+				} else {
+					error("Expected 'then' after if-expression.");
 				}
 			} else {
-				error("Expected 'then' after if-expression.");
+				error("Expected an expression after 'if'.");
 			}
-		} else {
-			error("Expected an expression after 'if'.");
 		}
 	} else if(token == Token::kwWhile) {
 		eat();
