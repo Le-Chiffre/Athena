@@ -740,11 +740,33 @@ Maybe<Id> Parser::parseQop() {
 }
 
 Type* Parser::parseType() {
+	if(auto list = sepBy1([=] {
+		if(auto list = many1([=]{return parseAType();})) {
+			if(list->next) {
+				return (Type*)build<AppType>(list->item, list->next);
+			} else {
+				return list->item;
+			}
+		} else {
+			return (Type*)nullptr;
+		}
+	}, Token::opArrowR)) {
+		if (list->next) {
+			return build<FunType>(list);
+		} else {
+			return list->item;
+		}
+	} else {
+		return nullptr;
+	}
+}
+
+Type* Parser::parseAType() {
 	if(token == Token::VarSym) {
 		auto name = lexer.GetContext().Find(token.data.id).name;
 		if(name.length == 1 && name.ptr[0] == kPointerSigil) {
 			eat();
-			if(auto type = parseType()) {
+			if(auto type = parseAType()) {
 				type->kind = Type::Ptr;
 				return type;
 			} else {
@@ -754,31 +776,20 @@ Type* Parser::parseType() {
 	} else if(token == Token::ConID) {
 		auto id = token.data.id;
 		eat();
-		auto ty = build<Type>(Type::Con, id);
-		
-		// Parse zero or more type applications.
-		if(auto list = many([=] {return parseType();})) return build<AppType>(ty, list);
-		else return ty;
+		return build<Type>(Type::Con, id);
 	} else if(token == Token::VarID) {
 		auto id = token.data.id;
 		eat();
 		return build<Type>(Type::Gen, id);
 	} else if(token == Token::BracketL) {
 		// Also handles unit type.
-        auto tup = parseTupleType();
-		if(token == Token::opArrowR) {
-			eat();
-			auto ret = parseType();
-			return build<FunType>(((TupleType*)tup)->fields, ret);
-		} else {
-			return tup;
-		}
+		return parseTupleType();
 	} else if(token == Token::ParenL) {
 		eat();
 		auto t = parseType();
 		if(token == Token::ParenR) eat();
 		else error("expected ')'");
-		
+
 		return t;
 	}
 
@@ -790,20 +801,13 @@ SimpleType* Parser::parseSimpleType() {
 	if(token == Token::ConID) {
 		auto id = token.data.id;
 		eat();
-
-		ASTList<Id>* kinds = nullptr;
-		if(token == Token::VarID) {
-			kinds = build<ASTList<Id>>(token.data.id);
-			auto p = kinds;
-			eat();
-			while(token == Token::VarID) {
-				p->next = build<ASTList<Id>>(token.data.id);
-				eat();
-				p = p->next;
+		return build<SimpleType>(id, many([=]{
+			if(token == Token::VarID) {
+				auto id = token.data.id; eat(); return just(id);
+			} else {
+				return nothing<Id>();
 			}
-		}
-
-		return build<SimpleType>(id, kinds);
+		}));
 	} else {
 		error("expected type name");
 	}
@@ -962,7 +966,7 @@ Constr* Parser::parseConstr() {
 	if(token == Token::ConID) {
 		auto name = token.data.id;
 		eat();
-		auto types = many([=] {return parseType();});
+		auto types = many([=] {return parseAType();});
 		return build<Constr>(name, types);
 	} else {
 		error("expected constructor name");

@@ -129,9 +129,8 @@ struct TupleType : Type {
 };
 
 struct FunType : Type {
-	FunType(TupleFieldList* params, TypeRef ret) : Type(Fun), params(params), returnType(ret) {}
-	TupleFieldList* params;
-	TypeRef returnType;
+	FunType(TypeList* types) : Type(Fun), types(types) {}
+	TypeList* types;
 };
 
 struct AppType : Type {

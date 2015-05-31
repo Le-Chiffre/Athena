@@ -77,6 +77,7 @@ struct Parser {
 	Maybe<Id> parseQop();
 
 	Type* parseType();
+	Type* parseAType();
 	SimpleType* parseSimpleType();
     Maybe<TupleField> parseTupleField();
 	Maybe<TupleField> parseTupleConstructField();
