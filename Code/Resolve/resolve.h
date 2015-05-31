@@ -151,6 +151,7 @@ struct Resolver {
 	Expr* resolvePrimitiveOp(Scope& scope, PrimitiveOp op, resolve::ExprRef dst);
 
 	Variable* resolveArgument(ScopeRef scope, ast::TupleField& arg);
+	Variable* resolveArgument(ScopeRef scope, ast::Type* arg);
     Field resolveField(ScopeRef scope, TypeRef container, uint index, ast::Field& field);
 	
 	/// Creates a boolean condition from the provided expression.
@@ -181,11 +182,17 @@ struct Resolver {
 	/// Creates a constant true value.
 	Expr* createTrue();
 
+	/// Creates an integer literal.
+	Expr* createInt(int i);
+
 	/// Creates a comparison between two values.
 	Expr* createCompare(Scope& scope, ExprRef left, ExprRef right);
 
 	/// Creates an if-expression.
 	Expr* createIf(ExprRef cond, ExprRef then, const Expr* otherwise);
+
+	/// Gets the provided variant's constructor index.
+	Expr* createGetCon(ExprRef variant);
 
 	/// Makes sure the provided expression is an rvalue.
 	Expr* getRV(ExprRef);

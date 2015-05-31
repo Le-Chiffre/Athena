@@ -14,12 +14,16 @@ bool Resolver::resolveFunctionDecl(Scope& scope, FunctionDecl& fun) {
 bool Resolver::resolveForeignFunction(Scope& scope, ForeignFunction& fun) {
     if(!fun.astType) return true;
 
-    fun.type = resolveType(scope, fun.astType->returnType);
-    auto arg = fun.astType->params;
-    while(arg) {
-        auto a = resolveArgument(scope, arg->item);
-        fun.arguments += a;
-        arg = arg->next;
+    auto arg = fun.astType->types;
+    while(1) {
+        if(arg->next) {
+            auto a = resolveArgument(scope, arg->item);
+            fun.arguments += a;
+            arg = arg->next;
+        } else {
+            fun.type = resolveType(scope, arg->item);
+            break;
+        }
     }
 
     fun.astType = nullptr;
@@ -68,6 +72,13 @@ bool Resolver::resolveFunction(Scope& scope, Function& fun) {
 Variable* Resolver::resolveArgument(ScopeRef scope, ast::TupleField& arg) {
     auto type = arg.type ? resolveType(scope, arg.type) : types.getUnknown();
     auto var = build<Variable>(arg.name ? arg.name() : 0, type, scope, true, true);
+    scope.variables += var;
+    return var;
+}
+
+Variable* Resolver::resolveArgument(ScopeRef scope, ast::Type* arg) {
+    auto type = resolveType(scope, arg);
+    auto var = build<Variable>(0, type, scope, true, true);
     scope.variables += var;
     return var;
 }
