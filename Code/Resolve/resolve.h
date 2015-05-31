@@ -115,8 +115,8 @@ struct Resolver {
 	bool resolveFunctionDecl(Scope& scope, FunctionDecl& fun);
 	bool resolveFunction(Scope& scope, Function& fun);
 	bool resolveForeignFunction(Scope& scope, ForeignFunction& fun);
-	Expr* resolveExpression(Scope& scope, ast::ExprRef expr);
-	Expr* resolveMulti(Scope& scope, ast::MultiExpr& expr);
+	Expr* resolveExpression(Scope& scope, ast::ExprRef expr, bool used);
+	Expr* resolveMulti(Scope& scope, ast::MultiExpr& expr, bool used);
     Expr* resolveLiteral(Scope& scope, ast::Literal& expr);
 	Expr* resolveInfix(Scope& scope, ast::InfixExpr& expr);
 	Expr* resolvePrefix(Scope& scope, ast::PrefixExpr& expr);
@@ -124,8 +124,8 @@ struct Resolver {
 	Expr* resolveUnaryCall(Scope& scope, Id function, ExprRef dst);
 	Expr* resolveCall(Scope& scope, ast::AppExpr& expr);
     Expr* resolveVar(Scope& scope, Id var);
-    Expr* resolveIf(Scope& scope, ast::IfExpr& expr);
-	Expr* resolveMultiIf(Scope& scope, ast::IfCaseList* cases);
+    Expr* resolveIf(Scope& scope, ast::IfExpr& expr, bool used);
+	Expr* resolveMultiIf(Scope& scope, ast::IfCaseList* cases, bool used);
 	Expr* resolveDecl(Scope& scope, ast::DeclExpr& expr);
 	Expr* resolveAssign(Scope& scope, ast::AssignExpr& expr);
 	Expr* resolveWhile(Scope& scope, ast::WhileExpr& expr);
@@ -133,13 +133,12 @@ struct Resolver {
 	Expr* resolveField(Scope& scope, ast::FieldExpr& expr, ast::ExprList* args = nullptr);
 	Expr* resolveConstruct(Scope& scope, ast::ConstructExpr& expr);
 	Expr* resolveAnonConstruct(Scope& scope, ast::TupleConstructExpr& expr);
-	Expr* resolveCase(Scope& scope, ast::CaseExpr& expr);
-	Expr* resolveAlt(Scope& scope, ExprRef pivot, ast::AltList* alt);
+	Expr* resolveCase(Scope& scope, ast::CaseExpr& expr, bool used);
+	Expr* resolveAlt(Scope& scope, ExprRef pivot, ast::AltList* alt, bool used);
 
 	TypeRef resolveAlias(AliasType* type);
 	TypeRef resolveTuple(Scope& scope, ast::TupleType& type, ast::SimpleType* tscope = nullptr);
 	TypeRef resolveVariant(VarType* type);
-	ExprList* resolveExpressions(Scope& scope, ast::ExprList* list);
 	Expr* resolvePattern(Scope& scope, ExprRef pivot, ast::Pattern& pat);
 
     /// Resolves a binary operation on two primitive types.
@@ -176,20 +175,32 @@ struct Resolver {
 	TypeRef getPtrOpType(PrimitiveOp, PtrType*, PtrType*);
 	TypeRef getUnaryOpType(PrimitiveOp, PrimitiveType);
 
+	TypeRef getEffectiveType(TypeRef type);
+
 	/// Creates a return of the provided expression.
 	Expr* createRet(ExprRef);
 
 	/// Creates a constant true value.
-	Expr* createTrue();
+	Expr* createTrue() {return createBool(true);}
 
-	/// Creates an integer literal.
+	/// Creates a constant false value.
+	Expr* createFalse() {return createBool(false);}
+
+	/// Creates a constant boolean value.
+	Expr* createBool(bool b);
+
+	/// Creates a constant integer value.
 	Expr* createInt(int i);
 
 	/// Creates a comparison between two values.
 	Expr* createCompare(Scope& scope, ExprRef left, ExprRef right);
 
 	/// Creates an if-expression.
-	Expr* createIf(ExprRef cond, ExprRef then, const Expr* otherwise);
+	Expr* createIf(ExprRef cond, ExprRef then, const Expr* otherwise, bool used);
+
+	/// Creates a field-expression.
+	Expr* createField(ExprRef pivot, Field* field);
+	Expr* createField(ExprRef pivot, int field);
 
 	/// Gets the provided variant's constructor index.
 	Expr* createGetCon(ExprRef variant);
@@ -238,6 +249,24 @@ struct Resolver {
 
 	/// Checks if the provided expression always evaluates to a true constant.
 	bool alwaysTrue(ExprRef expr);
+
+	template<class T> auto list(const T& t) {return build<ast::ASTList<T>>(t);}
+
+	template<class T, class F>
+	auto map(ast::ASTList<T>* l, F&& f) {
+		decltype(list(f(l->item))) list;
+		if(l) {
+			list = list(f(l->item));
+			auto a = list;
+			l = l->next;
+			while(l) {
+				a->next = list(f(l->item));
+				a = a->next;
+				l = l->next;
+			}
+		}
+		return list;
+	}
 
 	nullptr_t error(const char*);
 

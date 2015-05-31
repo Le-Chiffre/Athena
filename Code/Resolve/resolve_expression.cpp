@@ -15,12 +15,12 @@ inline TypeRef getLiteralType(TypeManager& m, const Literal& l) {
 	}
 }
 
-Expr* Resolver::resolveExpression(Scope& scope, ast::ExprRef expr) {
+Expr* Resolver::resolveExpression(Scope& scope, ast::ExprRef expr, bool used) {
 	switch(expr->type) {
 		case ast::Expr::Unit:
 			return build<EmptyExpr>(types.getUnit());
 		case ast::Expr::Multi:
-			return resolveMulti(scope, *(ast::MultiExpr*)expr);
+			return resolveMulti(scope, *(ast::MultiExpr*)expr, used);
 		case ast::Expr::Lit:
 			return resolveLiteral(scope, ((ast::LitExpr*)expr)->literal);
 		case ast::Expr::Infix:
@@ -33,9 +33,9 @@ Expr* Resolver::resolveExpression(Scope& scope, ast::ExprRef expr) {
 			// This can be either a variable or a function call without parameters.
 			return resolveVar(scope, ((ast::VarExpr*)expr)->name);
 		case ast::Expr::If:
-			return resolveIf(scope, *(ast::IfExpr*)expr);
+			return resolveIf(scope, *(ast::IfExpr*)expr, used);
 		case ast::Expr::MultiIf:
-			return resolveMultiIf(scope, ((ast::MultiIfExpr*)expr)->cases);
+			return resolveMultiIf(scope, ((ast::MultiIfExpr*)expr)->cases, used);
 		case ast::Expr::Decl:
 			return resolveDecl(scope, *(ast::DeclExpr*)expr);
 		case ast::Expr::Assign:
@@ -43,7 +43,7 @@ Expr* Resolver::resolveExpression(Scope& scope, ast::ExprRef expr) {
 		case ast::Expr::While:
 			return resolveWhile(scope, *(ast::WhileExpr*)expr);
 		case ast::Expr::Nested:
-			return resolveExpression(scope, ((ast::NestedExpr*)expr)->expr);
+			return resolveExpression(scope, ((ast::NestedExpr*)expr)->expr, used);
 		case ast::Expr::Coerce:
 			return resolveCoerce(scope, *(ast::CoerceExpr*)expr);
 		case ast::Expr::Field:
@@ -53,7 +53,7 @@ Expr* Resolver::resolveExpression(Scope& scope, ast::ExprRef expr) {
 		case ast::Expr::TupleConstruct:
 			return resolveAnonConstruct(scope, *(ast::TupleConstructExpr*)expr);
 		case ast::Expr::Case:
-			return resolveCase(scope, *(ast::CaseExpr*)expr);
+			return resolveCase(scope, *(ast::CaseExpr*)expr, used);
 		default:
 			FatalError("Unsupported expression type.");
 	}
@@ -61,9 +61,14 @@ Expr* Resolver::resolveExpression(Scope& scope, ast::ExprRef expr) {
 	return nullptr;
 }
 
-Expr* Resolver::resolveMulti(Scope& scope, ast::MultiExpr& expr) {
+Expr* Resolver::resolveMulti(Scope& scope, ast::MultiExpr& expr, bool used) {
 	Exprs es;
-	ast::walk(expr.exprs, [&](auto i) {es += this->resolveExpression(scope, i);});
+	auto e = expr.exprs;
+	while(e) {
+		// Expressions that are part of a statement list are never used, unless they are the last in the list.
+		es += this->resolveExpression(scope, e->item, e->next ? false : used);
+		e = e->next;
+	}
 	return build<MultiExpr>(Core::Move(es));
 }
 	
@@ -73,11 +78,11 @@ Expr* Resolver::resolveLiteral(Scope& scope, ast::Literal& literal) {
 
 Expr* Resolver::resolveInfix(Scope& scope, ast::InfixExpr& expr) {
 	auto& e = reorder(expr);
-	return resolveBinaryCall(scope, e.op, *getRV(*resolveExpression(scope, e.lhs)), *getRV(*resolveExpression(scope, e.rhs)));
+	return resolveBinaryCall(scope, e.op, *getRV(*resolveExpression(scope, e.lhs, true)), *getRV(*resolveExpression(scope, e.rhs, true)));
 }
 
 Expr* Resolver::resolvePrefix(Scope& scope, ast::PrefixExpr& expr) {
-	return resolveUnaryCall(scope, expr.op, *getRV(*resolveExpression(scope, expr.dst)));
+	return resolveUnaryCall(scope, expr.op, *getRV(*resolveExpression(scope, expr.dst, true)));
 }
 
 Expr* Resolver::resolveBinaryCall(Scope& scope, Id function, ExprRef lt, ExprRef rt) {
@@ -140,17 +145,17 @@ Expr* Resolver::resolveCall(Scope& scope, ast::AppExpr& expr) {
 			if (auto rhs = expr.args->next) {
 				if (!rhs->next) {
 					// Two arguments.
-					return resolveBinaryCall(scope, name, *getRV(*resolveExpression(scope, lhs->item)), *getRV(*resolveExpression(scope, rhs->item)));
+					return resolveBinaryCall(scope, name, *getRV(*resolveExpression(scope, lhs->item, true)), *getRV(*resolveExpression(scope, rhs->item, true)));
 				}
 			} else {
 				// Single argument.
-				return resolveUnaryCall(scope, name, *getRV(*resolveExpression(scope, lhs->item)));
+				return resolveUnaryCall(scope, name, *getRV(*resolveExpression(scope, lhs->item, true)));
 			}
 		}
 	}
 
 	// Create a list of function arguments.
-	auto args = resolveExpressions(scope, expr.args);
+	auto args = map(expr.args, [=](auto e){getRV(*resolveExpression(scope, e, true));});
 
 	// Find the function to call.
 	if(auto fun = findFunction(scope, expr.callee, args)) {
@@ -189,52 +194,21 @@ Expr* Resolver::resolveVar(Scope& scope, Id name) {
 	}
 }
 
-Expr* Resolver::resolveIf(Scope& scope, ast::IfExpr& expr) {
+Expr* Resolver::resolveIf(Scope& scope, ast::IfExpr& expr, bool used) {
 	return createIf(
 			*resolveCondition(scope, expr.cond),
-			*resolveExpression(scope, expr.then),
-			expr.otherwise ? resolveExpression(scope, expr.otherwise) : nullptr);
+			*resolveExpression(scope, expr.then, used),
+			expr.otherwise ? resolveExpression(scope, expr.otherwise, used) : nullptr, used);
 }
 
-Expr* Resolver::createIf(ExprRef cond_, ExprRef then_, const Expr* otherwise_) {
-	auto& cond = *getRV(cond_);
-	auto& then = *getRV(then_);
-	Expr* otherwise = otherwise_ ? getRV(*otherwise_) : nullptr;
-	bool useResult = false;
-
-	// Find the type of the expression.
-	// If-expressions without an else-part can fail and never return a value.
-	// If there is an else-part then both branches must return the same type.
-	auto type = types.getUnit();
-	if(otherwise) {
-		if(then.type->isKnown() && otherwise->type->isKnown()) {
-			if(then.type == otherwise->type) {
-				type = then.type;
-				useResult = true;
-			} else {
-				// TODO: Only generate this error if the result is actually used.
-				error("the then and else branches of an if-expression must return the same type");
-				return nullptr;
-			}
-		} else {
-			type = types.getUnknown();
-		}
-	}
-
-	return build<IfExpr>(cond, then, otherwise, type, useResult);
-}
-
-Expr* Resolver::resolveMultiIf(Scope& scope, ast::IfCaseList* cases) {
+Expr* Resolver::resolveMultiIf(Scope& scope, ast::IfCaseList* cases, bool used) {
 	// Create a chain of ifs.
 	if(cases) {
-		auto cond = resolveExpression(scope, cases->item->cond);
+		auto cond = resolveCondition(scope, cases->item->cond);
 		if(alwaysTrue(*cond)) {
-			return resolveExpression(scope, cases->item->then);
+			return resolveExpression(scope, cases->item->then, used);
 		} else {
-			return createIf(
-					*resolveExpression(scope, cases->item->cond),
-					*resolveExpression(scope, cases->item->then),
-					resolveMultiIf(scope, cases->next));
+			return createIf(*cond, *resolveExpression(scope, cases->item->then, used), resolveMultiIf(scope, cases->next, used), used);
 		}
 	} else {
 		return nullptr;
@@ -247,7 +221,7 @@ Expr* Resolver::resolveDecl(Scope& scope, ast::DeclExpr& expr) {
 	Expr* content = nullptr;
 	TypeRef type;
 	if(expr.content) {
-		content = getRV(*resolveExpression(scope, expr.content));
+		content = getRV(*resolveExpression(scope, expr.content, true));
 		type = content->type;
 	} else {
 		type = types.getUnknown();
@@ -293,9 +267,19 @@ Expr* Resolver::resolveDecl(Scope& scope, ast::DeclExpr& expr) {
 
 Expr* Resolver::resolveAssign(Scope& scope, ast::AssignExpr& expr) {
 	// Only lvalues can be assigned.
-	auto target = resolveExpression(scope, expr.target);
+	auto target = resolveExpression(scope, expr.target, true);
 	if(target->type->isLvalue()) {
-		auto value = getRV(*resolveExpression(scope, expr.value));
+		auto value = getRV(*resolveExpression(scope, expr.value, true));
+
+		// A variable declared without a type gets its type from the first location it is assigned at.
+		if(target->isVar()) {
+			auto var = ((VarExpr*)target)->var;
+			if(var->type->isUnknown()) {
+				// Set the variable type and update the target expression.
+				var->type = value->type;
+				target = resolveExpression(scope, expr.target, true);
+			}
+		}
 
 		// Perform an implicit conversion if needed.
 		value = implicitCoerce(*value, ((LVType*)target->type)->type);
@@ -315,7 +299,8 @@ Expr* Resolver::resolveAssign(Scope& scope, ast::AssignExpr& expr) {
 
 Expr* Resolver::resolveWhile(Scope& scope, ast::WhileExpr& expr) {
 	// The while loop returns nothing, so there is no need to convert the body to an lvalue.
-	auto loop = resolveExpression(scope, expr.loop);
+	// The loop body is not used as an expression; it exists solely for side effects.
+	auto loop = resolveExpression(scope, expr.loop, false);
 	auto cond = resolveCondition(scope, expr.cond);
 	return build<WhileExpr>(*cond, *loop, types.getUnit());
 }
@@ -359,11 +344,11 @@ Expr* Resolver::resolveCoerce(Scope& scope, ast::CoerceExpr& expr) {
 	}
 
 	// Perform an implicit coercion as the default. Also handles lvalues.
-	return implicitCoerce(*resolveExpression(scope, expr.target), resolveType(scope, expr.kind));
+	return implicitCoerce(*resolveExpression(scope, expr.target, true), resolveType(scope, expr.kind));
 }
 
 Expr* Resolver::resolveField(Scope& scope, ast::FieldExpr& expr, ast::ExprList* args) {
-	auto target = resolveExpression(scope, expr.target);
+	auto target = resolveExpression(scope, expr.target, true);
 
 	// Check if this is a field or function call expression.
 	// For types without named fields, this is always a function call.
@@ -381,7 +366,7 @@ Expr* Resolver::resolveField(Scope& scope, ast::FieldExpr& expr, ast::ExprList* 
 		}
 
 		if(auto f = tupType->findField(((ast::VarExpr*)expr.field)->name)) {
-			auto fexpr = build<FieldExpr>(*target, f, target->type->isLvalue() ? f->type : types.getLV(f->type));
+			auto fexpr = createField(*target, f);
 			if(args) {
 				// TODO: Indirect calls.
 				//return resolveCall(scope, )
@@ -420,7 +405,7 @@ Expr* Resolver::resolveConstruct(Scope& scope, ast::ConstructExpr& expr) {
 				return nullptr;
 			}
 
-			return implicitCoerce(*resolveExpression(scope, expr.args->item), type);
+			return implicitCoerce(*resolveExpression(scope, expr.args->item, true), type);
 		}
 	}
 
@@ -430,7 +415,7 @@ Expr* Resolver::resolveConstruct(Scope& scope, ast::ConstructExpr& expr) {
 		auto f = expr.args;
 		uint counter = 0;
 		while(f) {
-			auto e = getRV(*resolveExpression(scope, f->item));
+			auto e = getRV(*resolveExpression(scope, f->item, true));
 			auto t = con->contents[counter];
 			if(!typeCheck.compatible(*e, t)) {
 				error("incompatible constructor argument type");
@@ -451,7 +436,7 @@ Expr* Resolver::resolveConstruct(Scope& scope, ast::ConstructExpr& expr) {
 		auto f = expr.args;
 		uint counter = 0;
 		while(f) {
-			auto e = getRV(*resolveExpression(scope, f->item));
+			auto e = getRV(*resolveExpression(scope, f->item, true));
 			auto t = ttype->fields[counter].type;
 			if(!typeCheck.compatible(*e, t)) {
 				error("incompatible constructor argument type");
@@ -477,7 +462,7 @@ Expr* Resolver::resolveAnonConstruct(Scope& scope, ast::TupleConstructExpr& expr
 	uint index = 0;
 	while(f) {
 		ASSERT(f->item.defaultValue);
-		auto e = getRV(*resolveExpression(scope, f->item.defaultValue));
+		auto e = getRV(*resolveExpression(scope, f->item.defaultValue, true));
 		h.Add(e->type);
 		if(f->item.name) h.Add(f->item.name());
 
@@ -505,16 +490,16 @@ Expr* Resolver::resolveAnonConstruct(Scope& scope, ast::TupleConstructExpr& expr
 	return con;
 }
 
-Expr* Resolver::resolveAlt(Scope& scope, ExprRef pivot, ast::AltList* alt) {
+Expr* Resolver::resolveAlt(Scope& scope, ExprRef pivot, ast::AltList* alt, bool used) {
 	if(alt) {
 		auto s = build<ScopedExpr>(scope);
 		auto pat = resolvePattern(s->scope, pivot, *alt->item.pattern);
-		auto result = resolveExpression(s->scope, alt->item.expr);
+		auto result = resolveExpression(s->scope, alt->item.expr, used);
 		if(alwaysTrue(*pat)) {
 			s->contents = build<MultiExpr>(Exprs{pat, result});
 			s->type = result->type;
 		} else {
-			s->contents = createIf(*pat, *result, resolveAlt(scope, pivot, alt->next));
+			s->contents = createIf(*pat, *result, resolveAlt(scope, pivot, alt->next, used), used);
 			s->type = s->contents->type;
 		}
 		return s;
@@ -523,11 +508,11 @@ Expr* Resolver::resolveAlt(Scope& scope, ExprRef pivot, ast::AltList* alt) {
 	}
 }
 
-Expr* Resolver::resolveCase(Scope& scope, ast::CaseExpr& expr) {
+Expr* Resolver::resolveCase(Scope& scope, ast::CaseExpr& expr, bool used) {
 	auto alt = expr.alts;
 	if(alt) {
-		auto pivot = resolveExpression(scope, expr.pivot);
-		return resolveAlt(scope, *pivot, expr.alts);
+		auto pivot = resolveExpression(scope, expr.pivot, true);
+		return resolveAlt(scope, *pivot, expr.alts, used);
 	} else {
 		error("a case expression must have at least one alt");
 		return build<EmptyExpr>(types.getUnit());
@@ -548,10 +533,11 @@ Expr* Resolver::resolvePattern(Scope& scope, ExprRef pivot, ast::Pattern& pat) {
 		case ast::Pattern::Tup:
 			return nullptr;
 		case ast::Pattern::Con: {
-			auto l = build<Literal>();
-			l->i = scope.findConstructor(((ast::ConPattern&)pat).constructor)->index;
-			l->type = Literal::Int;
-			return createCompare(scope, *build<FieldExpr>(pivot, -1, types.getInt()), *resolveLiteral(scope, *l));
+			auto index = scope.findConstructor(((ast::ConPattern&)pat).constructor)->index;
+			auto checkCon = createCompare(scope, *createGetCon(pivot), *createInt(index));
+
+
+			//auto args = createIf(*checkCon, stuff, con);
 		}
 		default:
 			ASSERT(false);
@@ -559,25 +545,16 @@ Expr* Resolver::resolvePattern(Scope& scope, ExprRef pivot, ast::Pattern& pat) {
 	}
 }
 
-Expr* Resolver::resolveCondition(ScopeRef scope, ast::ExprRef expr) {
-	return implicitCoerce(*resolveExpression(scope, expr), types.getBool());
+Expr* Resolver::createGetCon(ExprRef variant) {
+	if(variant.type->isVariant()) {
+		return build<FieldExpr>(variant, -1, types.getInt());
+	} else {
+		return createInt(0);
+	}
 }
 
-ExprList* Resolver::resolveExpressions(Scope& scope, ast::ExprList* list) {
-	// Create a list of function arguments.
-	ExprList* args = nullptr;
-	if(list) {
-		auto arg = list;
-		args = build<ExprList>(getRV(*resolveExpression(scope, arg->item)));
-		auto a = args;
-		arg = arg->next;
-		while(arg) {
-			a->next = build<ExprList>(getRV(*resolveExpression(scope, arg->item)));
-			a = a->next;
-			arg = arg->next;
-		}
-	}
-	return args;
+Expr* Resolver::resolveCondition(ScopeRef scope, ast::ExprRef expr) {
+	return implicitCoerce(*resolveExpression(scope, expr, true), types.getBool());
 }
 	
 ast::InfixExpr& Resolver::reorder(ast::InfixExpr& expr) {
