@@ -151,7 +151,11 @@ Value* Generator::genLiteral(resolve::Literal& literal, resolve::TypeRef type) {
 	
 Value* Generator::genVar(resolve::Variable& var) {
 	ASSERT(var.codegen != nullptr); // This could happen if a constant is used before its creation.
-	return (Value*)var.codegen;
+	if(var.type->isVariant()) {
+		return builder.CreateLoad((Value*)var.codegen);
+	} else {
+		return (Value*)var.codegen;
+	}
 }
 	
 Value* Generator::genAssign(resolve::AssignExpr& assign) {
@@ -539,10 +543,10 @@ Value* Generator::genWhile(resolve::WhileExpr& expr) {
 }
 
 Value* Generator::genField(resolve::FieldExpr& expr) {
-	if(expr.type->isVariant()) {
-		auto var = (resolve::VarType*)expr.type;
+	if(expr.container.type->isVariant()) {
+		auto var = (resolve::VarType*)expr.container.type;
 		if(expr.constructor == -1) {
-			int index = ((VariantData*)getType(expr.container.type)->data)->selectorIndex;
+			int index = ((VariantData*)getType(var)->data)->selectorIndex;
 			if(index == -1) {
 				return builder.getInt32(0);
 			} else if(var->isEnum) {
@@ -596,19 +600,21 @@ Value* Generator::genConstruct(resolve::ConstructExpr& expr) {
 		} else {
 			// General variants are always stack-allocated, as they need to be bitcasted.
 			auto pointer = builder.CreateAlloca(type->llType);
-			auto stype = (StructType*)type;
+			auto stype = (StructType*)(type->llType);
 
 			// Set the constructor index.
 			auto last = stype->getStructNumElements() - 1;
-			auto conIndex = ConstantInt::get(stype->getStructElementType(last), last);
+			auto conIndex = ConstantInt::get(stype->getStructElementType(last), expr.con->index, false);
 			auto idPointer = builder.CreateStructGEP(pointer, last);
 			builder.CreateStore(conIndex, idPointer);
 
-			// Set the constructor-specific data.
-			auto conData = builder.CreatePointerCast(pointer, PointerType::getUnqual((Type*)expr.con->codegen));
-			for(auto& i : expr.args) {
-				auto argPointer = builder.CreateStructGEP(conData, i.index);
-				builder.CreateStore(genExpr(i.expr), argPointer);
+			// Set the constructor-specific data, if any.
+			if(expr.args.Count()) {
+				auto conData = builder.CreatePointerCast(pointer, PointerType::getUnqual((Type*)expr.con->codegen));
+				for (auto &i : expr.args) {
+					auto argPointer = builder.CreateStructGEP(conData, i.index);
+					builder.CreateStore(genExpr(i.expr), argPointer);
+				}
 			}
 
 			return pointer;
