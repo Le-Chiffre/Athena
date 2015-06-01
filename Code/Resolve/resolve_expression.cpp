@@ -77,8 +77,13 @@ Expr* Resolver::resolveLiteral(Scope& scope, ast::Literal& literal) {
 }
 
 Expr* Resolver::resolveInfix(Scope& scope, ast::InfixExpr& expr) {
-	auto& e = reorder(expr);
-	return resolveBinaryCall(scope, e.op, *getRV(*resolveExpression(scope, e.lhs, true)), *getRV(*resolveExpression(scope, e.rhs, true)));
+	ast::InfixExpr* e;
+	if(expr.ordered) e = &expr;
+	else e = reorder(expr);
+	
+	return resolveBinaryCall(scope, e->op,
+							 *getRV(*resolveExpression(scope, e->lhs, true)),
+							 *getRV(*resolveExpression(scope, e->rhs, true)));
 }
 
 Expr* Resolver::resolvePrefix(Scope& scope, ast::PrefixExpr& expr) {
@@ -155,7 +160,7 @@ Expr* Resolver::resolveCall(Scope& scope, ast::AppExpr& expr) {
 	}
 
 	// Create a list of function arguments.
-	auto args = map(expr.args, [=](auto e){getRV(*resolveExpression(scope, e, true));});
+	auto args = map(expr.args, [&](auto e){return (const Expr*)this->getRV(*this->resolveExpression(scope, e, true));});
 
 	// Find the function to call.
 	if(auto fun = findFunction(scope, expr.callee, args)) {
@@ -522,6 +527,7 @@ Expr* Resolver::resolveCase(Scope& scope, ast::CaseExpr& expr, bool used) {
 Expr* Resolver::resolvePattern(Scope& scope, ExprRef pivot, ast::Pattern& pat) {
 	switch(pat.kind) {
 		case ast::Pattern::Var: {
+			// TODO: Pattern matching variables are currently defined mutable due to code generation problems.
 			auto var = build<Variable>(((ast::VarPattern&)pat).var, pivot.type, scope, true);
 			scope.variables += var;
 			return build<MultiExpr>(Exprs{build<AssignExpr>(*var, *getRV(pivot)), createTrue()});
@@ -531,13 +537,52 @@ Expr* Resolver::resolvePattern(Scope& scope, ExprRef pivot, ast::Pattern& pat) {
 		case ast::Pattern::Any:
 			return createTrue();
 		case ast::Pattern::Tup:
+			DebugError("Not implemented");
 			return nullptr;
 		case ast::Pattern::Con: {
-			auto index = scope.findConstructor(((ast::ConPattern&)pat).constructor)->index;
-			auto checkCon = createCompare(scope, *createGetCon(pivot), *createInt(index));
+			/*
+			 * Constructor patterns on variants consist of multiple steps:
+			 *  - Check if the pivot and pattern constructor indices are the same.
+			 *  - Retrieve the data for that constructor.
+			 *  - Resolve each element pattern using the corresponding constructor data element as pivot.
+			 * This is built up as a chain of ifs.
+			 */
+			auto type = getEffectiveType(pivot.type);
+			if(type->isVariant()) {
+				auto& cpat = (ast::ConPattern&)pat;
+				auto con = scope.findConstructor(cpat.constructor);
+				if(type == con->parentType) {
+					if(con->contents.Count() == ast::count(cpat.patterns)) {
+						// Check if this is the correct constructor.
+						auto checkCon = createCompare(scope, *createGetCon(pivot), *createInt(con->index));
+						if(!con->contents.Count()) return checkCon;
 
-
-			//auto args = createIf(*checkCon, stuff, con);
+						auto fieldData = createField(pivot, con->index);
+						Expr* cont;
+						if(con->contents.Count() == 1) {
+							cont = resolvePattern(scope, *fieldData, *cpat.patterns->item);
+						} else {
+							// Retrieve the constructor data.
+							// We save this in an unnamed variable, because otherwise
+							// the code generator will copy these instructions for each pattern.
+							auto fieldVar = build<Variable>(0, fieldData->type, scope, true);
+							scope.variables += fieldVar;
+							auto init = build<AssignExpr>(*fieldVar, *fieldData);
+							auto data = build<VarExpr>(fieldVar, fieldVar->type);
+							cont = build<MultiExpr>(Exprs{init, resolveConPatterns(scope, *data, cpat.patterns, 0)});
+						}
+						return createIf(*checkCon, *cont, createFalse(), true);
+					} else {
+						error("invalid number of patterns for this constructor");
+						return createFalse();
+					}
+				} else {
+					error("incompatible type in pattern");
+					return createFalse();
+				}
+			} else {
+				DebugError("Not implemented");
+			}
 		}
 		default:
 			ASSERT(false);
@@ -545,43 +590,48 @@ Expr* Resolver::resolvePattern(Scope& scope, ExprRef pivot, ast::Pattern& pat) {
 	}
 }
 
-Expr* Resolver::createGetCon(ExprRef variant) {
-	if(variant.type->isVariant()) {
-		return build<FieldExpr>(variant, -1, types.getInt());
+Expr* Resolver::resolveConPatterns(Scope& scope, ExprRef pivot, ast::PatList* pats, uint i) {
+	auto data = createField(pivot, i);
+	auto checkPattern = resolvePattern(scope, *data, *pats->item);
+	if(pats->next) {
+		auto nextPat = resolveConPatterns(scope, pivot, pats->next, i+1);
+		if(alwaysTrue(*checkPattern)) {
+			return build<MultiExpr>(Exprs{checkPattern, nextPat});
+		} else {
+			return createIf(*checkPattern, *nextPat, createFalse(), true);
+		}
 	} else {
-		return createInt(0);
+		return checkPattern;
 	}
 }
 
 Expr* Resolver::resolveCondition(ScopeRef scope, ast::ExprRef expr) {
 	return implicitCoerce(*resolveExpression(scope, expr, true), types.getBool());
 }
-	
-ast::InfixExpr& Resolver::reorder(ast::InfixExpr& expr) {
-	auto e = &expr;
-	auto res = e;
-	uint lowest = context.FindOp(e->op).precedence;
 
-	while(e->rhs->isInfix()) {
-		auto rhs = (ast::InfixExpr*)e->rhs;
-		auto first = context.FindOp(e->op);
+ast::InfixExpr* Resolver::reorder(ast::InfixExpr& expr, uint min_prec) {
+	auto lhs = &expr;
+	while(lhs->rhs->isInfix() && !lhs->ordered) {
+		auto first = context.FindOp(lhs->op);
+		if(first.precedence < min_prec) break;
+		
+		auto rhs = (ast::InfixExpr*)lhs->rhs;
 		auto second = context.FindOp(rhs->op);
-
-		// Reorder if needed.
-		if(first.precedence > second.precedence ||
-				(first.precedence == second.precedence &&
-						(first.associativity == ast::Assoc::Left || second.associativity == ast::Assoc::Left))) {
-			e->rhs = rhs->lhs;
-			rhs->lhs = e;
-			if(second.precedence < lowest) {
-				res = rhs;
-				lowest = second.precedence;
+		if(second.precedence > first.precedence ||
+			  (second.precedence == first.precedence && second.associativity == ast::Assoc::Right)) {
+			lhs->rhs = reorder(*rhs, second.precedence);
+			if(lhs->rhs == rhs) {
+				lhs->ordered = true;
+				break;
 			}
+		} else {
+			lhs->ordered = true;
+			lhs->rhs = rhs->lhs;
+			rhs->lhs = lhs;
+			lhs = rhs;
 		}
-
-		e = rhs;
 	}
-	return *res;
+	return lhs;
 }
 
 bool Resolver::alwaysTrue(ExprRef expr) {
