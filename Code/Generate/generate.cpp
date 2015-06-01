@@ -72,20 +72,20 @@ BasicBlock* Generator::genScope(resolve::Scope& scope) {
 	builder.SetInsertPoint(block);
 	// Generate the variables used in this scope (excluding function parameters).
 	// Constant variables are generated lazily as registers.
-	for(auto v : scope.shadows) {
-		if(v->isVar()) {
-			auto var = builder.CreateAlloca(getType(v->type)->llType, nullptr, toRef(ccontext.Find(v->name).name));
-			v->codegen = var;
-		}
-	}
-
-	for(auto v : scope.variables) {
-		if(v->isVar()) {
-			auto var = builder.CreateAlloca(getType(v->type)->llType, nullptr, toRef(ccontext.Find(v->name).name));
-			v->codegen = var;
-		}
-	}
+	for(auto v : scope.shadows) genVarDecl(*v);
+	for(auto v : scope.variables) genVarDecl(*v);
 	return block;
+}
+
+void Generator::genVarDecl(resolve::Variable& v) {
+	if(v.isVar() && !v.funParam) {
+		auto var = builder.CreateAlloca(getType(v.type)->llType, nullptr, toRef(ccontext.Find(v.name).name));
+		v.codegen = var;
+	} else if(v.funParam && v.type->isVariant()) {
+		auto var = builder.CreateAlloca(getType(v.type)->llType, nullptr, toRef(ccontext.Find(v.name).name));
+		builder.CreateStore((Value*)v.codegen, var);
+		v.codegen = var;
+	}
 }
 	
 Value* Generator::genExpr(resolve::ExprRef expr) {
@@ -151,11 +151,7 @@ Value* Generator::genLiteral(resolve::Literal& literal, resolve::TypeRef type) {
 	
 Value* Generator::genVar(resolve::Variable& var) {
 	ASSERT(var.codegen != nullptr); // This could happen if a constant is used before its creation.
-	if(var.type->isVariant()) {
-		return builder.CreateLoad((Value*)var.codegen);
-	} else {
-		return (Value*)var.codegen;
-	}
+	return (Value*)var.codegen;
 }
 	
 Value* Generator::genAssign(resolve::AssignExpr& assign) {
@@ -550,13 +546,16 @@ Value* Generator::genField(resolve::FieldExpr& expr) {
 			if(index == -1) {
 				return builder.getInt32(0);
 			} else if(var->isEnum) {
-				return genExpr(expr.container);
+				return builder.CreateCast(Instruction::ZExt, genExpr(expr.container), builder.getInt32Ty());
 			} else {
-				return builder.CreateStructGEP(genExpr(expr.container), (uint)index);
+				auto con = builder.CreateLoad(builder.CreateStructGEP(genExpr(expr.container), (uint)index));
+				return builder.CreateCast(Instruction::ZExt, con, builder.getInt32Ty());
 			}
 		} else {
 			ASSERT(!var->isEnum);
-			return builder.CreatePointerCast(genExpr(expr.container), (Type*)var->list[expr.constructor]->codegen);
+			// Cast the variant data into a pointer to its constructor data.
+			auto targetType = PointerType::getUnqual(getType(var->list[expr.constructor]->dataType)->llType);
+			return builder.CreateLoad(builder.CreatePointerCast(genExpr(expr.container), targetType));
 		}
 	} else {
 		auto container = genExpr(expr.container);
@@ -731,22 +730,18 @@ TypeData* Generator::genLlvmType(resolve::TypeRef type) {
 			uint baseSize = 0;
 			for (auto& con : var->list) {
 				auto fCount = con->contents.Count();
-				if (fCount) {
-					auto fields = (Type**)StackAlloc(sizeof(Type*) * fCount);
-					for (uint i = 0; i < fCount; i++) {
-						fields[i] = getType(con->contents[i])->llType;
-					}
-					auto s = StructType::create(context, {fields, fCount}, "constructor");
+				if(fCount) {
+					auto s = getType(con->dataType);
 					auto dl = module.getDataLayout();
-					auto layout = dl->getStructLayout(s);
-					if(layout->getAlignment() > totalAlignment ||
-							(layout->getAlignment() == totalAlignment && layout->getSizeInBytes() > totalSize)) {
-						totalAlignment = layout->getAlignment();
-						baseType = s;
-						baseSize = (uint)layout->getSizeInBytes();
+					auto align = dl->getPrefTypeAlignment(s->llType);
+					auto size = dl->getTypeAllocSize(s->llType);
+					if(align > totalAlignment || (align == totalAlignment && size > totalSize)) {
+						totalAlignment = align;
+						baseType = s->llType;
+						baseSize = (uint)size;
 					}
 
-					totalSize = Core::Max(totalSize, (uint)layout->getSizeInBytes());
+					totalSize = Core::Max(totalSize, (uint)size);
 					con->codegen = s;
 				} else {
 					con->codegen = nullptr;
