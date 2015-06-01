@@ -498,15 +498,11 @@ Expr* Resolver::resolveAnonConstruct(Scope& scope, ast::TupleConstructExpr& expr
 Expr* Resolver::resolveAlt(Scope& scope, ExprRef pivot, ast::AltList* alt, bool used) {
 	if(alt) {
 		auto s = build<ScopedExpr>(scope);
-		auto pat = resolvePattern(s->scope, pivot, *alt->item.pattern);
+		IfConds conds;
+		resolvePattern(s->scope, pivot, *alt->item.pattern, conds);
 		auto result = resolveExpression(s->scope, alt->item.expr, used);
-		if(alwaysTrue(*pat)) {
-			s->contents = build<MultiExpr>(Exprs{pat, result});
-			s->type = result->type;
-		} else {
-			s->contents = createIf(*pat, *result, resolveAlt(scope, pivot, alt->next, used), used);
-			s->type = s->contents->type;
-		}
+		s->contents = createIf(Move(conds), *result, resolveAlt(scope, pivot, alt->next, used), used, CondMode::And);
+		s->type = result->type;
 		return s;
 	} else {
 		return nullptr;
@@ -524,21 +520,23 @@ Expr* Resolver::resolveCase(Scope& scope, ast::CaseExpr& expr, bool used) {
 	}
 }
 
-Expr* Resolver::resolvePattern(Scope& scope, ExprRef pivot, ast::Pattern& pat) {
+void Resolver::resolvePattern(Scope& scope, ExprRef pivot, ast::Pattern& pat, IfConds& conds) {
 	switch(pat.kind) {
 		case ast::Pattern::Var: {
-			// TODO: Pattern matching variables are currently defined mutable due to code generation problems.
 			auto var = build<Variable>(((ast::VarPattern&)pat).var, pivot.type, scope, true);
 			scope.variables += var;
-			return build<MultiExpr>(Exprs{build<AssignExpr>(*var, *getRV(pivot)), createTrue()});
+			conds += IfCond(build<AssignExpr>(*var, *getRV(pivot)), nullptr);
+			break;
 		}
 		case ast::Pattern::Lit:
-			return createCompare(scope, *getRV(pivot), *resolveLiteral(scope, ((ast::LitPattern&)pat).lit));
+			conds += IfCond(nullptr, createCompare(scope, *getRV(pivot), *resolveLiteral(scope, ((ast::LitPattern&)pat).lit)));
+			break;
 		case ast::Pattern::Any:
-			return createTrue();
+			conds += IfCond(nullptr, nullptr);
+			break;
 		case ast::Pattern::Tup:
 			DebugError("Not implemented");
-			return nullptr;
+			break;
 		case ast::Pattern::Con: {
 			/*
 			 * Constructor patterns on variants consist of multiple steps:
@@ -554,13 +552,13 @@ Expr* Resolver::resolvePattern(Scope& scope, ExprRef pivot, ast::Pattern& pat) {
 				if(type == con->parentType) {
 					if(con->contents.Count() == ast::count(cpat.patterns)) {
 						// Check if this is the correct constructor.
-						auto checkCon = createCompare(scope, *createGetCon(pivot), *createInt(con->index));
-						if(!con->contents.Count()) return checkCon;
+						conds += IfCond(nullptr, createCompare(scope, *createGetCon(pivot), *createInt(con->index)));
+						if(!con->contents.Count()) return;
 
 						auto fieldData = createField(pivot, con->index);
-						Expr* cont;
+						ExprList* cont;
 						if(con->contents.Count() == 1) {
-							cont = resolvePattern(scope, *fieldData, *cpat.patterns->item);
+							resolvePattern(scope, *fieldData, *cpat.patterns->item, conds);
 						} else {
 							// Retrieve the constructor data.
 							// We save this in an unnamed variable, because otherwise
@@ -569,39 +567,31 @@ Expr* Resolver::resolvePattern(Scope& scope, ExprRef pivot, ast::Pattern& pat) {
 							scope.variables += fieldVar;
 							auto init = build<AssignExpr>(*fieldVar, *fieldData);
 							auto data = build<VarExpr>(fieldVar, fieldVar->type);
-							cont = build<MultiExpr>(Exprs{init, resolveConPatterns(scope, *data, cpat.patterns, 0)});
+							conds += IfCond(init, nullptr);
+							auto conpat = cpat.patterns;
+							uint i = 0;
+							while(conpat) {
+								auto d = createField(*data, i);
+								resolvePattern(scope, *d, *conpat->item, conds);
+								conpat = conpat->next;
+								i++;
+							}
 						}
-						return createIf(*checkCon, *cont, createFalse(), true);
 					} else {
 						error("invalid number of patterns for this constructor");
-						return createFalse();
+						conds += IfCond(nullptr, createFalse());
 					}
 				} else {
 					error("incompatible type in pattern");
-					return createFalse();
+					conds += IfCond(nullptr, createFalse());
 				}
 			} else {
 				DebugError("Not implemented");
 			}
+			break;
 		}
 		default:
 			ASSERT(false);
-			return nullptr;
-	}
-}
-
-Expr* Resolver::resolveConPatterns(Scope& scope, ExprRef pivot, ast::PatList* pats, uint i) {
-	auto data = createField(pivot, i);
-	auto checkPattern = resolvePattern(scope, *data, *pats->item);
-	if(pats->next) {
-		auto nextPat = resolveConPatterns(scope, pivot, pats->next, i+1);
-		if(alwaysTrue(*checkPattern)) {
-			return build<MultiExpr>(Exprs{checkPattern, nextPat});
-		} else {
-			return createIf(*checkPattern, *nextPat, createFalse(), true);
-		}
-	} else {
-		return checkPattern;
 	}
 }
 
