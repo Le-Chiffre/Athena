@@ -37,11 +37,6 @@ inline SourcePos updateStringPos(SourcePos pos, Core::StringRef string) {
 	return fold(updatePos, pos, string);
 }
 
-template<class T>
-inline auto getListElem(T* a) { return a; }
-template<class T>
-inline auto getListElem(const Maybe<T>& a) { return a(); }
-
 struct Parser {
 	static const char kPointerSigil = '*';
 

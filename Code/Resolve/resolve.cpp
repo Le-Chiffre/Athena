@@ -123,7 +123,7 @@ Field Resolver::resolveField(ScopeRef scope, TypeRef container, uint index, ast:
 	if(field.type)
 		type = resolveType(scope, field.type);
 	if(field.content)
-		content = resolveExpression(scope, field.content);
+		content = resolveExpression(scope, field.content, true);
 	
 	// TODO: Typecheck here if both are set.
 	return {field.name, index, type, container, content, field.constant};
@@ -170,21 +170,6 @@ LitExpr* Resolver::literalCoerce(const ast::Literal& lit, TypeRef dst) {
 	// We always return a valid value to simplify the resolver.
 	// If an error occurred the code generator will not be invoked.
 	return build<LitExpr>(literal, dst);
-}
-
-Expr* Resolver::createRet(ExprRef e) {
-	return build<RetExpr>(*getRV(e));
-}
-
-Expr* Resolver::createTrue() {
-	Literal lit;
-	lit.i = 1;
-	lit.type = Literal::Bool;
-	return build<LitExpr>(lit, types.getBool());
-}
-
-Expr* Resolver::createCompare(Scope& scope, ExprRef left, ExprRef right) {
-	return resolveBinaryCall(scope, context.AddUnqualifiedName("=="), left, right);
 }
 
 Expr* Resolver::getRV(ExprRef e) {

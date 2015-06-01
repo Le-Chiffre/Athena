@@ -50,7 +50,7 @@ bool Resolver::resolveFunction(Scope& scope, Function& fun) {
         fun.type = resolveType(scope, decl.ret);
     }
 
-    auto expr = resolveExpression(fun.scope, decl.body);
+    auto expr = resolveExpression(fun.scope, decl.body, true);
     if(fun.type) {
         expr = implicitCoerce(*expr, fun.type);
     }

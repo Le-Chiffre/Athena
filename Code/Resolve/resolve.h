@@ -81,6 +81,29 @@ struct TypeManager {
 		return result;
 	}
 
+	TypeRef getTuple(const TypeList& types) {
+		Core::Hasher h;
+		for(auto t : types) h.Add(t);
+
+		// Check if this kind of tuple has been used already.
+		TupleType* result = nullptr;
+		if(!getTuple(h, result)) {
+			// Otherwise, create the type.
+			new (result) TupleType;
+			bool resolved = true;
+			result->fields.Reserve(types.Count());
+			uint i = 0;
+			for(auto& t : types) {
+				if(!t->resolved) resolved = false;
+				result->fields += Field{0, i, t, result, nullptr, true};
+				i++;
+			}
+			result->resolved = resolved;
+		}
+
+		return result;
+	}
+
 	TypeRef getLV(TypeRef t) {
 		LVType* type;
 		if(!lvalues.AddGet(t, type)) {
@@ -139,7 +162,9 @@ struct Resolver {
 	TypeRef resolveAlias(AliasType* type);
 	TypeRef resolveTuple(Scope& scope, ast::TupleType& type, ast::SimpleType* tscope = nullptr);
 	TypeRef resolveVariant(VarType* type);
+
 	Expr* resolvePattern(Scope& scope, ExprRef pivot, ast::Pattern& pat);
+	Expr* resolveConPatterns(Scope& scope, ExprRef pivot, ast::PatList* pats, uint i);
 
     /// Resolves a binary operation on two primitive types.
     /// *lhs* and *rhs* must be primitives.
@@ -245,7 +270,7 @@ struct Resolver {
 	uint findImplicitConversionCount(FunctionDecl* f, ExprList* args);
 
 	/// Reorders the provided chain of infix operators according to the operator precedence table.
-	ast::InfixExpr& reorder(ast::InfixExpr& expr);
+	ast::InfixExpr* reorder(ast::InfixExpr& expr, uint min_prec = 0);
 
 	/// Checks if the provided expression always evaluates to a true constant.
 	bool alwaysTrue(ExprRef expr);
@@ -254,10 +279,10 @@ struct Resolver {
 
 	template<class T, class F>
 	auto map(ast::ASTList<T>* l, F&& f) {
-		decltype(list(f(l->item))) list;
+		decltype(list(f(l->item))) ll = nullptr;
 		if(l) {
-			list = list(f(l->item));
-			auto a = list;
+			ll = list(f(l->item));
+			auto a = ll;
 			l = l->next;
 			while(l) {
 				a->next = list(f(l->item));
@@ -265,7 +290,7 @@ struct Resolver {
 				l = l->next;
 			}
 		}
-		return list;
+		return ll;
 	}
 
 	nullptr_t error(const char*);

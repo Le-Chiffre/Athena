@@ -32,12 +32,26 @@ struct ASTList<T*>
 	ASTList(T* i, ASTList<T*>* n) : next(n), item(i) {}
 };
 
+template<class T>
+inline auto getListElem(T* a) { return a; }
+template<class T>
+inline auto getListElem(const Core::Maybe<T>& a) { return a(); }
+
 template<class T, class F>
 void walk(ASTList<T>* l, F&& f) {
 	while(l) {
 		f(l->item);
 		l = l->next;
 	}
+}
+
+template<class T, class U, class F>
+U fold(ASTList<T>* l, U start, F&& f) {
+	while(l) {
+		start = f(l->item, start);
+		l = l->next;
+	}
+	return start;
 }
 
 template<class T>
@@ -205,6 +219,7 @@ struct InfixExpr : Expr {
 	InfixExpr(Id op, ExprRef lhs, ExprRef rhs) : Expr(Infix), lhs(lhs), rhs(rhs), op(op) {}
 	ExprRef lhs, rhs;
 	Id op;
+	bool ordered = false;
 };
 
 struct PrefixExpr : Expr {
