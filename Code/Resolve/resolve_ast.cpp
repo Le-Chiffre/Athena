@@ -63,4 +63,33 @@ bool Scope::hasVariables() {
     return false;
 }
 
+bool succeedsAlways(const IfConds& conds, CondMode mode) {
+    if(conds.Count()) {
+        if(mode == resolve::CondMode::And) {
+            // In and-mode, the chain can fail if there is at least one condition.
+            for(auto e : conds) {
+                if(e.cond) {
+                    return false;
+                }
+            }
+            return true;
+        } else {
+            // In or-mode, the chain will succeed if there is at least one missing condition.
+            for(auto e : conds) {
+                if(!e.cond) return true;
+            }
+            return false;
+        }
+    } else return true;
+}
+
+IfExpr::IfExpr(IfConds&& conds, ExprRef then, const Expr* otherwise, TypeRef type, bool ret, CondMode mode) :
+        Expr(If, type), conds(conds), then(then), otherwise(otherwise), mode(mode), returnResult(ret) {
+    alwaysTrue = succeedsAlways(conds, mode);
+}
+
+IfExpr::IfExpr(IfConds&& conds, ExprRef then, const Expr* otherwise, TypeRef type, bool ret, CondMode mode, bool alwaysTrue) :
+        Expr(If, type), conds(conds), then(then), otherwise(otherwise), mode(mode), returnResult(ret), alwaysTrue(alwaysTrue) {
+}
+
 }} // namespace athena::resolve

@@ -26,8 +26,14 @@ Expr* Resolver::createCompare(Scope& scope, ExprRef left, ExprRef right) {
     return resolveBinaryCall(scope, context.AddUnqualifiedName("=="), left, right);
 }
 
-Expr* Resolver::createIf(ExprRef cond_, ExprRef then_, const Expr* otherwise_, bool used) {
-    auto cond = getRV(cond_);
+Expr* Resolver::createIf(ExprRef cond, ExprRef then, const Expr* otherwise, bool used) {
+    return createIf(IfConds{IfCond{nullptr, (Expr*)&cond}}, then, otherwise, used, CondMode::And);
+}
+
+Expr* Resolver::createIf(IfConds&& conds, ExprRef then_, const Expr* otherwise_, bool used, CondMode mode) {
+    for(auto& c : conds) {
+        if(c.cond) c.cond = getRV(*c.cond);
+    }
     auto then = getRV(then_);
     Expr* otherwise = otherwise_ ? getRV(*otherwise_) : nullptr;
 
@@ -57,7 +63,7 @@ Expr* Resolver::createIf(ExprRef cond_, ExprRef then_, const Expr* otherwise_, b
         error("this expression may not return a value");
     }
 
-    return build<IfExpr>(*cond, *then, otherwise, type, used);
+    return build<IfExpr>(Move(conds), *then, otherwise, type, used, mode);
 }
 
 Expr* Resolver::createField(ExprRef pivot, Field* field) {

@@ -163,8 +163,8 @@ struct Resolver {
 	TypeRef resolveTuple(Scope& scope, ast::TupleType& type, ast::SimpleType* tscope = nullptr);
 	TypeRef resolveVariant(VarType* type);
 
-	Expr* resolvePattern(Scope& scope, ExprRef pivot, ast::Pattern& pat);
-	Expr* resolveConPatterns(Scope& scope, ExprRef pivot, ast::PatList* pats, uint i);
+	/// Adds to a list of conditions that must be true.
+	void resolvePattern(Scope& scope, ExprRef pivot, ast::Pattern& pat, IfConds& conds);
 
     /// Resolves a binary operation on two primitive types.
     /// *lhs* and *rhs* must be primitives.
@@ -222,6 +222,7 @@ struct Resolver {
 
 	/// Creates an if-expression.
 	Expr* createIf(ExprRef cond, ExprRef then, const Expr* otherwise, bool used);
+	Expr* createIf(IfConds&& cond, ExprRef then, const Expr* otherwise, bool used, CondMode mode);
 
 	/// Creates a field-expression.
 	Expr* createField(ExprRef pivot, Field* field);

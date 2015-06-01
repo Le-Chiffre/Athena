@@ -500,12 +500,33 @@ struct CaseExpr : Expr {
     Expr* otherwise;
 };
 
+struct IfCond {
+	IfCond(Expr* scope, Expr* cond) : scope(scope), cond(cond) {}
+	Expr* scope;
+ 	Expr* cond;
+};
+
+typedef Core::Array<IfCond> IfConds;
+
+enum class CondMode : uint8 {
+	/// The then-branch is executed if all conditions are true.
+	And,
+
+	/// The then-branch is executed if at least one condition is true.
+	Or
+};
+
+bool succeedsAlways(const IfConds& conds, CondMode mode);
+
 struct IfExpr : Expr {
-	IfExpr(ExprRef cond, ExprRef then, const Expr* otherwise, TypeRef type, bool ret) : Expr(If, type), cond(cond), then(then), otherwise(otherwise), returnResult(ret) {}
-	ExprRef cond;
+	IfExpr(IfConds&& conds, ExprRef then, const Expr* otherwise, TypeRef type, bool ret, CondMode mode);
+	IfExpr(IfConds&& conds, ExprRef then, const Expr* otherwise, TypeRef type, bool ret, CondMode mode, bool alwaysTrue);
+	IfConds conds;
 	ExprRef then;
 	const Expr* otherwise;
+	CondMode mode;
 	bool returnResult;
+	bool alwaysTrue;
 };
 
 struct WhileExpr : Expr {
