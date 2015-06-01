@@ -61,6 +61,13 @@ TypeRef Resolver::resolveVariant(VarType* type) {
 		ast::walk(c->astDecl, [&](auto i) {
 			c->contents += this->resolveType(type->scope, i, false, type->astDecl->type);
 		});
+		if(c->contents.Count() == 0) {
+			c->dataType = types.getUnit();
+		} else if(c->contents.Count() == 1) {
+			c->dataType = c->contents[0];
+		} else {
+			c->dataType = types.getTuple(c->contents);
+		}
 		c->astDecl = nullptr;
 	}
 	type->astDecl = nullptr;
@@ -143,7 +150,7 @@ TypeRef Resolver::resolveType(ScopeRef scope, ast::TypeRef type, bool constructo
 		// Check if this type has been defined in this scope.
 		if(constructor) {
 			if (auto t = scope.findConstructor(type->con))
-				return t->type;
+				return t->parentType;
 
 			// TODO: This is kind of a hack.
 			// The Bool primitive type has separate constructors.
@@ -194,6 +201,12 @@ TypeRef Resolver::instantiateType(ScopeRef scope, TypeRef base, ast::TypeList* a
 		error("must be a generic type");
 		return base;
 	}
+}
+
+TypeRef Resolver::getEffectiveType(TypeRef type) {
+	if(type->isAlias()) return ((AliasType*)type)->target;
+	else if(type->isLvalue()) return ((LVType*)type)->type;
+	else return type;
 }
 
 TypeRef Resolver::lazyResolve(TypeRef t) {

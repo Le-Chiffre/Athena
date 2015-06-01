@@ -37,14 +37,15 @@ typedef Core::NumberMap<FunctionDecl*, Id> FunMap;
 typedef ast::ForeignConvention ForeignConvention;
 
 struct VarConstructor {
-	VarConstructor(Id name, uint index, TypeRef type, ast::TypeList* astDecl) : name(name), index(index), type(type), astDecl(astDecl) {}
+	VarConstructor(Id name, uint index, TypeRef parentType, ast::TypeList* astDecl) : name(name), index(index), parentType(parentType), astDecl(astDecl) {}
 	VarConstructor(const VarConstructor&) = default;
 
 	Id name;
 	uint index;
-	TypeRef type;
+	TypeRef parentType;
 	ast::TypeList* astDecl;
 	TypeList contents;
+	TypeRef dataType = nullptr; // A type that contains everything inside the contents list.
 	void* codegen = nullptr;
 };
 
@@ -259,6 +260,7 @@ struct Type {
 	bool isVariant() const {return kind == Var;}
 	bool isGeneric() const {return kind == Gen;}
 	bool isApplication() const {return kind == App;}
+	bool isUnknown() const {return kind == Unknown;}
 
 	Type(Kind kind) : kind(kind) {}
 };
@@ -451,6 +453,7 @@ struct Expr {
 
 	bool isTemp() const {return kind < FirstTemporary;}
 	bool isLiteral() const {return kind == Lit;}
+	bool isVar() const {return kind == Var;}
 
 	TypeRef type;
 	Expr(Kind k, TypeRef type) : kind(k), type(type) {}
