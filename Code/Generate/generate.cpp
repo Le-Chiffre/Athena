@@ -37,7 +37,7 @@ Function* Generator::genFunctionDecl(resolve::FunctionDecl& function) {
 		function.codegen = func;
 		return func;
 	} else {
-		auto func = Function::Create(type, Function::InternalLinkage, toRef(ccontext.Find(function.name).name), &module);
+		auto func = Function::Create(type, Function::ExternalLinkage, toRef(ccontext.Find(function.name).name), &module);
 		func->setCallingConv(CallingConv::Fast);
 		function.codegen = func;
 		if(function.hasImpl) {
@@ -78,11 +78,12 @@ BasicBlock* Generator::genScope(resolve::Scope& scope) {
 }
 
 void Generator::genVarDecl(resolve::Variable& v) {
+	auto type = getType(v.type);
 	if(v.isVar() && !v.funParam) {
-		auto var = builder.CreateAlloca(getType(v.type)->llType, nullptr, toRef(ccontext.Find(v.name).name));
+		auto var = builder.CreateAlloca(type->llType, nullptr, toRef(ccontext.Find(v.name).name));
 		v.codegen = var;
-	} else if(v.funParam && v.type->isVariant()) {
-		auto var = builder.CreateAlloca(getType(v.type)->llType, nullptr, toRef(ccontext.Find(v.name).name));
+	} else if(v.funParam && type->onStack) {
+		auto var = builder.CreateAlloca(type->llType, nullptr, toRef(ccontext.Find(v.name).name));
 		builder.CreateStore((Value*)v.codegen, var);
 		v.codegen = var;
 	}
@@ -157,6 +158,9 @@ Value* Generator::genVar(resolve::Variable& var) {
 Value* Generator::genAssign(resolve::AssignExpr& assign) {
 	ASSERT(!assign.target.isVar());
 	auto e = genExpr(assign.value);
+
+	// This should also work for stack types - in that case the pointer to the stack object is replaced.
+	// This is not a problem, since assign-expressions are always executed before the variable is used.
 	assign.target.codegen = e;
 	return e;
 }
@@ -183,6 +187,9 @@ Value* Generator::genMulti(resolve::MultiExpr& expr) {
 	
 Value* Generator::genRet(resolve::RetExpr& expr) {
 	auto e = genExpr(expr.expr);
+	if(getType(expr.expr.type)->onStack) {
+		e = builder.CreateLoad(e);
+	}
 	if(expr.type->isUnit())
 		return builder.CreateRetVoid();
 	else
@@ -200,10 +207,16 @@ Value* Generator::genCall(resolve::FunctionDecl& function, resolve::ExprList* ar
 	auto args = (Value**)StackAlloc(sizeof(Value*) * argCount);
 	for(uint i=0; i<argCount; i++) {
 		args[i] = genExpr(*argList->item);
+		if(getType(argList->item->type)->onStack) {
+			args[i] = builder.CreateLoad(args[i]);
+		}
 		argList = argList->next;
 	}
-	
-	return builder.CreateCall((Value*)function.codegen, ArrayRef<Value*>{args, argCount});
+
+	auto f = (Function*)function.codegen;
+	auto call = builder.CreateCall(f, ArrayRef<Value*>{args, argCount});
+	call->setCallingConv(f->getCallingConv());
+	return call;
 }
 
 Value* Generator::genPrimitiveCall(resolve::PrimitiveOp op, resolve::ExprList* args) {
@@ -234,7 +247,7 @@ Value* Generator::genPrimitiveCall(resolve::PrimitiveOp op, resolve::ExprList* a
 		return genUnaryOp(op, *(const resolve::PrimType*)args->item->type, genExpr(*args->item));
 	} else {
 		FatalError("Unsupported primitive operator provided");
-        return nullptr;
+		return nullptr;
 	}
 }
 
@@ -379,18 +392,48 @@ Value* Generator::genCase(resolve::CaseExpr& casee) {
 }
 
 Value* Generator::genIf(resolve::IfExpr& ife) {
-	ASSERT(ife.cond.type->isBool());
+	// If the chain always succeeds, we just execute the condition scopes and the then-branch.
+	if(ife.alwaysTrue) {
+		for(auto e : ife.conds) {
+			if(e.scope) genExpr(*e.scope);
+		}
+		return genExpr(ife.then);
+	}
 
 	// Create basic blocks for each branch.
 	// Don't restore the previous one, as the next expression needs to be put in the continuation block.
 	auto function = getFunction();
-	auto thenBlock = BasicBlock::Create(context, "then", function);
-	BasicBlock* elseBlock = ife.otherwise ? BasicBlock::Create(context, "else", function) : nullptr;
-	auto contBlock = BasicBlock::Create(context, "cont", function);
+	BasicBlock* thenBlock, *elseBlock, *contBlock, *nextCond;
+	elseBlock = ife.otherwise ? BasicBlock::Create(context, "else", function) : nullptr;
+	contBlock = BasicBlock::Create(context, "cont", function);
+	if(ife.mode == resolve::CondMode::Or)
+		thenBlock = BasicBlock::Create(context, "then", function);
 
-	// Create condition.
-	auto cond = genExpr(ife.cond);
-	builder.CreateCondBr(cond, thenBlock, elseBlock ? elseBlock : contBlock);
+	// Generate a chain of conditions.
+	for(uint i = 0;; i++) {
+		auto c = &ife.conds[i];
+		if(c->scope) genExpr(*c->scope);
+
+		if(i == ife.conds.Count() - 1) {
+			if(c->cond) {
+				auto gen = genExpr(*c->cond);
+				thenBlock = BasicBlock::Create(context, "then", function);
+				builder.CreateCondBr(gen, thenBlock, elseBlock ? elseBlock : contBlock);
+			} else {
+				thenBlock = builder.GetInsertBlock();
+			}
+			break;
+		} else if(c->cond) {
+			auto gen = genExpr(*c->cond);
+			nextCond = BasicBlock::Create(context, "then", function);
+			if(ife.mode == resolve::CondMode::Or) {
+				builder.CreateCondBr(gen, thenBlock, nextCond);
+			} else {
+				builder.CreateCondBr(gen, nextCond, elseBlock ? elseBlock : contBlock);
+			}
+			builder.SetInsertPoint(nextCond);
+		}
+	}
 
 	// Create "then" branch.
 	// The code generated by the block may create blocks of its own,
@@ -591,11 +634,15 @@ Value* Generator::genConstruct(resolve::ConstructExpr& expr) {
 			return ConstantInt::get(type->llType, expr.con->index, false);
 		} else if(var->list.Count() == 1) {
 			// Single-constructor variants are constructed like the equivalent tuple.
-			Value* v = UndefValue::get(type->llType);
-			for(auto a : expr.args) {
-				v = builder.CreateInsertValue(v, genExpr(a.expr), a.index);
+			if(expr.args.Count() > 1) {
+				Value* v = UndefValue::get(type->llType);
+				for(auto a : expr.args) {
+					v = builder.CreateInsertValue(v, genExpr(a.expr), a.index);
+				}
+				return v;
+			} else {
+				return genExpr(expr.args[0].expr);
 			}
-			return v;
 		} else {
 			// General variants are always stack-allocated, as they need to be bitcasted.
 			auto pointer = builder.CreateAlloca(type->llType);
@@ -609,10 +656,14 @@ Value* Generator::genConstruct(resolve::ConstructExpr& expr) {
 
 			// Set the constructor-specific data, if any.
 			if(expr.args.Count()) {
-				auto conData = builder.CreatePointerCast(pointer, PointerType::getUnqual((Type*)expr.con->codegen));
-				for (auto &i : expr.args) {
-					auto argPointer = builder.CreateStructGEP(conData, i.index);
-					builder.CreateStore(genExpr(i.expr), argPointer);
+				auto conData = builder.CreatePointerCast(pointer, PointerType::getUnqual(((TypeData*)expr.con->codegen)->llType));
+				if(expr.args.Count() > 1) {
+					for (auto &i : expr.args) {
+						auto argPointer = builder.CreateStructGEP(conData, i.index);
+						builder.CreateStore(genExpr(i.expr), argPointer);
+					}
+				} else {
+					builder.CreateStore(genExpr(expr.args[0].expr), conData);
 				}
 			}
 
@@ -651,6 +702,7 @@ Value* Generator::genLazyCond(resolve::PrimitiveOp op, resolve::ExprRef lhs, res
 
 	// Create lhs condition.
 	auto left = genExpr(lhs);
+	lhsBlock = builder.GetInsertBlock();
 	if(op == resolve::PrimitiveOp::And) {
 		// For and, we can early-out if the first condition is false.
 		builder.CreateCondBr(left, rhsBlock, contBlock);
@@ -662,6 +714,7 @@ Value* Generator::genLazyCond(resolve::PrimitiveOp op, resolve::ExprRef lhs, res
 	// Create the rhs condition.
 	builder.SetInsertPoint(rhsBlock);
 	auto right = genExpr(rhs);
+	rhsBlock = builder.GetInsertBlock();
 	builder.CreateBr(contBlock);
 
 	// Create the expression result.
@@ -768,6 +821,7 @@ TypeData* Generator::genLlvmType(resolve::TypeRef type) {
 					data->llType = StructType::create(context, {fields, 3}, "variant");
 					varData->selectorIndex = 2;
 				}
+				data->onStack = true;
 			}
 		}
 		return data;

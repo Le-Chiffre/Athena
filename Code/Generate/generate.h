@@ -33,8 +33,9 @@ struct VariantData {
 };
 
 struct TypeData {
-	llvm::Type* llType;
-	void* data;
+	llvm::Type* llType = nullptr;
+	void* data = nullptr;
+	bool onStack = false;
 };
 	
 struct Generator {
