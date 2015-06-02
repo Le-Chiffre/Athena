@@ -75,8 +75,11 @@ void Parser::parseDecl() {
 		if(token == Token::VarID) {
 			// Parse zero or more argument names.
 			args = build<TupleType>(many1([=] {
-				if(token == Token::VarID) return just(TupleField{nullptr, token.data.id, nullptr});
-				else return nothing<TupleField>();
+				if(token == Token::VarID) {
+					auto id = token.data.id;
+					eat();
+					return just(TupleField{nullptr, id, nullptr});
+				} else return nothing<TupleField>();
 			}));
 		} else if(token == Token::BracketL) {
 			// Parse the function arguments as a tuple.
@@ -411,21 +414,27 @@ Expr* Parser::parseLeftExpr() {
 		}
 	} else if(token == Token::opBackSlash) {
 		eat();
-		auto vars = many([=]{
-			if(token == Token::VarID) {
-				auto id = token.data.id;
-				eat();
-				return just(id);
-			} else {
-				error("expected variable name");
-				return nothing<Id>();
-			}
-		});
+		TupleType* args;
+		if(token == Token::VarID) {
+			// Parse zero or more argument names.
+			args = build<TupleType>(many1([=] {
+				if(token == Token::VarID) {
+					auto id = token.data.id;
+					eat();
+					return just(TupleField{nullptr, id, nullptr});
+				} else return nothing<TupleField>();
+			}));
+		} else if(token == Token::BracketL) {
+			// Parse the function arguments as a tuple.
+			args = (TupleType*)parseTupleType();
+		} else {
+			error("expected function parameters");
+		}
 
 		if(token == Token::opArrowR) {
 			eat();
 			if(auto e = parseInfixExpr()) {
-				return build<LamExpr>(vars, e);
+				return build<LamExpr>(args, e);
 			} else {
 				return error("expected expression");
 			}

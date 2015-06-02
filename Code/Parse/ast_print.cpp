@@ -284,12 +284,19 @@ private:
 
 	void toString(const LamExpr& e) {
 		string += "LamExpr (";
-		auto v = e.vars;
-		while(v) {
-			auto name = context.Find(v->item).name;
-			string.Append(name.ptr, name.length);
-			if(v->next) string += ", ";
-			v = v->next;
+		if(e.args) {
+			auto arg = e.args->fields;
+			while(arg) {
+				String name;
+				if(arg->item.name)
+					name = context.Find(arg->item.name()).name;
+				else
+					name = "<unnamed>";
+
+				string.Append(name.ptr, name.length);
+				if(arg->next) string += ", ";
+				arg = arg->next;
+			}
 		}
 		string += ')';
 

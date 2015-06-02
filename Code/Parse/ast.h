@@ -216,11 +216,9 @@ struct AppExpr : Expr {
 	ExprList* args;
 };
 
-typedef ASTList<Id> IdList;
-
 struct LamExpr : Expr {
-	LamExpr(IdList* vars, ExprRef body) : Expr(Lam), vars(vars), body(body) {}
-	IdList* vars;
+	LamExpr(TupleType* args, ExprRef body) : Expr(Lam), args(args), body(body) {}
+	TupleType* args;
 	ExprRef body;
 };
 
