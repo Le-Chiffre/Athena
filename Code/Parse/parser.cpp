@@ -838,7 +838,7 @@ Type* Parser::parseTupleType() {
 Expr* Parser::parseTupleConstruct() {
 	auto expr = between([=] {
 		auto l = sepBy([=] {return parseTupleConstructField();}, Token::Comma);
-		if(l) return (Expr*)build<TupleConstructExpr>(nullptr, l);
+		if(l) return (Expr*)build<TupleConstructExpr>(l);
 		else return build<Expr>(Expr::Unit);
 	}, Token::BracketL, Token::BracketR);
 
@@ -1001,6 +1001,31 @@ Pattern* Parser::parseLeftPattern() {
 		auto id = token.data.id;
 		eat();
 		return build<ConPattern>(id, nullptr);
+	} else if(token == Token::BracketL) {
+		auto expr = between([=] {
+			return sepBy([=] {
+				Maybe<Id> name = Nothing;
+				Pattern* pat = nullptr;
+
+				if(token == Token::VarID) {
+					auto id = token.data.id;
+					eat();
+					if(token == Token::opEquals) {
+						name = id;
+						eat();
+						pat = parsePattern();
+					} else {
+						pat = build<VarPattern>(id);
+					}
+				} else {
+					pat = parsePattern();
+				}
+
+				if(!pat) return nothing<FieldPat>();
+				return just(FieldPat{name, pat});
+			}, Token::Comma);
+		}, Token::BracketL, Token::BracketR);
+		return build<TupPattern>(expr);
 	} else {
 		error("expected pattern");
 		return nullptr;

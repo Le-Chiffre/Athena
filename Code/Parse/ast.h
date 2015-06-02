@@ -289,8 +289,7 @@ struct FieldExpr : Expr {
 };
 
 struct TupleConstructExpr : Expr {
-	TupleConstructExpr(TypeRef type, TupleFieldList* args) : Expr(TupleConstruct), type(type), args(args) {}
-	TypeRef type;
+	TupleConstructExpr(TupleFieldList* args) : Expr(TupleConstruct), args(args) {}
 	TupleFieldList* args;
 };
 
@@ -344,9 +343,17 @@ struct LitPattern : Pattern {
 	Literal lit;
 };
 
+struct FieldPat {
+	FieldPat(Core::Maybe<Id> field, Pattern* pat) : field(field), pat(pat) {}
+	Core::Maybe<Id> field;
+	Pattern* pat;
+};
+
+typedef ASTList<FieldPat> FieldPatList;
+
 struct TupPattern : Pattern {
-	TupPattern(TupleFieldList* fields, Id asVar = 0) : Pattern(Tup, asVar), fields(fields) {}
-	TupleFieldList* fields;
+	TupPattern(FieldPatList* fields, Id asVar = 0) : Pattern(Tup, asVar), fields(fields) {}
+	FieldPatList* fields;
 };
 
 struct ConPattern : Pattern {
