@@ -71,78 +71,61 @@ void Parser::parseDecl() {
 	} else if(token == Token::kwForeign) {
 		parseForeignDecl();
 	} else if(auto var = tryParse([=] {return parseVar();})) {
-		if(token == Token::opColon) {
-			eat();
-
-			// Parse zero or more arguments.
-			auto args = build<TupleType>(many1([=] {
+		TupleType* args = nullptr;
+		if(token == Token::VarID) {
+			// Parse zero or more argument names.
+			args = build<TupleType>(many1([=] {
 				if(token == Token::VarID) return just(TupleField{nullptr, token.data.id, nullptr});
 				else return nothing<TupleField>();
 			}));
-
-			if(token == Token::opEquals) {
-				eat();
-
-				// Parse the function body.
-				if(auto expr = parseExpr()) {
-					module.declarations += build<FunDecl>(var(), expr, args, nullptr);
-				} else {
-					error("Expected a function body expression.");
-				}
-			} else {
-				error("Expected '=' after a function declaration.");
-			}
-		} else if(token == Token::opEquals) {
-			eat();
-
-			// Parse the function body.
-			if(auto expr = parseExpr()) {
-				module.declarations += build<FunDecl>(var(), expr, nullptr, nullptr);
-			} else {
-				error("Expected a function body expression.");
-			}
 		} else if(token == Token::BracketL) {
-            // Parse the function arguments as a tuple.
-            auto args = (TupleType*)parseTupleType();
-			Type* type = nullptr;
+			// Parse the function arguments as a tuple.
+			args = (TupleType*)parseTupleType();
+		}
 
-			// Parse optional return type.
-			if(token == Token::opArrowR) {
-				eat();
-				type = parseType();
-			}
-
-			if(token != Token::opEquals) {
-				error("Expected '=' after a function signature.");
-				return;
-			}
+		// Parse optional return type.
+		Type* type = nullptr;
+		if(token == Token::opArrowR) {
 			eat();
+			type = parseType();
+		}
 
-            // Parse the function body.
-            if(auto expr = parseExpr()) {
-                module.declarations += build<FunDecl>(var(), expr, args, type);
-            } else {
-                error("Expected a function body expression.");
-            }
-        } else if(token == Token::opArrowR) {
-			eat();
-
-			// Parse the return type.
-			auto type = parseType();
-			if(token != Token::opEquals) {
-				error("Expected '=' after a function signature.");
-				return;
-			}
+		if(token == Token::opEquals) {
 			eat();
 
 			// Parse the function body.
 			if(auto expr = parseExpr()) {
-				module.declarations += build<FunDecl>(var(), expr, nullptr, type);
+				module.declarations += build<FunDecl>(var(), expr, args, type);
 			} else {
-				error("Expected a function body expression.");
+				error("expected a function body expression.");
+			}
+		} else if(token == Token::opBar) {
+			auto cases = withLevel([=] {
+				return sepBy1([=] {
+					if(token == Token::opBar) eat();
+					else {error("expected '|'"); return (FunCase*)nullptr;}
+
+					auto pats = many([=] {return parsePattern();});
+
+					if(token == Token::opEquals) eat();
+					else {error("expected '='"); return (FunCase*)nullptr;}
+
+					if(auto expr = parseExpr()) {
+						return build<FunCase>(pats, expr);
+					} else {
+						error("expected function body");
+						return (FunCase*)nullptr;
+					}
+				}, Token::EndOfStmt);
+			});
+
+			if(cases) {
+				module.declarations += build<FunDecl>(var(), cases, args, type);
+			} else {
+				error("expected a function pattern");
 			}
 		} else {
-			error("Expected ':' or '=' after a function name declaration.");
+			error("expected a function definition");
 		}
 	}
 }

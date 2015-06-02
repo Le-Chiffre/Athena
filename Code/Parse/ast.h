@@ -382,12 +382,27 @@ struct Arg {
 
 typedef ASTList<Arg> ArgList;
 
+struct FunCase {
+	FunCase(PatList* patterns, ExprRef body) : patterns(patterns), body(body) {}
+	PatList* patterns;
+	ExprRef body;
+};
+
+typedef ASTList<FunCase*> FunCaseList;
+
 struct FunDecl : Decl {
-	FunDecl(Id name, ExprRef body, TupleType* args, TypeRef ret) : Decl(Function), name(name), args(args), ret(ret), body(body) {}
+	FunDecl(Id name, ExprRef body, TupleType* args, TypeRef ret) :
+			Decl(Function), name(name), args(args), ret(ret), body(body), cases(nullptr) {}
+	FunDecl(Id name, FunCaseList* cases, TupleType* args, TypeRef ret) :
+			Decl(Function), name(name), args(args), ret(ret), body(nullptr), cases(cases) {}
+
 	Id name;
 	TupleType* args;
 	TypeRef ret; // If the function explicitly defines one.
+
+	// One of these is set.
 	ExprRef body;
+	FunCaseList* cases;
 };
 
 struct TypeDecl : Decl {
