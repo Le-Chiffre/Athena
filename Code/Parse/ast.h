@@ -160,6 +160,7 @@ struct Expr {
 		Lit,
 		Var,
 		App,
+		Lam,
 		Infix,
 		Prefix,
         If,
@@ -213,6 +214,14 @@ struct AppExpr : Expr {
 	AppExpr(ExprRef n, ExprList* args = nullptr) : Expr(App), callee(n), args(args) {}
 	ExprRef callee;
 	ExprList* args;
+};
+
+typedef ASTList<Id> IdList;
+
+struct LamExpr : Expr {
+	LamExpr(IdList* vars, ExprRef body) : Expr(Lam), vars(vars), body(body) {}
+	IdList* vars;
+	ExprRef body;
 };
 
 struct InfixExpr : Expr {

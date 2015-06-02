@@ -409,6 +409,29 @@ Expr* Parser::parseLeftExpr() {
 		} else {
 			error("Expected expression after 'while'");
 		}
+	} else if(token == Token::opBackSlash) {
+		eat();
+		auto vars = many([=]{
+			if(token == Token::VarID) {
+				auto id = token.data.id;
+				eat();
+				return just(id);
+			} else {
+				error("expected variable name");
+				return nothing<Id>();
+			}
+		});
+
+		if(token == Token::opArrowR) {
+			eat();
+			if(auto e = parseInfixExpr()) {
+				return build<LamExpr>(vars, e);
+			} else {
+				return error("expected expression");
+			}
+		} else {
+			return error("expected '->'");
+		}
 	} else {
 		return parseCallExpr();
 	}

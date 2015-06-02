@@ -15,6 +15,7 @@ struct Printer {
 			case Expr::Lit: toString((const LitExpr&)expr); break;
 			case Expr::Var: toString((const VarExpr&)expr); break;
 			case Expr::App: toString((const AppExpr&)expr); break;
+			case Expr::Lam: toString((const LamExpr&)expr); break;
 			case Expr::Infix: toString((const InfixExpr&)expr); break;
 			case Expr::Prefix: toString((const PrefixExpr&)expr); break;
 			case Expr::If: toString((const IfExpr&)expr); break;
@@ -114,11 +115,16 @@ private:
 			case Literal::Char:
 				string += e.literal.c;
 				break;
-			case Literal::String:
+			case Literal::String: {
 				string += '"';
 				auto name = context.Find(e.literal.s).name;
 				string.Append(name.ptr, name.length);
 				string += '"';
+				break;
+			}
+			case Literal::Bool:
+				if(e.literal.i) string += "True";
+				else string += "False";
 				break;
 		}
 	}
@@ -273,6 +279,22 @@ private:
 			else toString(a->item, true);
 			a = a->next;
 		}
+		removeLevel();
+	}
+
+	void toString(const LamExpr& e) {
+		string += "LamExpr (";
+		auto v = e.vars;
+		while(v) {
+			auto name = context.Find(v->item).name;
+			string.Append(name.ptr, name.length);
+			if(v->next) string += ", ";
+			v = v->next;
+		}
+		string += ')';
+
+		makeLevel();
+		toString(*e.body, true);
 		removeLevel();
 	}
 	
