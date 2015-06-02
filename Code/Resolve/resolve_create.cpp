@@ -59,11 +59,14 @@ Expr* Resolver::createIf(IfConds&& conds, ExprRef then_, const Expr* otherwise_,
         } else {
             type = types.getUnknown();
         }
-    } else if(used) {
+    }
+
+    auto expr = build<IfExpr>(Move(conds), *then, otherwise, type, used, mode);
+    if(!otherwise && used && !expr->alwaysTrue) {
         error("this expression may not return a value");
     }
 
-    return build<IfExpr>(Move(conds), *then, otherwise, type, used, mode);
+    return expr;
 }
 
 Expr* Resolver::createField(ExprRef pivot, Field* field) {
