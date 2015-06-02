@@ -534,9 +534,39 @@ void Resolver::resolvePattern(Scope& scope, ExprRef pivot, ast::Pattern& pat, If
 		case ast::Pattern::Any:
 			conds += IfCond(nullptr, nullptr);
 			break;
-		case ast::Pattern::Tup:
-			DebugError("Not implemented");
+		case ast::Pattern::Tup: {
+			if(pivot.type->isTuple()) {
+				auto type = (TupleType*)pivot.type;
+				auto tpat = (ast::TupPattern&)pat;
+				auto p = tpat.fields;
+				uint i = 0;
+				while(p) {
+					if(i >= type->fields.Count()) {
+						error("the number of patterns cannot be greater than the number of fields");
+						conds += IfCond(nullptr, createFalse());
+						break;
+					}
+
+					if(p->item.field) {
+						if(auto field = type->findField(p->item.field())) {
+							resolvePattern(scope, *createField(pivot, field), *p->item.pat, conds);
+						} else {
+							error("this field does not exist");
+							conds += IfCond(nullptr, createFalse());
+						}
+					} else {
+						resolvePattern(scope, *createField(pivot, i), *p->item.pat, conds);
+					}
+
+					p = p->next;
+					i++;
+				}
+			} else {
+				error("this pattern can only match a tuple");
+				conds += IfCond(nullptr, createFalse());
+			}
 			break;
+		}
 		case ast::Pattern::Con: {
 			/*
 			 * Constructor patterns on variants consist of multiple steps:
