@@ -324,9 +324,11 @@ private:
 		}
 		string += ')';
 
-		makeLevel();
-		toString(*e.body, true);
-		removeLevel();
+		if(e.body) {
+			makeLevel();
+			toString(*e.body, true);
+			removeLevel();
+		}
 	}
 
 	void toString(const TypeDecl& e) {

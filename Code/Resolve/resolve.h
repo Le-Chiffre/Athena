@@ -138,6 +138,7 @@ struct Resolver {
 	bool resolveFunctionDecl(Scope& scope, FunctionDecl& fun);
 	bool resolveFunction(Scope& scope, Function& fun);
 	bool resolveForeignFunction(Scope& scope, ForeignFunction& fun);
+	Expr* resolveFunctionCases(Scope& scope, Function& fun, ast::FunCaseList* cases);
 	Expr* resolveExpression(Scope& scope, ast::ExprRef expr, bool used);
 	Expr* resolveMulti(Scope& scope, ast::MultiExpr& expr, bool used);
     Expr* resolveLiteral(Scope& scope, ast::Literal& expr);
