@@ -848,9 +848,9 @@ Expr* Parser::parseTupleConstruct() {
 
 Maybe<TupleField> Parser::parseTupleField() {
     /*
-     * tupfield →   varid [: type]
+     * tupfield →   varid [type]
      *          |   varid [= typedexpr]
-     *          |   type [= typedexpr]
+     *          |   type_varid [= typedexpr]
      * (The last one may not be valid in any context, but may be used in the future)
      */
 
@@ -860,19 +860,9 @@ Maybe<TupleField> Parser::parseTupleField() {
 
     // If the token is a varid, it can either be a generic or named parameter, depending on the token after it.
     if(token == Token::VarID) {
-        auto id = token.data.id;
+        name = token.data.id;
         eat();
-        if(token == Token::opColon) {
-            // This was the parameter name.
-            eat();
-            type = parseType();
-            name = id;
-        } else if(token == Token::opEquals) {
-            name = id;
-        } else {
-            // This was the type.
-            type = build<Type>(Type::Gen, id);
-        }
+		type = tryParse([=]{return parseType();});
     } else {
         type = parseType();
     }
