@@ -10,6 +10,11 @@ Core::String Mangler::mangle(Function* function) {
 
 	auto name = context.Find(function->name);
 	mangleQualifier(&name);
+	if(function->scope.parent && function->scope.parent->function) {
+		string += '$';
+		name = context.Find(function->scope.parent->function->name);
+		mangleQualifier(&name);
+	}
 
 	for(auto a : function->arguments) {
 		mangleType(a->type);

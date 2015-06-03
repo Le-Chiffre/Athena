@@ -62,13 +62,16 @@ struct Scope {
 	bool hasVariables();
 
 	// The base name of this scope (determines type visibility).
-	Id name;
+	Id name = 0;
 
 	// The parent scope, or null if it is a global scope.
-	Scope* parent;
+	Scope* parent = nullptr;
+
+	// The function that contains this scope, if any.
+	Function* function = nullptr;
 
 	// Children of this scope.
-	ScopeList* children;
+	ScopeList* children = nullptr;
 
 	// The variables that were declared in this scope.
 	VarList variables;
@@ -77,6 +80,7 @@ struct Scope {
 	VarList shadows;
 
 	// The variables from the parent function that are captured here.
+	// If this list contains entries, the function is a closure.
 	VarList captures;
 
     // The functions that were declared in this scope.
@@ -349,8 +353,89 @@ struct MapType : Type {
 	TypeRef to;
 };
 
+struct Constraint {
+	enum Kind {
+		// Defines that a certain function involving the type must exist.
+		Fun,
+
+		// Defines that the type must be a tuple and have a field with a certain index/name and type.
+		Field
+	};
+
+	struct FunC {
+		Id name; // The name of the function that has a parameter of this type.
+		uint index; // The index the parameter should be at.
+	};
+	struct FieldC {
+		uint index; // Set if index equals 0.
+		Id name;
+		TypeRef type; // The type of this field.
+	};
+
+	union {
+		FunC fun;
+		FieldC field;
+	};
+	Kind kind;
+};
+
+inline Constraint FunConstraint(Id name, uint index) {
+	Constraint c;
+	c.kind = Constraint::Fun;
+	c.fun.name = name;
+	c.fun.index = index;
+	return c;
+}
+
+inline Constraint FieldConstraint(uint index, Id name, TypeRef type) {
+	Constraint c;
+	c.kind = Constraint::Field;
+	c.field.index = index;
+	c.field.name = name;
+	c.field.type = type;
+	return c;
+}
+
+inline Constraint::FunC* FunConstraint(Constraint& c) {
+	if(c.kind == Constraint::Fun) return &c.fun;
+	else return nullptr;
+}
+
+inline Constraint::FieldC* FieldConstraint(Constraint& c) {
+	if(c.kind == Constraint::Field) return &c.field;
+	else return nullptr;
+}
+
 struct GenType : Type {
-	GenType(uint index) : Type(Gen), index(index) {}
+	GenType(int index) : Type(Gen), index(index) {}
+
+	/**
+	 * A set of constraints on what this type can be.
+	 * Each constraint defines a subset of all types.
+	 * The set of concrete types this generic can become is defined by the intersection between all subsets.
+	 * Whenever the intersection size is reduced to one (partial) type, the `typeConstraint` field is set.
+	 * This type can still define generic parameters of its own, but must be more specific than this one.
+	 * A code example:
+	 *    someFun a = case a of
+	 *    				Just x  -> True
+	 *    				Nothing -> False
+	 *  - When compiling this function we walk through any explicit parameters first (in this case, 'a').
+	 *  - Since no explicit type was given, 'a' is assigned a new generic type.
+	 *  - We now compile the case statement, starting with the pivot. This just references 'a', and defines no new constraints.
+	 *  - We compile the first alt. This contains a constructor pattern referencing the Just-constructor.
+	 *  - Since Just is a constructor of Maybe, we can assign an explicit type. This is the new generic type 'Maybe a'.
+	 *  - The nested pattern 'x' defines no new constraints; neither does the second alt 'Nothing'.
+	 *  - The return type is trivially inferred to Bool.
+	 *  - The signature of the whole function now becomes 'Maybe a -> Bool'.
+	 */
+	Core::Array<Constraint> constraints;
+	TypeRef typeConstraint = nullptr;
+
+	/**
+	 * The index of a generic type is related to a possible type containing it.
+	 * It refers to the index of the generic parameter this represents.
+	 * For example, in the type 'Either a b', 'b' is represented with the index 1.
+	 */
 	uint index;
 };
 
@@ -597,7 +682,10 @@ struct ConstructExpr : Expr {
 };
 
 struct ScopedExpr : Expr {
-	ScopedExpr(Scope& parent) : Expr(Scoped, nullptr) {scope.parent = &parent;}
+	ScopedExpr(Scope& parent) : Expr(Scoped, nullptr) {
+		scope.parent = &parent;
+		scope.function = parent.function;
+	}
 	Expr* contents = nullptr;
 	Scope scope;
 };

@@ -37,6 +37,7 @@ bool Resolver::resolveFunction(Scope& scope, Function& fun) {
     ASSERT(fun.name == decl.name);
 
     fun.scope.parent = &scope;
+    fun.scope.function = &fun;
     if(decl.args) {
         auto arg = decl.args->fields;
         while (arg) {

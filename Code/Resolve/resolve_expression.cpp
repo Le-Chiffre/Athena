@@ -589,7 +589,6 @@ void Resolver::resolvePattern(Scope& scope, ExprRef pivot, ast::Pattern& pat, If
 						if(!con->contents.Count()) return;
 
 						auto fieldData = createField(pivot, con->index);
-						ExprList* cont;
 						if(con->contents.Count() == 1) {
 							resolvePattern(scope, *fieldData, *cpat.patterns->item, conds);
 						} else {
