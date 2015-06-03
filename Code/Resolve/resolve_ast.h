@@ -23,9 +23,9 @@ struct VarConstructor;
 typedef Scope& ScopeRef;
 typedef FunctionDecl& FuncRef;
 typedef Type* TypeRef;
-typedef const Expr& ExprRef;
+typedef Expr& ExprRef;
 
-typedef ast::ASTList<const Expr*> ExprList;
+typedef ast::ASTList<Expr*> ExprList;
 typedef Core::Array<Variable*> VarList;
 typedef Core::Array<Function*> FunList;
 typedef Core::Array<Type*> TypeList;
@@ -522,11 +522,11 @@ enum class CondMode : uint8 {
 bool succeedsAlways(const IfConds& conds, CondMode mode);
 
 struct IfExpr : Expr {
-	IfExpr(IfConds&& conds, ExprRef then, const Expr* otherwise, TypeRef type, bool ret, CondMode mode);
-	IfExpr(IfConds&& conds, ExprRef then, const Expr* otherwise, TypeRef type, bool ret, CondMode mode, bool alwaysTrue);
+	IfExpr(IfConds&& conds, ExprRef then, Expr* otherwise, TypeRef type, bool ret, CondMode mode);
+	IfExpr(IfConds&& conds, ExprRef then, Expr* otherwise, TypeRef type, bool ret, CondMode mode, bool alwaysTrue);
 	IfConds conds;
 	ExprRef then;
-	const Expr* otherwise;
+	Expr* otherwise;
 	CondMode mode;
 	bool returnResult;
 	bool alwaysTrue;
@@ -612,6 +612,43 @@ struct EmptyDeclExpr : Expr {
 struct EmptyExpr : Expr {
 	EmptyExpr(TypeRef type) : Expr(Empty, type) {}
 };
+
+inline LitExpr* findLiteral(ExprRef e) {
+	if(e.isLiteral()) {
+		return (LitExpr*)&e;
+	} else if(e.kind == Expr::Multi) {
+		auto m = (MultiExpr*)&e;
+		if(m->es.Count() && m->es.Back()->isLiteral())
+			return findLiteral(*m->es.Back());
+	} else if(e.kind == Expr::Scoped) {
+		return findLiteral(*((ScopedExpr*)&e)->contents);
+	} else if(e.kind == Expr::If) {
+		auto i = (IfExpr*)&e;
+		if(i->alwaysTrue)
+			return findLiteral(i->then);
+	}
+	return nullptr;
+}
+
+// Only call this after a successful call to findLiteral.
+inline void updateLiteral(ExprRef e, TypeRef type) {
+	if(e.kind == Expr::Multi) {
+		auto m = (MultiExpr*)&e;
+		if(m->es.Count() && m->es.Back()->isLiteral()) {
+			findLiteral(*m->es.Back());
+			e.type = type;
+		}
+	} else if(e.kind == Expr::Scoped) {
+		findLiteral(*((ScopedExpr*)&e)->contents);
+		e.type = type;
+	} else if(e.kind == Expr::If) {
+		auto i = (IfExpr*)&e;
+		if(i->alwaysTrue) {
+			findLiteral(i->then);
+			i->type = type;
+		}
+	}
+}
 
 }} // namespace athena::resolve
 

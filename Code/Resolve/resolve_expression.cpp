@@ -160,7 +160,7 @@ Expr* Resolver::resolveCall(Scope& scope, ast::AppExpr& expr) {
 	}
 
 	// Create a list of function arguments.
-	auto args = map(expr.args, [&](auto e){return (const Expr*)this->getRV(*this->resolveExpression(scope, e, true));});
+	auto args = map(expr.args, [&](auto e){return this->getRV(*this->resolveExpression(scope, e, true));});
 
 	// Find the function to call.
 	if(auto fun = findFunction(scope, expr.callee, args)) {
@@ -326,30 +326,33 @@ Expr* Resolver::resolveCoerce(Scope& scope, ast::CoerceExpr& expr) {
 	//    If the function is not generic, an implicit conversion is applied.
 	//  - Finally, for any other use case other than the ones above, coercion acts like an implicit conversion.
 	//    This means that in order to convert to some incompatible type, you still have to convert explicitly.
-	if(expr.target->isLiteral()) {
+	auto target = resolveExpression(scope, expr.target, true);
+	auto type = resolveType(scope, expr.kind);
+	if(auto l = findLiteral(*target)) {
 		// Perform a literal coercion. This discards the coerce-expression.
-		return literalCoerce(((ast::LitExpr*)expr.target)->literal, resolveType(scope, expr.kind));
-	} else if(expr.target->isDecl()) {
+		literalCoerce(l, type);
+		updateLiteral(*target, type);
+		return target;
+	} else if(target->kind == Expr::EmptyDecl) {
 		// Perform a declaration coercion.
 		// This type of coercion is only valid if the declaration is still empty (has no type).
 		// Otherwise, it is treated as a normal coercion of an existing variable.
 		// Note that this works with code like "var x = 1: U8", since the coercion is applied to the literal.
 		// This particular branch only executes for code like "var x: U8".
-		auto decl = (EmptyDeclExpr*)resolveDecl(scope, *(ast::DeclExpr*)expr.target);
-		ASSERT(decl->kind == Expr::EmptyDecl);
+		auto decl = (EmptyDeclExpr*)target;
 		ASSERT(!decl->type->isKnown());
 
 		// Set the type of the referenced variable.
-		decl->type = resolveType(scope, expr.kind);
+		decl->type = type;
 		decl->var.type = decl->type;
 		return decl;
-	} else if(expr.target->isCall()) {
+	} else if(target->kind == Expr::App) {
 		// TODO: Generic function stuff.
 		// For now, just do the default.
 	}
 
 	// Perform an implicit coercion as the default. Also handles lvalues.
-	return implicitCoerce(*resolveExpression(scope, expr.target, true), resolveType(scope, expr.kind));
+	return implicitCoerce(*target, type);
 }
 
 Expr* Resolver::resolveField(Scope& scope, ast::FieldExpr& expr, ast::ExprList* args) {

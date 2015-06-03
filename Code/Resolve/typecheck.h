@@ -18,9 +18,9 @@ struct TypeCheck {
 	bool compatible(ExprRef src, TypeRef dst) {
 		if(compatible(src.type, dst)) {
 			return true;
-		} else if(src.kind == Expr::Lit) {
+		} else if(auto l = findLiteral(src)) {
 			// Literals have special conversion rules.
-			return literalCoerce(((LitExpr*)&src)->literal, dst, Nothing);
+			return literalCoerce(l->literal, dst, Nothing);
 		} else {
 			return false;
 		}
