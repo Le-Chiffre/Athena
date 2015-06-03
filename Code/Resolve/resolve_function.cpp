@@ -84,7 +84,7 @@ Expr* Resolver::resolveFunctionCases(Scope& scope, Function& fun, ast::FunCaseLi
         while(pat) {
             if(fun.arguments.Count() <= i) {
                 error("pattern count must match with the number of arguments");
-                return false;
+                return nullptr;
             }
             Variable* arg = fun.arguments[i];
             auto pivot = build<VarExpr>(arg, arg->type);

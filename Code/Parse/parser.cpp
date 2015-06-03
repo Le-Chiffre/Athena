@@ -58,11 +58,6 @@ void Parser::parseDecl() {
 	 * decl			→	fundecl
 	 * 				|	typedecl
 	 * 				|	datadecl
-	 * fundecl		→	var : args = expr
-	 * 				|	var tuptype [→ type] = expr
-	 * 				|	var [→ type] = expr
-	 * args			→	arg0 arg1 ... argn		(n ≥ 0)
-	 * arg			→	varid
 	 */
 	if(token == Token::kwType) {
 		parseTypeDecl();
@@ -70,7 +65,21 @@ void Parser::parseDecl() {
 		parseDataDecl();
 	} else if(token == Token::kwForeign) {
 		parseForeignDecl();
-	} else if(auto var = tryParse([=] {return parseVar();})) {
+	} else {
+		module.declarations += parseFunDecl();
+	}
+}
+	
+Decl* Parser::parseFunDecl() {
+	/*
+	 * fundecl		→	var : args = expr
+	 * 				|	var tuptype [→ type] = expr
+	 * 				|	var [→ type] = expr
+	 * args			→	arg0 arg1 ... argn		(n ≥ 0)
+	 * arg			→	varid
+	 */
+	FunDecl* fun = nullptr;
+	if(auto var = tryParse([=] {return parseVar();})) {
 		TupleType* args = nullptr;
 		if(token == Token::VarID) {
 			// Parse zero or more argument names.
@@ -98,7 +107,7 @@ void Parser::parseDecl() {
 
 			// Parse the function body.
 			if(auto expr = parseExpr()) {
-				module.declarations += build<FunDecl>(var(), expr, args, type);
+				fun = build<FunDecl>(var(), expr, args, type);
 			} else {
 				error("expected a function body expression.");
 			}
@@ -123,14 +132,22 @@ void Parser::parseDecl() {
 			});
 
 			if(cases) {
-				module.declarations += build<FunDecl>(var(), cases, args, type);
+				fun = build<FunDecl>(var(), cases, args, type);
 			} else {
 				error("expected a function pattern");
 			}
 		} else {
 			error("expected a function definition");
 		}
+
+		if(fun) {
+			if(token == Token::kwWhere) {
+				eat();
+				fun->locals = withLevel([=]{return sepBy([=]{return parseFunDecl();}, Token::EndOfStmt);});
+			}
+		}
 	}
+	return fun;
 }
 
 void Parser::parseDataDecl() {
