@@ -50,6 +50,23 @@ bool Resolver::resolveFunction(Scope& scope, Function& fun) {
         fun.type = resolveType(scope, decl.ret);
     }
 
+    // Resolve locally defined functions.
+    auto local = decl.locals;
+    while(local) {
+        // Local functions cannot be overloaded.
+        auto name = local->item->name;
+        FunctionDecl** f;
+        if(fun.scope.functions.AddGet(name, f)) {
+            error("local functions cannot be overloaded");
+        }
+        *f = build<Function>(name, local->item);
+        local = local->next;
+    }
+
+    fun.scope.functions.Iterate([this, &fun](Id name, FunctionDecl* f) {
+        resolveFunctionDecl(fun.scope, *f);
+    });
+
     // The function has either a normal body or a set of patterns.
     Expr* body;
     if(decl.body) {

@@ -387,7 +387,6 @@ struct Decl {
 };
 
 typedef const Decl& DeclRef;
-typedef ASTList<Decl*> DeclList;
 
 struct Arg {
 	Id name;
@@ -405,6 +404,9 @@ struct FunCase {
 
 typedef ASTList<FunCase*> FunCaseList;
 
+struct FunDecl;
+typedef ASTList<FunDecl*> FunDeclList;
+	
 struct FunDecl : Decl {
 	FunDecl(Id name, ExprRef body, TupleType* args, TypeRef ret) :
 			Decl(Function), name(name), args(args), ret(ret), body(body), cases(nullptr) {}
@@ -414,7 +416,7 @@ struct FunDecl : Decl {
 	Id name;
 	TupleType* args;
 	TypeRef ret; // If the function explicitly defines one.
-	DeclList* locals = nullptr;
+	FunDeclList* locals = nullptr;
 
 	// One of these is set.
 	ExprRef body;

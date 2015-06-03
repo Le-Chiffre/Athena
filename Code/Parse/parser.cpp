@@ -143,7 +143,7 @@ Decl* Parser::parseFunDecl() {
 		if(fun) {
 			if(token == Token::kwWhere) {
 				eat();
-				fun->locals = withLevel([=]{return sepBy([=]{return parseFunDecl();}, Token::EndOfStmt);});
+				fun->locals = withLevel([=]{return sepBy([=]{return (FunDecl*)parseFunDecl();}, Token::EndOfStmt);});
 			}
 		}
 	}
