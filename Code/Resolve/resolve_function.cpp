@@ -90,6 +90,12 @@ bool Resolver::resolveFunction(Scope& scope, Function& fun) {
         fun.type = fun.expression->type;
     }
 
+    // Check if this is a generic function.
+    for(auto a : fun.arguments) {
+        if(!a->type->resolved) fun.generic = true;
+    }
+    if(!fun.type->resolved) fun.generic = true;
+
     return true;
 }
 
@@ -121,7 +127,7 @@ Expr* Resolver::resolveFunctionCases(Scope& scope, Function& fun, ast::FunCaseLi
 }
 
 Variable* Resolver::resolveArgument(ScopeRef scope, ast::TupleField& arg) {
-    auto type = arg.type ? resolveType(scope, arg.type) : types.getUnknown();
+    auto type = arg.type ? resolveType(scope, arg.type) : build<GenType>(0);
     auto var = build<Variable>(arg.name ? arg.name() : 0, type, scope, true, true);
     scope.variables += var;
     return var;

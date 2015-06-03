@@ -98,57 +98,63 @@ main {x: Float} =
 )s";
 	
 	auto test5 = R"s(
-h {x: Int} = x*2
-g {x: Int} = x*4
-f {x: Int} = x*8
+h [x: Int] = x*2
+g [x: Int] = x*4
+f [x: Int] = x*8
 e = f $ g $ h 1
 )s";
 
 	auto foreigntest = R"s(
-foreign import "strlen" stringLength : {*U8} -> Int
-foreign import "printf" print : {str: *U8} -> Int
+foreign import "strlen" stringLength : *U8 -> Int
+foreign import "printf" print : *U8 -> Int
 
 fluff = print "hello world!"
 ;)s";
 
 	auto memtest = R"s(
-copyMem {src: *U8, dst: *U8, count: Int} =
+copyMem [src *U8, dst *U8, count Int] =
 	var p = 0
-	while p < count do
+	while p < count ->
 		*(src+p) = *(dst+p)
 		p = p + 1
 
-fillMem {mem: *U8, count: Int, pattern: U8} =
+fillMem [mem *U8, count Int, pattern U8] =
 	var p = 0
-	while p < count do
+	while p < count ->
 		*(mem+p) = pattern
 		p = p + 1
 
-zeroMem {mem: *U8, count: Int} = fillMem mem count 0
+zeroMem [mem *U8, count Int] = fillMem mem count 0
 
-compareMem {a: *U8, b: *U8, count: Int} =
+compareMem [a *U8, b *U8, count Int] =
 	var p = 0
-	while p < count `and` *(a+p) == *(b+p) do p = p + 1
+	while p < count `and` *(a+p) == *(b+p) -> p = p + 1
 	*(a+p) - *(b+p)
 
-strlen {str: *U8} =
+strlen [str *U8] =
 	var str, l = 0
-	while *str > 0 do
+	while *str > 0 ->
 		str = str + 1
 		l = l + 1
 	l
+
+parseNum [ch U8] = ch - 48
+
+parseInt [string *U8] =
+	var string
+	var i = 0 : U32
+	while *string != 0 ->
+		i = i * 10 + parseNum (*string)
+		string = string + 1
+	i
 )s";
 
 	auto gentest = R"s(
-f {a: Int} =
-	case a of
-		7 -> True
-		5 -> True
-		_ -> False
+id x = x
 )s";
 
 	athena::ast::Module module;
-	athena::ast::Parser p(context, module, memtest);
+	athena::ast::Parser p(context, module, gentest);
 	p.parseModule();
 
 	{
@@ -158,7 +164,7 @@ f {a: Int} =
 		f.Write({str.ptr, str.length});
 	}
 
-	//Core::Terminal << athena::ast::toString(module, context);
+	Core::Terminal << athena::ast::toString(module, context);
 
 	athena::resolve::Resolver resolver{context, module};
 	auto resolved = resolver.resolve();

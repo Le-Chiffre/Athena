@@ -140,12 +140,16 @@ struct Function : FunctionDecl {
 	/*
 	 * The following fields are invalid as long as the function has not been resolved.
 	 */
-	
-	// The mangled name of this function.
-	Id mangledName = 0;
 
 	// Any expressions this function consists of.
 	Expr* expression = nullptr;
+
+	// The mangled name of this function.
+	Id mangledName = 0;
+
+	// This is true as long as the function contains any generic parameters or return type.
+	// Generic functions must be instantiated before they can be called normally.
+	bool generic = false;
 };
 
 struct ForeignFunction : FunctionDecl {
@@ -407,7 +411,7 @@ inline Constraint::FieldC* FieldConstraint(Constraint& c) {
 }
 
 struct GenType : Type {
-	GenType(int index) : Type(Gen), index(index) {}
+	GenType(int index) : Type(Gen), index(index) {resolved = false;}
 
 	/**
 	 * A set of constraints on what this type can be.

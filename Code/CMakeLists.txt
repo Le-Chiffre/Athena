@@ -44,7 +44,7 @@ set(SOURCE_FILES
 )
 
 
-add_executable(Athena ${SOURCE_FILES})
+add_executable(Athena ${SOURCE_FILES} Resolve/resolve_create.cpp)
 target_link_libraries(Athena
 LLVMInstrumentation LLVMInterpreter LLVMTableGen LLVMXCoreDisassembler LLVMXCoreCodeGen LLVMXCoreDesc LLVMXCoreInfo LLVMXCoreAsmPrinter LLVMSystemZDisassembler
 LLVMSystemZCodeGen LLVMSystemZAsmParser LLVMSystemZDesc LLVMSystemZInfo LLVMSystemZAsmPrinter LLVMSparcDisassembler LLVMSparcCodeGen LLVMSparcAsmParser
