@@ -92,7 +92,7 @@ void Resolver::initPrimitives() {
 	types.primMap.Add(context.AddUnqualifiedName("Double"), types.getPrim(PrimitiveType::F64));
 }
 
-Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, resolve::ExprRef lhs, resolve::ExprRef rhs) {
+Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, ExprRef lhs, ExprRef rhs) {
 	// This is either a pointer or primitive.
 	if(lhs.type->isPointer()) {
 		auto lt = (PtrType*)lhs.type;
@@ -154,7 +154,7 @@ Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, resolve::ExprRe
 	return nullptr;
 }
 
-TypeRef Resolver::getBinaryOpType(PrimitiveOp op, PrimitiveType lhs, PrimitiveType rhs, const Expr*& left, const Expr*& right) {
+TypeRef Resolver::getBinaryOpType(PrimitiveOp op, PrimitiveType lhs, PrimitiveType rhs, Expr*& left, Expr*& right) {
 	auto type = types.getPrim(largest(lhs, rhs));
 	left = implicitCoerce(*left, type);
 	right = implicitCoerce(*right, type);

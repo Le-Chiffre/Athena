@@ -196,7 +196,7 @@ struct Resolver {
 	/// Instantiates a generic type.
 	TypeRef instantiateType(ScopeRef scope, TypeRef base, ast::TypeList* apps, ast::SimpleType* tscope = nullptr);
 
-	TypeRef getBinaryOpType(PrimitiveOp, PrimitiveType, PrimitiveType, const Expr*&, const Expr*&);
+	TypeRef getBinaryOpType(PrimitiveOp, PrimitiveType, PrimitiveType, Expr*&, Expr*&);
 	TypeRef getPtrOpType(PrimitiveOp, PtrType*, PrimitiveType);
 	TypeRef getPtrOpType(PrimitiveOp, PtrType*, PtrType*);
 	TypeRef getUnaryOpType(PrimitiveOp, PrimitiveType);
@@ -222,8 +222,8 @@ struct Resolver {
 	Expr* createCompare(Scope& scope, ExprRef left, ExprRef right);
 
 	/// Creates an if-expression.
-	Expr* createIf(ExprRef cond, ExprRef then, const Expr* otherwise, bool used);
-	Expr* createIf(IfConds&& cond, ExprRef then, const Expr* otherwise, bool used, CondMode mode);
+	Expr* createIf(ExprRef cond, ExprRef then, Expr* otherwise, bool used);
+	Expr* createIf(IfConds&& cond, ExprRef then, Expr* otherwise, bool used, CondMode mode);
 
 	/// Creates a field-expression.
 	Expr* createField(ExprRef pivot, Field* field);
@@ -254,6 +254,7 @@ struct Resolver {
 	/// Checks if the provided literal type can be converted to the target type.
 	/// This is more flexible than an implicit coercion and done on compile time.
 	LitExpr* literalCoerce(const ast::Literal& lit, TypeRef dst);
+	LitExpr* literalCoerce(LitExpr* lit, TypeRef dst);
 
 	/// Tries to find a function from the provided expression that takes the provided parameters.
 	FunctionDecl* findFunction(ScopeRef scope, ast::ExprRef, ExprList* args);

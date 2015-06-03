@@ -469,7 +469,7 @@ Value* Generator::genIf(resolve::IfExpr& ife) {
 	}
 }
 
-Value* Generator::genCoerce(const resolve::Expr& srce, resolve::Type* dst) {
+Value* Generator::genCoerce(resolve::Expr& srce, resolve::Type* dst) {
 	auto src = srce.type;
 	auto llSrc = getType(src)->llType;
 	auto llDst = getType(dst)->llType;
@@ -544,7 +544,7 @@ Value* Generator::genCoerce(const resolve::Expr& srce, resolve::Type* dst) {
 	return nullptr;
 }
 
-Value* Generator::genCoerceLV(const resolve::Expr& src, resolve::Type* dst) {
+Value* Generator::genCoerceLV(resolve::Expr& src, resolve::Type* dst) {
 	ASSERT(src.type->isLvalue());
 	ASSERT(((resolve::LVType*)src.type)->type == dst);
 

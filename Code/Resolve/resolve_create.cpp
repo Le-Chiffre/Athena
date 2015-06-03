@@ -26,11 +26,11 @@ Expr* Resolver::createCompare(Scope& scope, ExprRef left, ExprRef right) {
     return resolveBinaryCall(scope, context.AddUnqualifiedName("=="), left, right);
 }
 
-Expr* Resolver::createIf(ExprRef cond, ExprRef then, const Expr* otherwise, bool used) {
+Expr* Resolver::createIf(ExprRef cond, ExprRef then, Expr* otherwise, bool used) {
     return createIf(IfConds{IfCond{nullptr, (Expr*)&cond}}, then, otherwise, used, CondMode::And);
 }
 
-Expr* Resolver::createIf(IfConds&& conds, ExprRef then_, const Expr* otherwise_, bool used, CondMode mode) {
+Expr* Resolver::createIf(IfConds&& conds, ExprRef then_, Expr* otherwise_, bool used, CondMode mode) {
     for(auto& c : conds) {
         if(c.cond) c.cond = getRV(*c.cond);
     }
@@ -52,7 +52,7 @@ Expr* Resolver::createIf(IfConds&& conds, ExprRef then_, const Expr* otherwise_,
                 then = implicitCoerce(*then, type);
             } else if(typeCheck.compatible(*otherwise, then->type)) {
                 type = then->type;
-                then = implicitCoerce(*otherwise, type);
+                otherwise = implicitCoerce(*otherwise, type);
             } else {
                 error("the then and else branches of an if-expression must be compatible when used as an expression");
             }

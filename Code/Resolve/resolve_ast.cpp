@@ -83,12 +83,12 @@ bool succeedsAlways(const IfConds& conds, CondMode mode) {
     } else return true;
 }
 
-IfExpr::IfExpr(IfConds&& conds, ExprRef then, const Expr* otherwise, TypeRef type, bool ret, CondMode mode) :
+IfExpr::IfExpr(IfConds&& conds, ExprRef then, Expr* otherwise, TypeRef type, bool ret, CondMode mode) :
         Expr(If, type), conds(conds), then(then), otherwise(otherwise), mode(mode), returnResult(ret) {
     alwaysTrue = succeedsAlways(conds, mode);
 }
 
-IfExpr::IfExpr(IfConds&& conds, ExprRef then, const Expr* otherwise, TypeRef type, bool ret, CondMode mode, bool alwaysTrue) :
+IfExpr::IfExpr(IfConds&& conds, ExprRef then, Expr* otherwise, TypeRef type, bool ret, CondMode mode, bool alwaysTrue) :
         Expr(If, type), conds(conds), then(then), otherwise(otherwise), mode(mode), returnResult(ret), alwaysTrue(alwaysTrue) {
 }
 
