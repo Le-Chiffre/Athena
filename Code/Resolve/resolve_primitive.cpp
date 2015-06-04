@@ -102,7 +102,7 @@ Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, ExprRef lhs, Ex
 				auto list = build<ExprList>(&lhs, build<ExprList>(&rhs));
 				return build<AppPExpr>(op, list, type);
 			}
-		} else {
+		} else if(rhs.type->isPrimitive()) {
 			auto rt = ((PrimType*)rhs.type)->type;
 			if(auto type = getPtrOpType(op, lt, rt)) {
 				auto list = build<ExprList>(&lhs, build<ExprList>(&rhs));
@@ -111,7 +111,7 @@ Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, ExprRef lhs, Ex
 		}
 	} else if(rhs.type->isPointer()) {
 		error("This built-in operator cannot be applied to a primitive and a pointer");
-	} else {
+	} else if(lhs.type->isPrimitive() && rhs.type->isPrimitive()) {
 		auto left = &lhs;
 		auto right = &rhs;
 

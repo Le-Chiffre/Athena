@@ -183,6 +183,7 @@ struct Expr {
 	bool isLiteral() const {return type == Lit;}
 	bool isCall() const {return type == App;}
 	bool isDecl() const {return type == Decl;}
+	bool isField() const {return type == Field;}
 };
 
 typedef Expr* ExprRef;

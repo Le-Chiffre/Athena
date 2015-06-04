@@ -100,8 +100,16 @@ Expr* Resolver::resolveBinaryCall(Scope& scope, Id function, ExprRef lt, ExprRef
 				return e;
 	}
 
+	auto args = list(&lt, list(&rt));
+
+	// If one of the arguments has an incomplete type, create a generic call.
+	if(!lt.type->resolved || !rt.type->resolved) {
+		lt.type->constrain(FunConstraint(function, 0));
+		rt.type->constrain(FunConstraint(function, 1));
+		return build<GenAppExpr>(function, args, build<GenType>(0));
+	}
+
 	// Otherwise, create a normal function call.
-	auto args = build<ExprList>(&lt, build<ExprList>(&rt));
 	if(auto func = findFunction(scope, function, args)) {
 		args->item = implicitCoerce(*args->item, func->arguments[0]->type);
 		args->next->item = implicitCoerce(*args->next->item, func->arguments[1]->type);
@@ -124,8 +132,15 @@ Expr* Resolver::resolveUnaryCall(Scope& scope, Id function, ExprRef target) {
 		}
 	}
 
+	auto args = list(&target);
+
+	// If the argument has an incomplete type, create a generic call.
+	if(!target.type->resolved) {
+		target.type->constrain(FunConstraint(function, 0));
+		return build<GenAppExpr>(function, args, build<GenType>(0));
+	}
+
 	// Otherwise, create a normal function call.
-	auto args = build<ExprList>(&target);
 	if(auto func = findFunction(scope, function, args)) {
 		args->item = implicitCoerce(*args->item, func->arguments[0]->type);
 		return build<AppExpr>(*func, args);
@@ -139,12 +154,12 @@ Expr* Resolver::resolveCall(Scope& scope, ast::AppExpr& expr) {
 	// If the operand is a field expression we need special handling, since there are several options:
 	// - the field operand is an actual field of its target and has a function type, which we call.
 	// - the field operand is not a field, and we produce a function call with the target as first parameter.
-	if(expr.callee->type == ast::Expr::Field) {
+	if(expr.callee->isField()) {
 		return resolveField(scope, *(ast::FieldExpr*)expr.callee, expr.args);
 	}
 
 	// Special case for calls with one or two parameters - these can map to builtin operations.
-	if(expr.callee->type == ast::Expr::Var) {
+	if(expr.callee->isVar()) {
 		auto name = ((ast::VarExpr*)expr.callee)->name;
 		if (auto lhs = expr.args) {
 			if (auto rhs = expr.args->next) {
@@ -160,9 +175,32 @@ Expr* Resolver::resolveCall(Scope& scope, ast::AppExpr& expr) {
 	}
 
 	// Create a list of function arguments.
-	auto args = map(expr.args, [&](auto e){return this->getRV(*this->resolveExpression(scope, e, true));});
+	bool resolved = true;
+	auto args = map(expr.args, [&](auto e) {
+		auto a = this->getRV(*this->resolveExpression(scope, e, true));
+		if(!a->type->resolved) resolved = false;
+		return a;
+	});
 
-	// Find the function to call.
+	// If the arguments contain an incomplete type, create a generic call.
+	if(!resolved) {
+		if(expr.callee->isVar()) {
+			auto name = ((ast::VarExpr*)expr.callee)->name;
+			auto a = args;
+			uint i = 0;
+			while(a) {
+				a->item->type->constrain(FunConstraint(name, i));
+				a = a->next;
+				i++;
+			}
+			return build<GenAppExpr>(name, args, build<GenType>(0));
+		} else {
+			DebugError("Not implemented");
+			return nullptr;
+		}
+	}
+
+	// Otherwise, find the function to call.
 	if(auto fun = findFunction(scope, expr.callee, args)) {
 		auto a = args;
 		for(auto b : fun->arguments) {

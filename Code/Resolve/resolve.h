@@ -279,6 +279,7 @@ struct Resolver {
 	bool alwaysTrue(ExprRef expr);
 
 	template<class T> auto list(const T& t) {return build<ast::ASTList<T>>(t);}
+	template<class T> auto list(const T& t, ast::ASTList<T>* next) {return build<ast::ASTList<T>>(t, next);}
 
 	template<class T, class F>
 	auto map(ast::ASTList<T>* l, F&& f) {

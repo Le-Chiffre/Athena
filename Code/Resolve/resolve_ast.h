@@ -273,6 +273,8 @@ struct Type {
 	bool isApplication() const {return kind == App;}
 	bool isUnknown() const {return kind == Unknown;}
 
+	void constrain(const struct Constraint&& c);
+
 	Type(Kind kind) : kind(kind) {}
 };
 
@@ -443,6 +445,12 @@ struct GenType : Type {
 	uint index;
 };
 
+inline void Type::constrain(const Constraint&& c) {
+	if(isGeneric()) {
+		((GenType*)this)->constraints += c;
+	}
+}
+
 struct AppType : Type {
 	AppType(uint baseIndex, ast::TypeList* apps) :
 			Type(App), baseIndex(baseIndex), apps(apps) {resolved = false;}
@@ -540,7 +548,8 @@ struct Expr {
 		// They are removed before the resolve stage finishes.
 		FirstTemporary,
 		EmptyDecl = FirstTemporary,
-		Empty
+		Empty,
+		GenApp,
 	} kind;
 
 	bool isTemp() const {return kind < FirstTemporary;}
@@ -584,6 +593,12 @@ struct AppPExpr : Expr {
 	AppPExpr(PrimitiveOp op, ExprList* args, TypeRef type) : Expr(AppP, type), args(args), op(op) {}
 	ExprList* args;
 	PrimitiveOp op;
+};
+
+struct GenAppExpr : Expr {
+	GenAppExpr(Id name, ExprList* args, TypeRef type) : Expr(GenApp, type), args(args), name(name) {}
+	ExprList* args;
+	Id name;
 };
 
 struct CaseExpr : Expr {
