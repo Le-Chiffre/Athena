@@ -141,12 +141,12 @@ Expr* Resolver::implicitLoad(ExprRef target) {
 	if(target.type->isPointer()) {
 		return build<LoadExpr>(target, ((PtrType*)target.type)->type);
 	} else {
-		return (Expr*)&target;
+		return &target;
 	}
 }
 
 Expr* Resolver::implicitCoerce(ExprRef src, TypeRef dst) {
-	if(src.type == dst) return (Expr*)&src;
+	if(src.type == dst) return &src;
 
 	if(auto e = findLiteral(src)) {
 		literalCoerce(e, dst);
@@ -184,7 +184,7 @@ LitExpr* Resolver::literalCoerce(LitExpr* lit, TypeRef dst) {
 Expr* Resolver::getRV(ExprRef e) {
 	if(e.type->isLvalue()) {
 		return build<CoerceLVExpr>(e, types.getRV(e.type));
-	} else return (Expr*)&e;
+	} else return &e;
 }
 
 nullptr_t Resolver::error(const char* text) {

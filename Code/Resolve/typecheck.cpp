@@ -12,8 +12,8 @@ inline void error(Maybe<Diagnostics*> diag, const char* text) {
 
 bool TypeCheck::implicitCoerce(TypeRef src, TypeRef dst, Maybe<Diagnostics*> diag) {
 	// Lvalue types are semantically equivalent and can always be implicitly converted.
-	if(src->isLvalue()) {
-		return compatible(((LVType*)src)->type, dst);
+	if(src != src->canonical) {
+		return compatible(src->canonical, dst);
 	}
 
 	// Only primitive types can be implicitly converted:

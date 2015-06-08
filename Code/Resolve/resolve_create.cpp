@@ -32,7 +32,10 @@ Expr* Resolver::createIf(ExprRef cond, ExprRef then, Expr* otherwise, bool used)
 
 Expr* Resolver::createIf(IfConds&& conds, ExprRef then_, Expr* otherwise_, bool used, CondMode mode) {
     for(auto& c : conds) {
-        if(c.cond) c.cond = getRV(*c.cond);
+        if(c.cond) {
+            c.cond = getRV(*c.cond);
+            constrain(c.cond->type, types.getBool());
+        }
     }
     auto then = getRV(then_);
     Expr* otherwise = otherwise_ ? getRV(*otherwise_) : nullptr;
@@ -76,7 +79,7 @@ Expr* Resolver::createField(ExprRef pivot, Field* field) {
 }
 
 Expr* Resolver::createField(ExprRef pivot, int field) {
-    auto stype = getEffectiveType(pivot.type);
+    auto stype = pivot.type->canonical;
     if(stype->isTuple()) {
         auto ttype = (TupleType*)stype;
         if(ttype->fields.Count() <= field) {

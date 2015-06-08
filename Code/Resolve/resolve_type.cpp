@@ -8,7 +8,7 @@ template<class F>
 TypeRef Resolver::mapType(F&& f, TypeRef type) {
 	switch(type->kind) {
 		case Type::Alias:
-			return mapType(f, ((AliasType*)type)->target);
+			return mapType(f, type->canonical);
 		case Type::Tuple: {
 			auto t = (TupleType*)type;
 			auto fields = t->fields;
@@ -34,7 +34,7 @@ TypeRef Resolver::mapType(F&& f, TypeRef type) {
 			// TODO
 			break;
 		case Type::Lvalue:
-			return types.getLV(f(((LVType*)type)->type));
+			return types.getLV(f(type->canonical));
 		case Type::Gen:
 			return f(type);
 		case Type::App:
@@ -49,9 +49,9 @@ TypeRef Resolver::mapType(F&& f, TypeRef type) {
 
 TypeRef Resolver::resolveAlias(AliasType* type) {
 	ASSERT(type->astDecl);
-	type->target = resolveType(type->scope, type->astDecl->target, false, type->astDecl->type);
+	type->canonical = resolveType(type->scope, type->astDecl->target, false, type->astDecl->type);
 	type->astDecl = nullptr;
-	return type->resolved ? type->target : type;
+	return type->resolved ? type->canonical : type;
 }
 
 TypeRef Resolver::resolveVariant(VarType* type) {
@@ -203,12 +203,6 @@ TypeRef Resolver::instantiateType(ScopeRef scope, TypeRef base, ast::TypeList* a
 	}
 }
 
-TypeRef Resolver::getEffectiveType(TypeRef type) {
-	if(type->isAlias()) return ((AliasType*)type)->target;
-	else if(type->isLvalue()) return ((LVType*)type)->type;
-	else return type;
-}
-
 TypeRef Resolver::lazyResolve(TypeRef t) {
 	if(t->kind == Type::Alias && ((AliasType*)t)->astDecl) {
 		resolveAlias((AliasType*)t);
@@ -216,6 +210,30 @@ TypeRef Resolver::lazyResolve(TypeRef t) {
 		resolveVariant((VarType*)t);
 	}
 	return t;
+}
+
+void Resolver::constrain(TypeRef type, const Constraint&& c) {
+	if(type->canonical->isGeneric()) {
+		// TODO: Check if constraints conflict.
+		((GenType*)type->canonical)->constraints += c;
+	} else {
+		ASSERT(false);
+	}
+}
+
+void Resolver::constrain(TypeRef type, TypeRef c) {
+	if(type->canonical->isGeneric()) {
+		auto t = (GenType*)type->canonical;
+		if(t->typeConstraint) {
+			// TODO: Merge constrained types.
+			DebugError("Not implemented");
+		} else {
+			t->typeConstraint = c;
+		}
+	} else {
+		// TODO: Merge complete types.
+		DebugError("Not implemented");
+	}
 }
 
 }} // namespace athena::resolve

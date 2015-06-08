@@ -546,7 +546,7 @@ Value* Generator::genCoerce(resolve::Expr& srce, resolve::Type* dst) {
 
 Value* Generator::genCoerceLV(resolve::Expr& src, resolve::Type* dst) {
 	ASSERT(src.type->isLvalue());
-	ASSERT(((resolve::LVType*)src.type)->type == dst);
+	ASSERT(src.type->canonical == dst);
 
 	// LValues are always implicitly pointers in the code generator.
 	return builder.CreateLoad(genExpr(src));

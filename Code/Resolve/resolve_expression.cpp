@@ -23,12 +23,14 @@ Expr* Resolver::resolveExpression(Scope& scope, ast::ExprRef expr, bool used) {
 			return resolveMulti(scope, *(ast::MultiExpr*)expr, used);
 		case ast::Expr::Lit:
 			return resolveLiteral(scope, ((ast::LitExpr*)expr)->literal);
+		case ast::Expr::App:
+			return resolveCall(scope, *(ast::AppExpr*)expr);
+		case ast::Expr::Lam:
+			return resolveLambda(scope, *(ast::LamExpr*)expr);
 		case ast::Expr::Infix:
 			return resolveInfix(scope, *(ast::InfixExpr*)expr);
 		case ast::Expr::Prefix:
 			return resolvePrefix(scope, *(ast::PrefixExpr*)expr);
-		case ast::Expr::App:
-			return resolveCall(scope, *(ast::AppExpr*)expr);
 		case ast::Expr::Var:
 			// This can be either a variable or a function call without parameters.
 			return resolveVar(scope, ((ast::VarExpr*)expr)->name);
@@ -104,8 +106,8 @@ Expr* Resolver::resolveBinaryCall(Scope& scope, Id function, ExprRef lt, ExprRef
 
 	// If one of the arguments has an incomplete type, create a generic call.
 	if(!lt.type->resolved || !rt.type->resolved) {
-		lt.type->constrain(FunConstraint(function, 0));
-		rt.type->constrain(FunConstraint(function, 1));
+		constrain(lt.type, FunConstraint(function, 0));
+		constrain(rt.type, FunConstraint(function, 1));
 		return build<GenAppExpr>(function, args, build<GenType>(0));
 	}
 
@@ -136,7 +138,7 @@ Expr* Resolver::resolveUnaryCall(Scope& scope, Id function, ExprRef target) {
 
 	// If the argument has an incomplete type, create a generic call.
 	if(!target.type->resolved) {
-		target.type->constrain(FunConstraint(function, 0));
+		constrain(target.type, FunConstraint(function, 0));
 		return build<GenAppExpr>(function, args, build<GenType>(0));
 	}
 
@@ -189,7 +191,7 @@ Expr* Resolver::resolveCall(Scope& scope, ast::AppExpr& expr) {
 			auto a = args;
 			uint i = 0;
 			while(a) {
-				a->item->type->constrain(FunConstraint(name, i));
+				constrain(a->item->type, FunConstraint(name, i));
 				a = a->next;
 				i++;
 			}
@@ -211,6 +213,10 @@ Expr* Resolver::resolveCall(Scope& scope, ast::AppExpr& expr) {
 	}
 
 	// No need for errors - each failure above this would print an error.
+	return nullptr;
+}
+
+Expr* Resolver::resolveLambda(Scope& scope, ast::LamExpr& expr) {
 	return nullptr;
 }
 
@@ -325,7 +331,7 @@ Expr* Resolver::resolveAssign(Scope& scope, ast::AssignExpr& expr) {
 		}
 
 		// Perform an implicit conversion if needed.
-		value = implicitCoerce(*value, ((LVType*)target->type)->type);
+		value = implicitCoerce(*value, target->type->canonical);
 		if(!value) {
 			error("assigning to '' from incompatible type ''");
 			//TODO: Implement Type printing.
@@ -408,7 +414,7 @@ Expr* Resolver::resolveField(Scope& scope, ast::FieldExpr& expr, ast::ExprList* 
 			tupType = (TupleType*)((PtrType*)target->type)->type;
 		} else {
 			ASSERT(target->type->isLvalue());
-			tupType = (TupleType*)((LVType*)target->type)->type;
+			tupType = (TupleType*)target->type->canonical;
 		}
 
 		if(auto f = tupType->findField(((ast::VarExpr*)expr.field)->name)) {
@@ -616,7 +622,7 @@ void Resolver::resolvePattern(Scope& scope, ExprRef pivot, ast::Pattern& pat, If
 			 *  - Resolve each element pattern using the corresponding constructor data element as pivot.
 			 * This is built up as a chain of ifs.
 			 */
-			auto type = getEffectiveType(pivot.type);
+			auto type = pivot.type->canonical;
 			if(type->isVariant()) {
 				auto& cpat = (ast::ConPattern&)pat;
 				auto con = scope.findConstructor(cpat.constructor);

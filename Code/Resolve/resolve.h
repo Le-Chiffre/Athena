@@ -117,7 +117,7 @@ struct TypeManager {
 	// t must be an lvalue.
 	TypeRef getRV(TypeRef t) {
 		ASSERT(t->isLvalue());
-		return ((LVType*)t)->type;
+		return t->canonical;
 	}
 
     Core::FixedArray<PrimType, (uint)PrimitiveType::TypeCount> prims;
@@ -147,6 +147,7 @@ struct Resolver {
 	Expr* resolveBinaryCall(Scope& scope, Id function, ExprRef lhs, ExprRef rhs);
 	Expr* resolveUnaryCall(Scope& scope, Id function, ExprRef dst);
 	Expr* resolveCall(Scope& scope, ast::AppExpr& expr);
+	Expr* resolveLambda(Scope& scope, ast::LamExpr& expr);
     Expr* resolveVar(Scope& scope, Id var);
     Expr* resolveIf(Scope& scope, ast::IfExpr& expr, bool used);
 	Expr* resolveMultiIf(Scope& scope, ast::IfCaseList* cases, bool used);
@@ -196,12 +197,13 @@ struct Resolver {
 	/// Instantiates a generic type.
 	TypeRef instantiateType(ScopeRef scope, TypeRef base, ast::TypeList* apps, ast::SimpleType* tscope = nullptr);
 
+	void constrain(TypeRef type, const Constraint&& c);
+	void constrain(TypeRef type, TypeRef c);
+
 	TypeRef getBinaryOpType(PrimitiveOp, PrimitiveType, PrimitiveType, Expr*&, Expr*&);
 	TypeRef getPtrOpType(PrimitiveOp, PtrType*, PrimitiveType);
 	TypeRef getPtrOpType(PrimitiveOp, PtrType*, PtrType*);
 	TypeRef getUnaryOpType(PrimitiveOp, PrimitiveType);
-
-	TypeRef getEffectiveType(TypeRef type);
 
 	/// Creates a return of the provided expression.
 	Expr* createRet(ExprRef);

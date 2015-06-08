@@ -234,6 +234,7 @@ inline PrimitiveType largest(PrimitiveType a, PrimitiveType b) {
 
 struct Type {
 	void* codegen = nullptr; // Opaque pointer that can be used by the code generator.
+	TypeRef canonical;
 	
 	enum Kind {
 		Unknown,
@@ -246,6 +247,7 @@ struct Type {
 		Lvalue,
 		Gen,
 		App,
+		Lam,
 
 		// These are often checked for together, so we let them share a single bit.
 		Prim = 0x10,
@@ -271,11 +273,12 @@ struct Type {
 	bool isVariant() const {return kind == Var;}
 	bool isGeneric() const {return kind == Gen;}
 	bool isApplication() const {return kind == App;}
+	bool isLambda() const {return kind == Lam;}
 	bool isUnknown() const {return kind == Unknown;}
 
-	void constrain(const struct Constraint&& c);
-
-	Type(Kind kind) : kind(kind) {}
+	Type(Kind kind) : kind(kind) {
+		canonical = this;
+	}
 };
 
 /// A primitive type, where a primitive is a "native" type that represents a raw number in some form.
@@ -296,14 +299,13 @@ struct PtrType : Type {
 
 /// Represents an lvalue (as opposed to rvalue).
 struct LVType : Type {
-	LVType(TypeRef type) : Type(Lvalue), type(type) {}
-	TypeRef type;
+	LVType(TypeRef type) : Type(Lvalue) {canonical = type;}
 };
 	
 inline bool Type::isTupleOrIndirect() const {
 	return isTuple()
 		|| (kind == Ptr && ((PtrType*)this)->type->isTuple())
-		|| (kind == Lvalue && ((LVType*)this)->type->isTuple());
+		|| (kind == Lvalue && ((LVType*)this)->canonical->isTuple());
 }
 
 struct Field {
@@ -346,6 +348,12 @@ struct VarType : Type {
 	VarConstructorList list;
 	uint8 selectorBits = 0;
 	bool isEnum = false;
+};
+
+struct LamType : Type {
+	LamType(Function& fun, ExprRef contents) : Type(Lam), fun(fun), contents(contents) {}
+	Function& fun;
+	ExprRef contents;
 };
 
 struct ArrayType : Type {
@@ -445,12 +453,6 @@ struct GenType : Type {
 	uint index;
 };
 
-inline void Type::constrain(const Constraint&& c) {
-	if(isGeneric()) {
-		((GenType*)this)->constraints += c;
-	}
-}
-
 struct AppType : Type {
 	AppType(uint baseIndex, ast::TypeList* apps) :
 			Type(App), baseIndex(baseIndex), apps(apps) {resolved = false;}
@@ -464,7 +466,6 @@ struct AliasType : Type {
 	ast::TypeDecl* astDecl;
 	Id name;
 	uint generics = ast::count(astDecl->type->kind);
-	TypeRef target = nullptr;
 	Scope& scope;
 };
 
