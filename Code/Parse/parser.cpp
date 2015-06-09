@@ -200,6 +200,7 @@ void Parser::parseForeignDecl() {
 	 * topdecl	→	foreign fdecl
 	 * fdecl	→	import callconv [safety] impent var : ftype	   	 	(define variable)
 	 * 			|	export callconv expent var : ftype	    			(expose variable)
+	 * 			|   import string where imports							(library import)
 	 * callconv	→	ccall | stdcall | cplusplus | js	    			(calling convention)
 	 * impent	→	[string]
 	 * expent	→	[string]
@@ -431,7 +432,8 @@ Expr* Parser::parseLeftExpr() {
 		}
 	} else if(token == Token::opBackSlash) {
 		eat();
-		TupleType* args;
+		TupleType* args = nullptr;
+		bool isCase = false;
 		if(token == Token::VarID) {
 			// Parse zero or more argument names.
 			args = build<TupleType>(many1([=] {
@@ -444,6 +446,9 @@ Expr* Parser::parseLeftExpr() {
 		} else if(token == Token::BracketL) {
 			// Parse the function arguments as a tuple.
 			args = (TupleType*)parseTupleType();
+		} else if(token == Token::kwCase) {
+			eat();
+			isCase = true;
 		} else {
 			error("expected function parameters");
 		}
@@ -451,7 +456,7 @@ Expr* Parser::parseLeftExpr() {
 		if(token == Token::opArrowR) {
 			eat();
 			if(auto e = parseInfixExpr()) {
-				return build<LamExpr>(args, e);
+				return build<LamExpr>(args, isCase, e);
 			} else {
 				return error("expected expression");
 			}

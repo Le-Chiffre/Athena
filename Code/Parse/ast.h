@@ -218,9 +218,10 @@ struct AppExpr : Expr {
 };
 
 struct LamExpr : Expr {
-	LamExpr(TupleType* args, ExprRef body) : Expr(Lam), args(args), body(body) {}
+	LamExpr(TupleType* args, bool isCase, ExprRef body) : Expr(Lam), args(args), body(body), isCase(isCase) {}
 	TupleType* args;
 	ExprRef body;
+	bool isCase;
 };
 
 struct InfixExpr : Expr {
