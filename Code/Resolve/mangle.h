@@ -11,7 +11,7 @@ struct Mangler {
 	Mangler(ast::CompileContext& context) : context(context) {}
 
 	/// Mangles the name of the provided function.
-	Core::String mangle(Function* function);
+	String mangle(Function* function);
 
 	/// Mangles a function name to a name id.
 	Id mangleId(Function* function);
@@ -27,7 +27,7 @@ struct Mangler {
 
 private:
 	ast::CompileContext& context;
-	Core::String string;
+	StringBuilder string;
 };
 
 }} // namespace athena::resolve

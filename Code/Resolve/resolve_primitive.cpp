@@ -11,14 +11,14 @@ static const char* primitiveOperatorNames[] = {
 	"-", "not", "&", "*"			  // Unary
 };
 
-static const byte primitiveOperatorLengths[] = {
+static const Byte primitiveOperatorLengths[] = {
 	1, 1, 1, 1, 3,    // Arithmatic
 	3, 3, 3, 2, 3,	  // Bitwise
 	2, 2, 1, 2, 1, 2, // Comparison
 	1, 3, 1, 1		  // Unary
 };
 
-static const uint16 primitiveOperatorPrecedences[] = {
+static const U16 primitiveOperatorPrecedences[] = {
 	11, 11, 12, 12, 12,	// Arithmetic
 	10, 10, 7, 5, 6,	// Bitwise
 	8, 8, 9, 9, 9, 9	// Comparison
@@ -30,7 +30,7 @@ static const char* primitiveTypeNames[] = {
 	"F64", "F32", "F16", "Bool"
 };
 
-static const byte primitiveTypeLengths[] = {
+static const Byte primitiveTypeLengths[] = {
 	3, 3, 3, 2,
 	3, 3, 3, 2,
 	3, 3, 3, 4
@@ -62,34 +62,34 @@ inline bool arithCompatible(PrimitiveType lhs, PrimitiveType rhs) {
 
 void Resolver::initPrimitives() {
 	// Make sure each operator exists in the context and add them to the map.
-	for(uint i = 0; i < (uint)PrimitiveOp::FirstUnary; i++) {
+	for(U32 i = 0; i < (U32)PrimitiveOp::FirstUnary; i++) {
 		primitiveOps[i] = context.AddUnqualifiedName(primitiveOperatorNames[i], primitiveOperatorLengths[i]);
-		primitiveBinaryMap.Add(primitiveOps[i], (PrimitiveOp)i);
+		primitiveBinaryMap.add(primitiveOps[i], (PrimitiveOp)i);
 	}
 
-	for(uint i = (uint)PrimitiveOp::FirstUnary; i < (uint)PrimitiveOp::OpCount; i++) {
+	for(U32 i = (U32)PrimitiveOp::FirstUnary; i < (U32)PrimitiveOp::OpCount; i++) {
 		primitiveOps[i] = context.AddUnqualifiedName(primitiveOperatorNames[i], primitiveOperatorLengths[i]);
-		primitiveUnaryMap.Add(primitiveOps[i], (PrimitiveOp)i);
+		primitiveUnaryMap.add(primitiveOps[i], (PrimitiveOp)i);
 	}
 
 	// Make sure all precedences are in the context and none have been overwritten.
-	for(uint i = 0; i < (uint)PrimitiveOp::FirstUnary; i++) {
+	for(U32 i = 0; i < (U32)PrimitiveOp::FirstUnary; i++) {
 		if(context.TryFindOp(primitiveOps[i]))
 			error("the precedence of built-in operator %@ cannot be redefined", primitiveOperatorNames[i]);
 		context.AddOp(primitiveOps[i], primitiveOperatorPrecedences[i], ast::Assoc::Left);
 	}
 
 	// Make sure each primitive type exists in the context, and add them to the map.
-	for(uint i = 0; i < (uint)PrimitiveType::TypeCount; i++) {
+	for(U32 i = 0; i < (U32)PrimitiveType::TypeCount; i++) {
 		auto id = context.AddUnqualifiedName(primitiveTypeNames[i], primitiveTypeLengths[i]);
-		types.primMap.Add(id, types.getPrim((PrimitiveType)i));
+		types.primMap.add(id, types.getPrim((PrimitiveType)i));
 	}
 
 	// Add the builtin aliases.
-	types.primMap.Add(context.AddUnqualifiedName("Byte"), types.getPrim(PrimitiveType::U8));
-	types.primMap.Add(context.AddUnqualifiedName("Int"), types.getPrim(PrimitiveType::I32));
-	types.primMap.Add(context.AddUnqualifiedName("Float"), types.getPrim(PrimitiveType::F32));
-	types.primMap.Add(context.AddUnqualifiedName("Double"), types.getPrim(PrimitiveType::F64));
+	types.primMap.add(context.AddUnqualifiedName("Byte"), types.getPrim(PrimitiveType::U8));
+	types.primMap.add(context.AddUnqualifiedName("Int"), types.getPrim(PrimitiveType::I32));
+	types.primMap.add(context.AddUnqualifiedName("Float"), types.getPrim(PrimitiveType::F32));
+	types.primMap.add(context.AddUnqualifiedName("Double"), types.getPrim(PrimitiveType::F64));
 }
 
 Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, ExprRef lhs, ExprRef rhs) {
@@ -234,7 +234,7 @@ TypeRef Resolver::getUnaryOpType(PrimitiveOp op, PrimitiveType type) {
 			error("the not-operation can only be applied to booleans and integers");
 		}
 	} else {
-		DebugError("Not a unary operator or unsupported!");
+		debugError("Not a unary operator or unsupported!");
 	}
 	return nullptr;
 }

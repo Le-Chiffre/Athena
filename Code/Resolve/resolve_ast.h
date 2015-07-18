@@ -26,22 +26,22 @@ typedef Type* TypeRef;
 typedef Expr& ExprRef;
 
 typedef ast::ASTList<Expr*> ExprList;
-typedef Core::Array<Variable*> VarList;
-typedef Core::Array<Function*> FunList;
-typedef Core::Array<Type*> TypeList;
+typedef Array<Variable*> VarList;
+typedef Array<Function*> FunList;
+typedef Array<Type*> TypeList;
 typedef ast::ASTList<Scope*> ScopeList;
 typedef ast::ASTList<Alt*> AltList;
-typedef Core::NumberMap<TypeRef, Id> TypeMap;
-typedef Core::NumberMap<VarConstructor, Id> ConMap;
-typedef Core::NumberMap<FunctionDecl*, Id> FunMap;
+typedef Tritium::Map<Id, TypeRef> TypeMap;
+typedef Tritium::Map<Id, VarConstructor> ConMap;
+typedef Tritium::Map<Id, FunctionDecl*> FunMap;
 typedef ast::ForeignConvention ForeignConvention;
 
 struct VarConstructor {
-	VarConstructor(Id name, uint index, TypeRef parentType, ast::TypeList* astDecl) : name(name), index(index), parentType(parentType), astDecl(astDecl) {}
+	VarConstructor(Id name, U32 index, TypeRef parentType, ast::TypeList* astDecl) : name(name), index(index), parentType(parentType), astDecl(astDecl) {}
 	VarConstructor(const VarConstructor&) = default;
 
 	Id name;
-	uint index;
+	U32 index;
 	TypeRef parentType;
 	ast::TypeList* astDecl;
 	TypeList contents;
@@ -169,7 +169,7 @@ struct Variable {
 	Id name;
 	bool constant;
 	bool funParam;
-	
+
 	bool isVar() const {return !constant && !funParam;}
 };
 
@@ -188,24 +188,24 @@ enum class PrimitiveType {
 	 * Make sure to update PrimitiveTypeCategory and category() when changing this!
 	 */
     FirstSigned,
-	I64 = (uint)FirstSigned,
+	I64 = (::U32)FirstSigned,
 	I32,
 	I16,
 	I8,
-	
+
 	FirstUnsigned,
-	U64 = (uint)FirstUnsigned,
+	U64 = (::U32)FirstUnsigned,
 	U32,
 	U16,
 	U8,
 
 	FirstFloat,
-	F64 = (uint)FirstFloat,
+	F64 = (::U32)FirstFloat,
 	F32,
 	F16,
 
     FirstOther,
-    Bool = (uint)FirstOther,
+    Bool = (::U32)FirstOther,
 
 	TypeCount
 };
@@ -229,13 +229,13 @@ inline PrimitiveTypeCategory category(PrimitiveType t) {
 
 /// Returns the largest of the two provided types.
 inline PrimitiveType largest(PrimitiveType a, PrimitiveType b) {
-	return Core::Min(a, b);
+	return (PrimitiveType)Tritium::Math::min((U32)a, (U32)b);
 }
 
 struct Type {
 	void* codegen = nullptr; // Opaque pointer that can be used by the code generator.
 	TypeRef canonical;
-	
+
 	enum Kind {
 		Unknown,
         Alias,
@@ -262,7 +262,7 @@ struct Type {
 
 	bool isPointer() const {return kind == Ptr;}
     bool isPrimitive() const {return kind == Prim;}
-	bool isPtrOrPrim() const {return ((uint)kind & 0x10) != 0;}
+	bool isPtrOrPrim() const {return ((U32)kind & 0x10) != 0;}
 	bool isTuple() const {return kind == Tuple;}
 	bool isTupleOrIndirect() const;
 	bool isKnown() const {return kind != Unknown;}
@@ -301,7 +301,7 @@ struct PtrType : Type {
 struct LVType : Type {
 	LVType(TypeRef type) : Type(Lvalue) {canonical = type;}
 };
-	
+
 inline bool Type::isTupleOrIndirect() const {
 	return isTuple()
 		|| (kind == Ptr && ((PtrType*)this)->type->isTuple())
@@ -309,18 +309,18 @@ inline bool Type::isTupleOrIndirect() const {
 }
 
 struct Field {
-	Field(Id name, uint index, TypeRef type, TypeRef container, Expr* content, bool constant) :
+	Field(Id name, U32 index, TypeRef type, TypeRef container, Expr* content, bool constant) :
 		name(name), index(index), type(type), container(container), content(content), constant(constant) {}
 
 	Id name;
-	uint index;
+	U32 index;
 	TypeRef type;
 	TypeRef container;
 	Expr* content;
 	bool constant;
 };
 
-typedef Core::Array<Field> FieldList;
+typedef Array<Field> FieldList;
 
 struct TupleType : Type {
 	TupleType() : Type(Tuple) {}
@@ -334,7 +334,7 @@ struct TupleType : Type {
 	}
 };
 
-typedef Core::Array<VarConstructor*> VarConstructorList;
+typedef Array<VarConstructor*> VarConstructorList;
 
 struct VarType : Type {
 	VarType(Id name, ast::DataDecl* astDecl, Scope& scope) :
@@ -344,9 +344,9 @@ struct VarType : Type {
 	ast::DataDecl* astDecl;
 	Scope& scope;
 	Id name;
-	uint generics = ast::count(astDecl->type->kind);
+	U32 generics = ast::count(astDecl->type->kind);
 	VarConstructorList list;
-	uint8 selectorBits = 0;
+	Byte selectorBits = 0;
 	bool isEnum = false;
 };
 
@@ -378,10 +378,10 @@ struct Constraint {
 
 	struct FunC {
 		Id name; // The name of the function that has a parameter of this type.
-		uint index; // The index the parameter should be at.
+		U32 index; // The index the parameter should be at.
 	};
 	struct FieldC {
-		uint index; // Set if index equals 0.
+		U32 index; // Set if index equals 0.
 		Id name;
 		TypeRef type; // The type of this field.
 	};
@@ -393,7 +393,7 @@ struct Constraint {
 	Kind kind;
 };
 
-inline Constraint FunConstraint(Id name, uint index) {
+inline Constraint FunConstraint(Id name, U32 index) {
 	Constraint c;
 	c.kind = Constraint::Fun;
 	c.fun.name = name;
@@ -401,7 +401,7 @@ inline Constraint FunConstraint(Id name, uint index) {
 	return c;
 }
 
-inline Constraint FieldConstraint(uint index, Id name, TypeRef type) {
+inline Constraint FieldConstraint(U32 index, Id name, TypeRef type) {
 	Constraint c;
 	c.kind = Constraint::Field;
 	c.field.index = index;
@@ -442,7 +442,7 @@ struct GenType : Type {
 	 *  - The return type is trivially inferred to Bool.
 	 *  - The signature of the whole function now becomes 'Maybe a -> Bool'.
 	 */
-	Core::Array<Constraint> constraints;
+	::Array<Constraint> constraints;
 	TypeRef typeConstraint = nullptr;
 
 	/**
@@ -450,13 +450,13 @@ struct GenType : Type {
 	 * It refers to the index of the generic parameter this represents.
 	 * For example, in the type 'Either a b', 'b' is represented with the index 1.
 	 */
-	uint index;
+	U32 index;
 };
 
 struct AppType : Type {
-	AppType(uint baseIndex, ast::TypeList* apps) :
+	AppType(U32 baseIndex, ast::TypeList* apps) :
 			Type(App), baseIndex(baseIndex), apps(apps) {resolved = false;}
-	uint baseIndex;
+	U32 baseIndex;
 	ast::TypeList* apps;
 };
 
@@ -465,7 +465,7 @@ struct AliasType : Type {
 			Type(Alias), astDecl(astDecl), name(name), scope(scope) {resolved = generics == 0;}
 	ast::TypeDecl* astDecl;
 	Id name;
-	uint generics = ast::count(astDecl->type->kind);
+	U32 generics = ast::count(astDecl->type->kind);
 	Scope& scope;
 };
 
@@ -482,14 +482,14 @@ enum class PrimitiveOp {
 	Rem,
 
     FirstBit,
-	Shl = (uint)FirstBit,
+	Shl = (U32)FirstBit,
 	Shr,
 	And,
 	Or,
 	Xor,
 
     FirstCompare,
-	CmpEq = (uint)FirstCompare,
+	CmpEq = (U32)FirstCompare,
 	CmpNeq,
 	CmpGt,
 	CmpGe,
@@ -498,11 +498,11 @@ enum class PrimitiveOp {
 
 	// Unary
 	FirstUnary,
-	Neg = (uint)FirstUnary,
+	Neg = (U32)FirstUnary,
 	Not,
 	Ref,
 	Deref,
-	
+
 	// Must be last
 	OpCount
 };
@@ -524,7 +524,7 @@ inline bool isAndOr(PrimitiveOp op) {
 
 struct Expr {
 	void* codegen = nullptr; // Opaque pointer that can be used by the code generator.
-	
+
 	enum Kind {
 		Multi,
 		Lit,
@@ -561,10 +561,10 @@ struct Expr {
 	Expr(Kind k, TypeRef type) : kind(k), type(type) {}
 };
 
-typedef Core::Array<Expr*> Exprs;
+typedef Array<Expr*> Exprs;
 
 struct MultiExpr : Expr {
-	MultiExpr(Exprs&& es) : Expr(Multi, es.Back()->type), es(Core::Move(es)) {}
+	MultiExpr(Exprs&& es) : Expr(Multi, (*es.back())->type), es(move(es)) {}
 	Exprs es;
 };
 
@@ -614,9 +614,9 @@ struct IfCond {
  	Expr* cond;
 };
 
-typedef Core::Array<IfCond> IfConds;
+typedef Array<IfCond> IfConds;
 
-enum class CondMode : uint8 {
+enum class CondMode : Byte {
 	/// The then-branch is executed if all conditions are true.
 	And,
 
@@ -682,20 +682,20 @@ struct FieldExpr : Expr {
 		int constructor;
 	};
 };
-	
+
 struct RetExpr : Expr {
 	RetExpr(ExprRef e) : Expr(Ret, e.type), expr(e) {}
 	ExprRef expr;
 };
 
 struct ConstructArg {
-	uint index;
+	U32 index;
 	ExprRef expr;
 };
 
 struct ConstructExpr : Expr {
 	ConstructExpr(TypeRef type, VarConstructor* con = nullptr) : Expr(Construct, type), con(con) {}
-	Core::Array<ConstructArg> args;
+	Array<ConstructArg> args;
 
 	// Only set if the type is a variant.
 	VarConstructor* con;
@@ -726,8 +726,8 @@ inline LitExpr* findLiteral(ExprRef e) {
 		return (LitExpr*)&e;
 	} else if(e.kind == Expr::Multi) {
 		auto m = (MultiExpr*)&e;
-		if(m->es.Count() && m->es.Back()->isLiteral())
-			return findLiteral(*m->es.Back());
+		if(m->es.size() && (*m->es.back())->isLiteral())
+			return findLiteral(**m->es.back());
 	} else if(e.kind == Expr::Scoped) {
 		return findLiteral(*((ScopedExpr*)&e)->contents);
 	} else if(e.kind == Expr::If) {
@@ -742,8 +742,8 @@ inline LitExpr* findLiteral(ExprRef e) {
 inline void updateLiteral(ExprRef e, TypeRef type) {
 	if(e.kind == Expr::Multi) {
 		auto m = (MultiExpr*)&e;
-		if(m->es.Count() && m->es.Back()->isLiteral()) {
-			findLiteral(*m->es.Back());
+		if(m->es.size() && (*m->es.back())->isLiteral()) {
+			findLiteral(**m->es.back());
 			e.type = type;
 		}
 	} else if(e.kind == Expr::Scoped) {

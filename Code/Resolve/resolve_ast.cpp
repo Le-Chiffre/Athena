@@ -35,13 +35,13 @@ Variable* Scope::findLocalVar(Id name) {
 }
 
 template<class T>
-inline T* findHelper(Scope* scope, Core::NumberMap<T, Id> Scope::*map, Id name) {
+inline T* findHelper(Scope* scope, Tritium::Map<Id, T> Scope::*map, Id name) {
     // Type names are unique, although a generic type may have specializations.
     // Generic types are handled separately.
     while(scope) {
         // Even if the type name exists, it may not have been resolved yet.
         // This is handled by the caller.
-        if(auto t = (scope->*map).Get(name)) return t;
+        if(auto t = (scope->*map).get(name)) return t.force();
         scope = scope->parent;
     }
 
@@ -64,7 +64,7 @@ bool Scope::hasVariables() {
 }
 
 bool succeedsAlways(const IfConds& conds, CondMode mode) {
-    if(conds.Count()) {
+    if(conds.size()) {
         if(mode == resolve::CondMode::And) {
             // In and-mode, the chain can fail if there is at least one condition.
             for(auto e : conds) {

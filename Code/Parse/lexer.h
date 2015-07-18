@@ -1,16 +1,11 @@
 #ifndef Athena_Parser_lexer_h
 #define Athena_Parser_lexer_h
 
-#include <core.h>
-#include <Map.h>
-#include <Hash.h>
+#include <Types/Map.h>
+#include <Mem/Hash.h>
 
 namespace athena {
 namespace ast {
-
-using Core::Maybe;
-using Core::Nothing;
-typedef Core::StringRef String;
 
 enum CompileMode {
     CompileAthena,
@@ -19,10 +14,10 @@ enum CompileMode {
 
 struct Diagnostics {
 	template<class... P>
-	void Error(const char* format, P... args) {Core::LogError(format, args...);}
+	void Error(const char* format, P... args) {}
 
 	template<class... P>
-	void Warning(const char* format, P... args) {Core::LogWarning(format, args...);}
+	void Warning(const char* format, P... args) {}
 
 	void Enable() {mEnabled = true;}
 
@@ -34,20 +29,20 @@ private:
 
 struct Qualified {
 	Qualified* qualifier = nullptr;
-	String name;
+	String name{""};
 };
 
-enum class Assoc : uint16 {
+enum class Assoc : U16 {
 	Left,
 	Right
 };
 
 struct OpProperties {
-	uint16 precedence;
+	U16 precedence;
 	Assoc associativity;
 };
 
-typedef uint32 ID;
+typedef U32 ID;
 
 struct CompileSettings {
     CompileMode mode;
@@ -64,16 +59,16 @@ struct CompileContext {
 	 */
 	void AddOp(ID op) {
 		OpProperties prop{9, Assoc::Left};
-		mOPs.Add(op, prop, false);
+		mOPs.add(op, prop, false);
 	}
 
 	/**
 	 * Adds an operator to the list with the provided properties,
 	 * or updates the properties of an existing operator.
 	 */
-	void AddOp(ID op, uint prec, Assoc assoc) {
-		OpProperties prop{(uint16)prec, assoc};
-		mOPs.Add(op, prop, true);
+	void AddOp(ID op, U32 prec, Assoc assoc) {
+		OpProperties prop{(U16)prec, assoc};
+		mOPs.add(op, prop, true);
 	}
 
 	/**
@@ -81,44 +76,43 @@ struct CompileContext {
 	 * The operator must exist.
 	 */
 	OpProperties FindOp(ID op) {
-		auto res = mOPs.Get(op);
+		auto res = mOPs.get(op);
 		if(res)
-			return *res;
+			return *res.force();
 		else
 			return {9, Assoc::Left};
 	}
 
 	OpProperties* TryFindOp(ID op) {
-		return mOPs.Get(op);
+		return mOPs.get(op).get();
 	}
 
 	Qualified& Find(ID id) {
-		auto res = mNames.Get(id);
-		ASSERT(res != nullptr);
-		return *res;
+		auto res = mNames.get(id);
+		assert(res == true);
+		return *res.force();
 	}
 
-	ID AddUnqualifiedName(String str) {
-		return AddUnqualifiedName(str.ptr, str.length);
+	ID AddUnqualifiedName(const String& str) {
+		return AddUnqualifiedName(str.text(), str.size());
 	}
 
-	ID AddUnqualifiedName(const char* chars, uint_ptr count) {
+	ID AddUnqualifiedName(const char* chars, Size count) {
 		Qualified q;
-		q.name.ptr = chars;
-		q.name.length = count;
+        q.name = String(chars, count);
 		return AddName(&q);
 	}
 
 	ID AddName(Qualified* q) {
-		Core::Hasher h;
+		Tritium::Hasher h;
 
 		auto qu = q;
 		while(qu) {
-			h.AddData(qu->name.ptr, (uint)(qu->name.length * sizeof(*qu->name.ptr)));
+			h.addData(qu->name.text(), (U32)(qu->name.size() * sizeof(*qu->name.text())));
 			qu = qu->qualifier;
 		}
 
-		return AddName(ID(h), q);
+		return AddName(ID((U32)h), q);
 	}
 
 	ID AddName(ID id, Qualified* q) {
@@ -132,7 +126,7 @@ struct CompileContext {
 				DebugError("HsCompile: A name collision occured in the compiler context.");
 		}
 #else
-		mNames.Add(id, *q, false);
+		mNames.add(id, *q, false);
 #endif
 		return id;
 	}
@@ -140,9 +134,9 @@ struct CompileContext {
 	/**
 	 * Allocates memory from the current parsing context.
 	 */
-	void* Alloc(uint_ptr size) {
+	void* Alloc(Size size) {
 		//TODO: Fix this.
-		return Core::HeapAlloc(size);
+		return Tritium::hAlloc(size);
 	}
 
 	/**
@@ -157,8 +151,8 @@ struct CompileContext {
 	}
 
 private:
-	Core::NumberMap<Qualified, ID> mNames{256};
-	Core::NumberMap<OpProperties, ID> mOPs{64};
+	Tritium::Map<ID, Qualified> mNames{256};
+	Tritium::Map<ID, OpProperties> mOPs{64};
 };
 
 struct Token {
@@ -252,15 +246,15 @@ struct Token {
 	bool operator != (Type t) {return !(*this == t);}
 	bool operator != (Kind c) {return !(*this == c);}
 
-	uint sourceLine;
-	uint sourceColumn;
-	uint length;
+	U32 sourceLine;
+	U32 sourceColumn;
+	U32 length;
 	Type type;
 	Kind kind;
 	union {
-		uint integer;
+		U32 integer;
 		double floating;
-		wchar32 character;
+		WChar32 character;
 		ID id;
 	} data;
 
@@ -302,7 +296,7 @@ private:
 	 * Parses mP as a UTF-8 code point and returns it as UTF-32.
 	 * If mP doesn't contain valid UTF-32, warnings are generated and ' ' is returned.
 	 */
-	wchar32 NextCodePoint();
+	WChar32 NextCodePoint();
 
 	/**
 	 * Indicates that the current source pointer is the start of a new line,
@@ -328,14 +322,14 @@ private:
 	 * mP must point to the first character after the start of the literal (').
 	 * If the literal is invalid, warnings are generated and ' ' is returned.
 	 */
-	wchar32 ParseCharLiteral();
+	WChar32 ParseCharLiteral();
 
 	/**
 	 * Parses an escape sequence from a character literal.
 	 * mP must point to the first character after '\'.
 	 * @return The code point generated. If the sequence is invalid, warnings are generated and ' ' is returned.
 	 */
-	wchar32 ParseEscapedLiteral();
+	WChar32 ParseEscapedLiteral();
 
 	/**
 	 * Parses a numeric literal into the current token.
@@ -380,7 +374,7 @@ private:
 	/**
 	 * Allocates memory from the current parsing context.
 	 */
-	void* Alloc(uint_ptr size) {
+	void* Alloc(Size size) {
 		return mContext.Alloc(size);
 	}
 
@@ -396,21 +390,21 @@ private:
 	friend struct SaveLexer;
 	friend struct IndentLevel;
 
-	static const uint kTabWidth = 4;
+	static const U32 kTabWidth = 4;
 	static const char kFormatStart = '{';
 	static const char kFormatEnd = '}';
 
 	Token* mToken; //The token currently being parsed.
-	uint mIdent = 0; //The current indentation level.
-	uint mBlockCount = 0; // The current number of indentation blocks.
+	U32 mIdent = 0; //The current indentation level.
+	U32 mBlockCount = 0; // The current number of indentation blocks.
 	const char* mText; //The full source code.
 	const char* mP; //The current source pointer.
 	const char* mL; //The first character of the current line.
 	Qualified mQualifier; //The current qualified name being built up.
-	uint mLine = 0; //The current source line.
-	uint mTabs = 0; // The number of tabs processed on the current line.
+	U32 mLine = 0; //The current source line.
+	U32 mTabs = 0; // The number of tabs processed on the current line.
 	bool mNewItem = false; //Indicates that a new item was started by the previous token.
-	uint8 mFormatting = 0; // Indicates that we are currently inside a formatting string literal.
+	Byte mFormatting = 0; // Indicates that we are currently inside a formatting string literal.
 	Diagnostics mDiag;
 	CompileContext& mContext;
 };
@@ -423,12 +417,12 @@ struct IndentLevel {
 
 	void end() {
 		lexer.mIdent = previous;
-		ASSERT(lexer.mBlockCount > 0);
+		assert(lexer.mBlockCount > 0);
 		lexer.mBlockCount--;
 	}
 
 	Lexer& lexer;
-	const uint previous;
+	const U32 previous;
 };
 
 struct SaveLexer {
@@ -457,11 +451,11 @@ struct SaveLexer {
 	Lexer& lexer;
 	const char* p;
 	const char* l;
-	uint line;
-	uint indent;
-	uint blocks;
-	uint tabs;
-	uint8 formatting;
+	U32 line;
+	U32 indent;
+	U32 blocks;
+	U32 tabs;
+	Byte formatting;
 	bool newItem;
 };
 

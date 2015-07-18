@@ -1,4 +1,4 @@
-#include <CoreMath.h>
+
 #include "resolve.h"
 
 namespace athena {
@@ -25,7 +25,7 @@ Module* Resolver::resolve() {
 			// Create a linked list of functions with the same name.
 			auto name = ((ast::FunDecl*)decl)->name;
 			FunctionDecl** f;
-			if(!module->functions.AddGet(name, f)) *f = nullptr;
+			if(!module->functions.addGet(name, f)) *f = nullptr;
 			auto fun = *f;
 			*f = build<Function>(name, (ast::FunDecl*)decl);
 			(*f)->sibling = fun;
@@ -34,7 +34,7 @@ Module* Resolver::resolve() {
 			if(fdecl->type->kind == ast::Type::Fun) {
 				auto name = fdecl->importedName;
 				FunctionDecl **f;
-				if (!module->functions.AddGet(name, f)) *f = nullptr;
+				if (!module->functions.addGet(name, f)) *f = nullptr;
 				auto fun = *f;
 				*f = build<ForeignFunction>(fdecl);
 				(*f)->sibling = fun;
@@ -47,12 +47,12 @@ Module* Resolver::resolve() {
 			if(decl->kind == ast::Decl::Type) {
 				name = ((ast::TypeDecl*)decl)->type->name;
 			} else {
-				ASSERT(decl->kind == ast::Decl::Data);
+				assert(decl->kind == ast::Decl::Data);
 				name = ((ast::DataDecl*)decl)->type->name;
 			}
-			
+
 			TypeRef* type;
-			if(module->types.AddGet(name, type)) {
+			if(module->types.addGet(name, type)) {
 				// This type was already declared in this scope.
 				// Ignore the type that was defined last.
 				error("redefinition of '%@'", context.Find(name).name);
@@ -66,28 +66,28 @@ Module* Resolver::resolve() {
 					// The constructors can be declared here, but are resolved later.
 					auto con = ((ast::DataDecl*)decl)->constrs;
 					bool isEnum = true;
-					uint index = 0;
+					U32 index = 0;
 					while(con) {
 						if(con->item->types) isEnum = false;
 						VarConstructor* constr;
-						if(module->constructors.AddGet(con->item->name, constr)) {
+						if(module->constructors.addGet(con->item->name, constr)) {
 							// This constructor was already declared in this scope.
 							// Ignore the constructor that was defined last.
 							error("redefinition of type constructor '%@'", context.Find(name).name);
 						} else {
 							new (constr) VarConstructor{con->item->name, index, t, con->item->types};
-							t->list += constr;
+							t->list << constr;
 						}
 						con = con->next;
 						index++;
 					}
 					t->isEnum = isEnum;
-					t->selectorBits = t->list.Count() ? Core::Math::FindLastBit(t->list.Count() - 1) + 1 : 0;
+					t->selectorBits = t->list.size() ? Tritium::Math::findLastBit(t->list.size() - 1) + 1 : 0;
 
-					ASSERT(t->list.Count() >= 1);
+					assert(t->list.size() >= 1);
 					*type = t;
 				} else {
-					DebugError("Not implemented");
+					debugError("Not implemented");
 				}
 			}
 		}
@@ -96,7 +96,7 @@ Module* Resolver::resolve() {
     // Perform the resolve pass. All defined names in this scope are now available.
 	// Symbols may be resolved lazily when used by other symbols,
 	// so we just skip those that are already defined.
-	module->types.Iterate([=](Id name, TypeRef& t) {
+    walk([=](Id name, TypeRef& t) {
 		if(t->kind == Type::Alias) {
 			// Alias types are completely replaced by their contents, since they are equivalent.
             auto a = (AliasType*)t;
@@ -106,35 +106,35 @@ Module* Resolver::resolve() {
 			auto a = (VarType*)t;
             if(a->astDecl) resolveVariant(a);
         }
-	});
+	}, module->types);
 
-    module->functions.Iterate([=](Id name, FunctionDecl* f) {
+    walk([=](Id name, FunctionDecl* f) {
         resolveFunctionDecl(*module, *f);
-    });
-	
+    }, module->functions);
+
 	return module;
 }
 
-Field Resolver::resolveField(ScopeRef scope, TypeRef container, uint index, ast::Field& field) {
-	ASSERT(field.type || field.content);
+Field Resolver::resolveField(ScopeRef scope, TypeRef container, U32 index, ast::Field& field) {
+	assert(field.type || field.content);
 	TypeRef type = nullptr;
 	Expr* content = nullptr;
-	
+
 	if(field.type)
 		type = resolveType(scope, field.type);
 	if(field.content)
 		content = resolveExpression(scope, field.content, true);
-	
+
 	// TODO: Typecheck here if both are set.
 	return {field.name, index, type, container, content, field.constant};
 }
 
 PrimitiveOp* Resolver::tryPrimitiveBinaryOp(Id callee) {
-	return primitiveBinaryMap.Get(callee);
+	return primitiveBinaryMap.get(callee);
 }
 
 PrimitiveOp* Resolver::tryPrimitiveUnaryOp(Id callee) {
-	return primitiveUnaryMap.Get(callee);
+	return primitiveUnaryMap.get(callee);
 }
 
 Expr* Resolver::implicitLoad(ExprRef target) {
@@ -153,8 +153,8 @@ Expr* Resolver::implicitCoerce(ExprRef src, TypeRef dst) {
 		updateLiteral(src, dst);
 		return &src;
 	}
-	
-	if(typeCheck.implicitCoerce(src.type, dst, Nothing)) {
+
+	if(typeCheck.implicitCoerce(src.type, dst, Nothing())) {
 		// Lvalue to Rvalue conversion is so common that we implement it as a special instruction.
 		// This also allows for a simpler code generator.
 		if(src.type->isLvalue())
@@ -168,7 +168,7 @@ Expr* Resolver::implicitCoerce(ExprRef src, TypeRef dst) {
 
 LitExpr* Resolver::literalCoerce(const ast::Literal& lit, TypeRef dst) {
 	Literal literal;
-	typeCheck.literalCoerce(lit, dst, literal, Nothing);
+	typeCheck.literalCoerce(lit, dst, literal, Nothing());
 
 	// We always return a valid value to simplify the resolver.
 	// If an error occurred the code generator will not be invoked.
@@ -176,7 +176,7 @@ LitExpr* Resolver::literalCoerce(const ast::Literal& lit, TypeRef dst) {
 }
 
 LitExpr* Resolver::literalCoerce(LitExpr* lit, TypeRef dst) {
-	if(typeCheck.literalCoerce(lit->literal, dst, lit->literal, Nothing))
+	if(typeCheck.literalCoerce(lit->literal, dst, lit->literal, Nothing()))
 		lit->type = dst;
 	return lit;
 }
@@ -187,8 +187,7 @@ Expr* Resolver::getRV(ExprRef e) {
 	} else return &e;
 }
 
-nullptr_t Resolver::error(const char* text) {
-	Core::LogError(text);
+void* Resolver::error(const char* text) {
 	return nullptr;
 }
 

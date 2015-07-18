@@ -4,14 +4,14 @@
 namespace athena {
 namespace resolve {
 
-Core::String Mangler::mangle(Function* function) {
-	string.Clear();
-	string += "_Z";
+String Mangler::mangle(Function* function) {
+	string.clear();
+	string << "_Z";
 
 	auto name = context.Find(function->name);
 	mangleQualifier(&name);
 	if(function->scope.parent && function->scope.parent->function) {
-		string += '$';
+		string << '$';
 		name = context.Find(function->scope.parent->function->name);
 		mangleQualifier(&name);
 	}
@@ -19,7 +19,7 @@ Core::String Mangler::mangle(Function* function) {
 	for(auto a : function->arguments) {
 		mangleType(a->type);
 	}
-	return string;
+	return string.string();
 }
 
 Id Mangler::mangleId(Function* function) {
@@ -27,27 +27,27 @@ Id Mangler::mangleId(Function* function) {
 }
 
 void Mangler::mangleQualifier(ast::Qualified* qualified) {
-	string += "N";
+	string << "N";
 	auto name = qualified->name;
 	auto q = qualified->qualifier;
 	while(q) {
 		char buffer[32];
-		Core::NumberToString((uint)q->name.length, buffer, 32);
-		string += &buffer[0];
-		string.Append(q->name.ptr, (uint)q->name.length);
+        Tritium::show((U32)q->name.size(), buffer, 32);
+		string << &buffer[0];
+        string << q->name;
 		q = q->qualifier;
 	}
 
 	char buffer[32];
-	Core::NumberToString((uint)name.length, buffer, 32);
-	string += &buffer[0];
-	string.Append(name.ptr, (uint)name.length);
-	string += 'E';
+    Tritium::show((U32)name.size(), buffer, 32);
+	string << &buffer[0];
+    string << name;
+	string << 'E';
 }
 
 void Mangler::mangleType(TypeRef type) {
 	if(type->isUnit())
-		string += 'v';
+		string << 'v';
 	else if(type->isPrimitive())
 		mangleType(((PrimType*)type)->type);
 	else if(type->isPointer())
@@ -62,11 +62,11 @@ void Mangler::mangleType(PrimitiveType type) {
 			'y', 'j', 't', 'h',
 			'd', 'f', 't', 'b'
 	};
-	string += types[(uint)type];
+	string << types[(U32)type];
 }
 
 void Mangler::mangleType(const PtrType* type) {
-	string += 'P';
+	string << 'P';
 	mangleType(type->type);
 }
 

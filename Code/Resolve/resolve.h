@@ -10,13 +10,13 @@
 namespace athena {
 namespace resolve {
 
-typedef Core::NumberMap<PrimitiveOp, Id> PrimOpMap;
+typedef Tritium::Map<Id, PrimitiveOp> PrimOpMap;
 
 struct TypeManager {
     TypeManager() {
 		unknownType.resolved = false;
-        for(uint i=0; i<(uint)PrimitiveType::TypeCount; i++) {
-            prims += PrimType{(PrimitiveType)i};
+        for(U32 i=0; i<(U32)PrimitiveType::TypeCount; i++) {
+            prims << PrimType{(PrimitiveType)i};
         }
 
         stringType = getPtr(getU8());
@@ -25,17 +25,17 @@ struct TypeManager {
 	TypeRef getUnit() {return &unitType;}
 	TypeRef getUnknown() {return &unknownType;}
 
-    TypeRef getPrim(PrimitiveType t) {return &prims[(uint)t];}
-    TypeRef getBool() {return &prims[(uint)PrimitiveType::Bool];}
-    TypeRef getFloat() {return &prims[(uint)PrimitiveType::F32];}
-    TypeRef getDouble() {return &prims[(uint)PrimitiveType::F64];}
-    TypeRef getInt() {return &prims[(uint)PrimitiveType::I32];}
-    TypeRef getU8() {return &prims[(uint)PrimitiveType::U8];}
+    TypeRef getPrim(PrimitiveType t) {return &prims[(U32)t];}
+    TypeRef getBool() {return &prims[(U32)PrimitiveType::Bool];}
+    TypeRef getFloat() {return &prims[(U32)PrimitiveType::F32];}
+    TypeRef getDouble() {return &prims[(U32)PrimitiveType::F64];}
+    TypeRef getInt() {return &prims[(U32)PrimitiveType::I32];}
+    TypeRef getU8() {return &prims[(U32)PrimitiveType::U8];}
     TypeRef getString() {return stringType;}
 
     TypeRef getArray(TypeRef content) {
         ArrayType* type;
-        if(!arrays.AddGet(content, type)) {
+        if(!arrays.addGet(content, type)) {
 			new(type) ArrayType{content};
 			type->resolved = content->resolved;
 		}
@@ -45,7 +45,7 @@ struct TypeManager {
 
 	TypeRef getPtr(TypeRef content) {
 		PtrType* type;
-		if(!ptrs.AddGet(content, type)) {
+		if(!ptrs.addGet(content, type)) {
 			new(type) PtrType{content};
 			type->resolved = content->resolved;
 		}
@@ -53,27 +53,27 @@ struct TypeManager {
 		return type;
 	}
 
-	bool getTuple(uint hash, TupleType*& type) {
-		return tuples.AddGet(hash, type);
+	bool getTuple(U32 hash, TupleType*& type) {
+		return tuples.addGet(hash, type);
 	}
 
 	TypeRef getTuple(const FieldList& fields) {
-		Core::Hasher h;
+		Tritium::Hasher h;
 		for(auto& f : fields) {
-			h.Add(f.type);
-			if(f.name) h.Add(f.name);
+			h.add(f.type);
+			if(f.name) h.add(f.name);
 		}
 
 		// Check if this kind of tuple has been used already.
 		TupleType* result = nullptr;
-		if(!getTuple(h, result)) {
+		if(!getTuple((U32)h, result)) {
 			// Otherwise, create the type.
 			new (result) TupleType;
 			bool resolved = true;
-			result->fields.Reserve(fields.Count());
+			result->fields.reserve(fields.size());
 			for(auto& f : fields) {
 				if(!f.type->resolved) resolved = false;
-				result->fields += f;
+				result->fields << f;
 			}
 			result->resolved = resolved;
 		}
@@ -82,20 +82,20 @@ struct TypeManager {
 	}
 
 	TypeRef getTuple(const TypeList& types) {
-		Core::Hasher h;
-		for(auto t : types) h.Add(t);
+		Tritium::Hasher h;
+		for(auto t : types) h.add(t);
 
 		// Check if this kind of tuple has been used already.
 		TupleType* result = nullptr;
-		if(!getTuple(h, result)) {
+		if(!getTuple((U32)h, result)) {
 			// Otherwise, create the type.
 			new (result) TupleType;
 			bool resolved = true;
-			result->fields.Reserve(types.Count());
-			uint i = 0;
+			result->fields.reserve(types.size());
+			U32 i = 0;
 			for(auto& t : types) {
 				if(!t->resolved) resolved = false;
-				result->fields += Field{0, i, t, result, nullptr, true};
+				result->fields << Field{0, i, t, result, nullptr, true};
 				i++;
 			}
 			result->resolved = resolved;
@@ -106,7 +106,7 @@ struct TypeManager {
 
 	TypeRef getLV(TypeRef t) {
 		LVType* type;
-		if(!lvalues.AddGet(t, type)) {
+		if(!lvalues.addGet(t, type)) {
 			new(type) LVType(t);
 			type->resolved = t->resolved;
 		}
@@ -116,16 +116,16 @@ struct TypeManager {
 
 	// t must be an lvalue.
 	TypeRef getRV(TypeRef t) {
-		ASSERT(t->isLvalue());
+		assert(t->isLvalue());
 		return t->canonical;
 	}
 
-    Core::FixedArray<PrimType, (uint)PrimitiveType::TypeCount> prims;
-	Core::NumberMap<TypeRef, Id> primMap; // Maps from ast type name to type.
-    Core::NumberMap<ArrayType, TypeRef> arrays;
-	Core::NumberMap<PtrType, TypeRef> ptrs;
-	Core::NumberMap<TupleType, uint> tuples;
-	Core::NumberMap<LVType, TypeRef> lvalues;
+    ArrayF<PrimType, (U32)PrimitiveType::TypeCount> prims;
+	Tritium::Map<Id, TypeRef> primMap; // Maps from ast type name to type.
+    Tritium::Map<TypeRef, ArrayType> arrays;
+    Tritium::Map<TypeRef, PtrType> ptrs;
+    Tritium::Map<U32, TupleType> tuples;
+    Tritium::Map<TypeRef, LVType> lvalues;
 	Type* stringType;
 	Type unitType{Type::Unit};
 	Type unknownType{Type::Unknown};
@@ -178,8 +178,8 @@ struct Resolver {
 
 	Variable* resolveArgument(ScopeRef scope, ast::TupleField& arg);
 	Variable* resolveArgument(ScopeRef scope, ast::Type* arg);
-    Field resolveField(ScopeRef scope, TypeRef container, uint index, ast::Field& field);
-	
+    Field resolveField(ScopeRef scope, TypeRef container, U32 index, ast::Field& field);
+
 	/// Creates a boolean condition from the provided expression.
 	Expr* resolveCondition(ScopeRef scope, ast::ExprRef expr);
 
@@ -272,10 +272,10 @@ struct Resolver {
 
 	/// Returns the number of implicit conversions needed to call this function with the provided arguments.
 	/// The function must be callable with these arguments.
-	uint findImplicitConversionCount(FunctionDecl* f, ExprList* args);
+	U32 findImplicitConversionCount(FunctionDecl* f, ExprList* args);
 
 	/// Reorders the provided chain of infix operators according to the operator precedence table.
-	ast::InfixExpr* reorder(ast::InfixExpr& expr, uint min_prec = 0);
+	ast::InfixExpr* reorder(ast::InfixExpr& expr, U32 min_prec = 0);
 
 	/// Checks if the provided expression always evaluates to a true constant.
 	bool alwaysTrue(ExprRef expr);
@@ -299,29 +299,28 @@ struct Resolver {
 		return ll;
 	}
 
-	nullptr_t error(const char*);
+	void* error(const char*);
 
 	template<class P, class... Ps>
-	nullptr_t error(const char* text, P first, Ps... more) {
-		Core::LogError(text, first, more...);
+	void* error(const char* text, P first, Ps... more) {
 		return nullptr;
 	}
 
 	template<class T, class... P>
 	T* build(P&&... p) {
-		return buffer.New<T>(Core::Forward<P>(p)...);
+		return buffer.create<T>(forward<P>(p)...);
 	}
 
 	/// Initializes the data used to recognize and resolve primitives.
 	/// This also makes sure that no primitive types and operators are redefined in the program.
 	void initPrimitives();
 
-	Id primitiveOps[(uint)PrimitiveOp::OpCount];
+	Id primitiveOps[(U32)PrimitiveOp::OpCount];
 	PrimOpMap primitiveBinaryMap;
 	PrimOpMap primitiveUnaryMap;
 	ast::CompileContext& context;
 	ast::Module& source;
-	Core::StaticBuffer buffer;
+	Tritium::StaticBuffer buffer;
     TypeManager types;
 	TypeCheck typeCheck;
 	EmptyExpr emptyExpr{types.getUnit()};
@@ -331,7 +330,7 @@ struct Resolver {
 	Scope* currentScope = nullptr;
 
 	// This is used to accumulate potentially callable functions.
-	Core::Array<FunctionDecl*> potentialCallees{32};
+	Array<FunctionDecl*> potentialCallees{32};
 };
 
 }} // namespace athena::resolve

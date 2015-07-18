@@ -21,7 +21,7 @@ FunctionDecl* Resolver::findFunction(ScopeRef scope, ast::ExprRef callee, ExprLi
 }
 
 FunctionDecl* Resolver::findFunction(ScopeRef scope, Id name, ExprList* args) {
-	potentialCallees.Clear();
+	potentialCallees.clear();
 	bool identifierExists = false;
 
 	// Recursively search upwards through each scope.
@@ -30,7 +30,7 @@ FunctionDecl* Resolver::findFunction(ScopeRef scope, Id name, ExprList* args) {
 		// Note: functions are added to a scope before they are processed, so any existing function will be found from here.
 		// TODO: Since only the function names are added (not their arguments),
 		// TODO: we have to resolve each function before we can know which one to call.
-		if(auto fns = s->functions.Get(name)) {
+		if(auto fns = s->functions.get(name)) {
 			identifierExists = true;
 
 			// If there are multiple overloads, we have to resolve each one.
@@ -48,7 +48,7 @@ FunctionDecl* Resolver::findFunction(ScopeRef scope, Id name, ExprList* args) {
 
 	// No callable function was found.
 	// TODO: Should we return some dummy object here?
-	if(!potentialCallees.Count()) {
+	if(!potentialCallees.size()) {
 		auto n = context.Find(name).name;
 		if(identifierExists)
 			error("no matching function for call to '%@'", n);
@@ -79,7 +79,7 @@ bool Resolver::potentiallyCallable(FunctionDecl* fun, ExprList* args) {
 	return !(arg || farg != fend);
 }
 
-uint Resolver::findImplicitConversionCount(FunctionDecl* f, ExprList* args) {
+U32 Resolver::findImplicitConversionCount(FunctionDecl* f, ExprList* args) {
 	return 0;
 }
 
@@ -87,17 +87,17 @@ FunctionDecl* Resolver::findBestMatch(ExprList* args) {
 	// One function is a better match than the other if one of the following is true:
 	//  - The call needs less implicit conversions.
 	//  - The function is less generic.
-	ASSERT(potentialCallees.Count() > 0);
-	if(potentialCallees.Count() == 1) return potentialCallees[0];
+	assert(potentialCallees.size() > 0);
+	if(potentialCallees.size() == 1) return potentialCallees[0];
 
 	auto bestMatch = potentialCallees[0];
-	uint leastConversions = findImplicitConversionCount(bestMatch, args);
-	uint sameMatchCount = 0; // The number of functions that match just as well as the best one.
+	U32 leastConversions = findImplicitConversionCount(bestMatch, args);
+	U32 sameMatchCount = 0; // The number of functions that match just as well as the best one.
 
 	// For each function, check if it is better than the best one.
-	for(uint i = 1; i < potentialCallees.Count(); i++) {
+	for(U32 i = 1; i < potentialCallees.size(); i++) {
 		// TODO: This should be the last match factor that is checked.
-		uint convs = findImplicitConversionCount(potentialCallees[i], args);
+		U32 convs = findImplicitConversionCount(potentialCallees[i], args);
 		if(convs < leastConversions) {
 			sameMatchCount = 0;
 			bestMatch = potentialCallees[i];

@@ -7,9 +7,6 @@
 namespace athena {
 namespace resolve {
 
-using Core::Maybe;
-using Core::Nothing;
-
 struct TypeCheck {
 	bool compatible(ExprRef src, ExprRef dst) {
 		return compatible(src.type, dst.type);
@@ -20,14 +17,14 @@ struct TypeCheck {
 			return true;
 		} else if(auto l = findLiteral(src)) {
 			// Literals have special conversion rules.
-			return literalCoerce(l->literal, dst, Nothing);
+			return literalCoerce(l->literal, dst, Nothing());
 		} else {
 			return false;
 		}
 	}
 
 	bool compatible(TypeRef src, TypeRef dst) {
-		return src == dst || implicitCoerce(src, dst, Nothing);
+		return src == dst || implicitCoerce(src, dst, Nothing());
 	}
 
 	/// Returns true if the source type can be implicitly converted to the target type.

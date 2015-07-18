@@ -2,14 +2,14 @@ cmake_minimum_required(VERSION 2.8.4)
 project(Athena)
 
 include_directories(../../llvm/include)
-include_directories(../../Core/Code/Include)
-link_directories(../../Core/Bin/Win32)
+include_directories(../../Tritium/Code/Tritium/Core)
+link_directories(../../Tritium/Debug)
 link_directories(../../llvm/build/lib)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -msse4.1 -mfpmath=sse -Wall")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4.1 -mfpmath=sse -Wall -std=c++14 -fno-rtti -fno-exceptions -fno-threadsafe-statics")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -D_DEBUG -DDEBUG")
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static -mwindows -nostartfiles -Wl,-eWinMainCRTStartup")
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static -mwindows")
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/../Bin/Win32")
 

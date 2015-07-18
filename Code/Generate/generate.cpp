@@ -21,14 +21,14 @@ Module* Generator::generate(resolve::Module& module) {
 
 	return &this->module;
 }
-	
+
 Function* Generator::genFunctionDecl(resolve::FunctionDecl& function) {
 	auto argCount = function.arguments.Count();
 	auto argTypes = (Type**)StackAlloc(sizeof(Type*) * argCount);
-	for(uint i=0; i<argCount; i++) {
+	for(U32 i=0; i<argCount; i++) {
 		argTypes[i] = getType(function.arguments[i]->type)->llType;
 	}
-	
+
 	auto type = FunctionType::get(getType(function.type)->llType, ArrayRef<Type*>(argTypes, argCount), false);
 	if(function.isForeign) {
 		auto &ff = (resolve::ForeignFunction&)function;
@@ -49,13 +49,13 @@ Function* Generator::genFunctionDecl(resolve::FunctionDecl& function) {
 
 void Generator::genFunction(Function* func, resolve::Function& function) {
 	// Generate the function arguments.
-	uint i=0;
+	U32 i=0;
 	for(auto it=func->arg_begin(); i<function.arguments.Count(); i++, it++) {
 		auto a = function.arguments[i];
 		it->setName(toRef(ccontext.Find(a->name).name));
 		a->codegen = it;
 	}
-	
+
 	// Generate the function body.
 	auto scope = genScope(function.scope);
 	scope->insertInto(func);
@@ -88,7 +88,7 @@ void Generator::genVarDecl(resolve::Variable& v) {
 		v.codegen = var;
 	}
 }
-	
+
 Value* Generator::genExpr(resolve::ExprRef expr) {
 	switch(expr.kind) {
 		case resolve::Expr::Multi:
@@ -149,12 +149,12 @@ Value* Generator::genLiteral(resolve::Literal& literal, resolve::TypeRef type) {
 	FatalError("Unsupported literal type.");
 	return nullptr;
 }
-	
+
 Value* Generator::genVar(resolve::Variable& var) {
 	ASSERT(var.codegen != nullptr); // This could happen if a constant is used before its creation.
 	return (Value*)var.codegen;
 }
-	
+
 Value* Generator::genAssign(resolve::AssignExpr& assign) {
 	ASSERT(!assign.target.isVar());
 	auto e = genExpr(assign.value);
@@ -184,7 +184,7 @@ Value* Generator::genMulti(resolve::MultiExpr& expr) {
 		v = genExpr(*i);
 	return v;
 }
-	
+
 Value* Generator::genRet(resolve::RetExpr& expr) {
 	auto e = genExpr(expr.expr);
 	if(getType(expr.expr.type)->onStack) {
@@ -201,11 +201,11 @@ Value* Generator::genCall(resolve::FunctionDecl& function, resolve::ExprList* ar
 	if(!function.codegen) {
 		genFunctionDecl(function);
 	}
-	
+
 	// Generate the function arguments.
 	auto argCount = function.arguments.Count();
 	auto args = (Value**)StackAlloc(sizeof(Value*) * argCount);
-	for(uint i=0; i<argCount; i++) {
+	for(U32 i=0; i<argCount; i++) {
 		args[i] = genExpr(*argList->item);
 		if(getType(argList->item->type)->onStack) {
 			args[i] = builder.CreateLoad(args[i]);
@@ -410,7 +410,7 @@ Value* Generator::genIf(resolve::IfExpr& ife) {
 		thenBlock = BasicBlock::Create(context, "then", function);
 
 	// Generate a chain of conditions.
-	for(uint i = 0;; i++) {
+	for(U32 i = 0;; i++) {
 		auto c = &ife.conds[i];
 		if(c->scope) genExpr(*c->scope);
 
@@ -591,7 +591,7 @@ Value* Generator::genField(resolve::FieldExpr& expr) {
 			} else if(var->isEnum) {
 				return builder.CreateCast(Instruction::ZExt, genExpr(expr.container), builder.getInt32Ty());
 			} else {
-				auto con = builder.CreateLoad(builder.CreateStructGEP(genExpr(expr.container), (uint)index));
+				auto con = builder.CreateLoad(builder.CreateStructGEP(genExpr(expr.container), (U32)index));
 				return builder.CreateCast(Instruction::ZExt, con, builder.getInt32Ty());
 			}
 		} else {
@@ -760,7 +760,7 @@ TypeData* Generator::genLlvmType(resolve::TypeRef type) {
 		// Generate the tuple contents.
 		auto fCount = tuple->fields.Count();
 		auto fields = (Type**)StackAlloc(sizeof(Type*) * fCount);
-		for(uint i=0; i<fCount; i++) {
+		for(U32 i=0; i<fCount; i++) {
 			fields[i] = getType(tuple->fields[i].type)->llType;
 		}
 
@@ -777,10 +777,10 @@ TypeData* Generator::genLlvmType(resolve::TypeRef type) {
 			data->llType = selectorTy;
 		} else {
 			// Start by generating a type for each constructor.
-			uint totalSize = 0;
-			uint totalAlignment = 0;
+			U32 totalSize = 0;
+			U32 totalAlignment = 0;
 			Type* baseType;
-			uint baseSize = 0;
+			U32 baseSize = 0;
 			for (auto& con : var->list) {
 				auto fCount = con->contents.Count();
 				if(fCount) {
@@ -791,10 +791,10 @@ TypeData* Generator::genLlvmType(resolve::TypeRef type) {
 					if(align > totalAlignment || (align == totalAlignment && size > totalSize)) {
 						totalAlignment = align;
 						baseType = s->llType;
-						baseSize = (uint)size;
+						baseSize = (U32)size;
 					}
 
-					totalSize = Core::Max(totalSize, (uint)size);
+					totalSize = Core::Max(totalSize, (U32)size);
 					con->codegen = s;
 				} else {
 					con->codegen = nullptr;

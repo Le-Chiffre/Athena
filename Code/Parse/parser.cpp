@@ -25,7 +25,7 @@ inline Literal toLiteral(Token& tok) {
             l.s = tok.data.id;
             l.type = Literal::String;
             break;
-        default: FatalError("Invalid literal type.");
+        default: fatalError("Invalid literal type.");
     }
 	return l;
 }
@@ -66,10 +66,10 @@ void Parser::parseDecl() {
 	} else if(token == Token::kwForeign) {
 		parseForeignDecl();
 	} else {
-		module.declarations += parseFunDecl();
+		module.declarations << parseFunDecl();
 	}
 }
-	
+
 Decl* Parser::parseFunDecl() {
 	/*
 	 * fundecl		→	var : args = expr
@@ -83,12 +83,12 @@ Decl* Parser::parseFunDecl() {
 		TupleType* args = nullptr;
 		if(token == Token::VarID) {
 			// Parse zero or more argument names.
-			args = build<TupleType>(many1([=] {
+			args = build<TupleType>(many1([=]() -> Maybe<TupleField> {
 				if(token == Token::VarID) {
 					auto id = token.data.id;
 					eat();
-					return just(TupleField{nullptr, id, nullptr});
-				} else return nothing<TupleField>();
+					return Just(TupleField{nullptr, Just(id), nullptr});
+				} else return Nothing();
 			}));
 		} else if(token == Token::BracketL) {
 			// Parse the function arguments as a tuple.
@@ -107,7 +107,7 @@ Decl* Parser::parseFunDecl() {
 
 			// Parse the function body.
 			if(auto expr = parseExpr()) {
-				fun = build<FunDecl>(var(), expr, args, type);
+				fun = build<FunDecl>(var.force(), expr, args, type);
 			} else {
 				error("expected a function body expression.");
 			}
@@ -132,7 +132,7 @@ Decl* Parser::parseFunDecl() {
 			});
 
 			if(cases) {
-				fun = build<FunDecl>(var(), cases, args, type);
+				fun = build<FunDecl>(var.force(), cases, args, type);
 			} else {
 				error("expected a function pattern");
 			}
@@ -163,7 +163,7 @@ void Parser::parseDataDecl() {
 			eat();
 			auto cs = sepBy1([=] {return parseConstr();}, Token::opBar);
 			if(!cs) error("expected at least one constructor definition");
-			else module.declarations += build<DataDecl>(type, cs);
+			else module.declarations << build<DataDecl>(type, cs);
 		} else {
 			error("Expected '=' after type name");
 		}
@@ -180,7 +180,7 @@ void Parser::parseTypeDecl() {
 			if(token == Token::opEquals) {
 				eat();
 				if(auto type = parseType()) {
-					module.declarations += build<TypeDecl>(t, type);
+					module.declarations << build<TypeDecl>(t, type);
 				} else {
 					error("expected type after 'type t ='.");
 				}
@@ -253,7 +253,7 @@ void Parser::parseForeignDecl() {
 			}
 
 			auto type = parseType();
-			module.declarations += build<ForeignDecl>(name, importName, type, convention);
+			module.declarations << build<ForeignDecl>(name, importName, type, convention);
 		} else {
 			error("expected 'import'.");
 		}
@@ -323,7 +323,7 @@ Expr* Parser::parseInfixExpr() {
 		} else if(auto op = tryParse([=] {return parseQop();})) {
 			// Binary operator.
 			if(auto rhs = parseInfixExpr()) {
-				return build<InfixExpr>(op(), lhs, rhs);
+				return build<InfixExpr>(op.force(), lhs, rhs);
 			} else {
 				return error("Expected a right-hand side for a binary operator.");
 			}
@@ -436,12 +436,12 @@ Expr* Parser::parseLeftExpr() {
 		bool isCase = false;
 		if(token == Token::VarID) {
 			// Parse zero or more argument names.
-			args = build<TupleType>(many1([=] {
+			args = build<TupleType>(many1([=]() -> Maybe<TupleField> {
 				if(token == Token::VarID) {
 					auto id = token.data.id;
 					eat();
-					return just(TupleField{nullptr, id, nullptr});
-				} else return nothing<TupleField>();
+					return Just(TupleField{nullptr, Just(id), nullptr});
+				} else return Nothing();
 			}));
 		} else if(token == Token::BracketL) {
 			// Parse the function arguments as a tuple.
@@ -540,7 +540,7 @@ Expr* Parser::parseCaseExpr() {
 	} else {
 		error("expected 'case'");
 	}
-	
+
 	return nullptr;
 }
 
@@ -574,14 +574,14 @@ Expr* Parser::parseBaseExpr() {
 		eat();
 		return build<ConstructExpr>(build<Type>(Type::Con, name), nullptr);
 	} else if(auto var = tryParse([=] {return parseVar();} )) {
-		return build<VarExpr>(var());
+		return build<VarExpr>(var.force());
 	} else {
 		return error("Expected an expression.");
 	}
 }
 
 Expr* Parser::parseLiteral() {
-	ASSERT(token == Token::Literal);
+	assert(token == Token::Literal);
 	if(token == Token::String) {
 		return parseStringLiteral();
 	} else {
@@ -592,7 +592,7 @@ Expr* Parser::parseLiteral() {
 }
 
 Expr* Parser::parseStringLiteral() {
-	ASSERT(token == Token::String);
+    assert(token == Token::String);
 	auto string = token.data.id;
 	eat();
 
@@ -612,7 +612,7 @@ Expr* Parser::parseStringLiteral() {
 				return error("Expected end of string format after this expression.");
 
 			eat();
-			ASSERT(token == Token::String);
+            assert(token == Token::String);
 			p->next = build<FormatList>(FormatChunk{token.data.id, expr});
 			p = p->next;
 			eat();
@@ -678,7 +678,7 @@ void Parser::parseFixity() {
 	// Check if a precedence for these operators was applied.
 	// If no precedence is provided, we use the default of 9 as defined by the standard.
 	if(token == Token::Integer) {
-		f.prec = (uint8)token.data.integer;
+		f.prec = (Byte)token.data.integer;
 		eat();
 	} else {
 		f.prec = kDefaultFixity.prec;
@@ -701,7 +701,7 @@ void Parser::parseFixity() {
 void Parser::addFixity(Fixity f) {
 	if(token == Token::VarSym) {
 		Fixity* pf;
-		if(module.operators.AddGet(token.data.id, pf)) {
+		if(module.operators.addGet(token.data.id, pf)) {
 			error("This operator has already had its precedence defined.");
 		} else {
 			*pf = f;
@@ -719,15 +719,15 @@ Maybe<Alt> Parser::parseAlt() {
 	 * 		|		    					(empty alternative)
 	 */
 	auto pat = parsePattern();
-	if(!pat) return Nothing;
+	if(!pat) return Nothing();
 
 	if(token == Token::opArrowR) eat();
-	else {error("expected '->'"); return Nothing;}
+	else {error("expected '->'"); return Nothing();}
 
 	auto exp = parseTypedExpr();
-	if(!exp) return Nothing;
+	if(!exp) return Nothing();
 
-	return Alt{pat, exp};
+	return Just(Alt{pat, exp});
 }
 
 Maybe<Id> Parser::parseVar() {
@@ -737,7 +737,7 @@ Maybe<Id> Parser::parseVar() {
 	if(token == Token::VarID) {
 		auto id = token.data.id;
 		eat();
-		return id;
+		return Just(id);
 	} else if(token == Token::ParenL) {
 		eat();
 		if(token == Token::VarSym) {
@@ -745,12 +745,12 @@ Maybe<Id> Parser::parseVar() {
 			eat();
 			if(token == Token::ParenR) {
 				eat();
-				return id;
+				return Just(id);
 			}
 		}
 	}
 
-	return Nothing;
+	return Nothing();
 }
 
 Maybe<Id> Parser::parseQop() {
@@ -760,7 +760,7 @@ Maybe<Id> Parser::parseQop() {
 	if(token == Token::VarSym) {
 		auto id = token.data.id;
 		eat();
-		return id;
+		return Just(id);
 	} else if(token == Token::Grave) {
 		eat();
 		if(token == Token::VarID) {
@@ -768,12 +768,12 @@ Maybe<Id> Parser::parseQop() {
 			eat();
 			if(token == Token::Grave) {
 				eat();
-				return id;
+				return Just(id);
 			}
 		}
 	}
 
-	return Nothing;
+	return Nothing();
 }
 
 Type* Parser::parseType() {
@@ -801,7 +801,7 @@ Type* Parser::parseType() {
 Type* Parser::parseAType() {
 	if(token == Token::VarSym) {
 		auto name = lexer.GetContext().Find(token.data.id).name;
-		if(name.length == 1 && name.ptr[0] == kPointerSigil) {
+		if(name.size() == 1 && name.text()[0] == kPointerSigil) {
 			eat();
 			if(auto type = parseAType()) {
 				type->kind = Type::Ptr;
@@ -838,11 +838,13 @@ SimpleType* Parser::parseSimpleType() {
 	if(token == Token::ConID) {
 		auto id = token.data.id;
 		eat();
-		return build<SimpleType>(id, many([=]{
+		return build<SimpleType>(id, many([=]() -> Maybe<ID> {
 			if(token == Token::VarID) {
-				auto id = token.data.id; eat(); return just(id);
+				auto id = token.data.id;
+                eat();
+                return Just(id);
 			} else {
-				return nothing<Id>();
+				return Nothing();
 			}
 		}));
 	} else {
@@ -886,12 +888,12 @@ Maybe<TupleField> Parser::parseTupleField() {
      */
 
     TypeRef type = nullptr;
-    Maybe<Id> name = Nothing;
+    Maybe<Id> name = Nothing();
     ExprRef def = nullptr;
 
     // If the token is a varid, it can either be a generic or named parameter, depending on the token after it.
     if(token == Token::VarID) {
-        name = token.data.id;
+        name = Just(token.data.id);
         eat();
 		type = tryParse([=]{return parseType();});
     } else {
@@ -904,9 +906,9 @@ Maybe<TupleField> Parser::parseTupleField() {
         def = parseTypedExpr();
     }
 
-	if(!type && !def) return Nothing;
+	if(!type && !def) return Nothing();
 
-    return TupleField{type, name, def};
+    return Just(TupleField{type, name, def});
 }
 
 Maybe<TupleField> Parser::parseTupleConstructField() {
@@ -915,7 +917,7 @@ Maybe<TupleField> Parser::parseTupleConstructField() {
      *          	|   varid [= typedexpr]
      */
 
-	Maybe<Id> name = Nothing;
+	Maybe<Id> name = Nothing();
 	ExprRef def = nullptr;
 
 	// If the token is a varid, it can either be a generic or named parameter, depending on the token after it.
@@ -923,7 +925,7 @@ Maybe<TupleField> Parser::parseTupleConstructField() {
 		auto id = token.data.id;
 		eat();
 		if(token == Token::opEquals) {
-			name = id;
+			name = Just(id);
 			eat();
 			def = parseTypedExpr();
 		} else {
@@ -933,8 +935,8 @@ Maybe<TupleField> Parser::parseTupleConstructField() {
 		def = parseTypedExpr();
 	}
 
-	if(!def) return Nothing;
-	return TupleField{nullptr, name, def};
+	if(!def) return Nothing();
+	return Just(TupleField{nullptr, name, def});
 }
 
 Field* Parser::parseField() {
@@ -975,7 +977,7 @@ Field* Parser::parseField() {
 
 	return nullptr;
 }
-	
+
 Expr* Parser::parseElse() {
 	if(token == Token::EndOfStmt) eat();
 	if(token == Token::kwElse) {
@@ -1034,15 +1036,15 @@ Pattern* Parser::parseLeftPattern() {
 		return build<ConPattern>(id, nullptr);
 	} else if(token == Token::BracketL) {
 		auto expr = between([=] {
-			return sepBy([=] {
-				Maybe<Id> name = Nothing;
+			return sepBy([=]() -> Maybe<FieldPat> {
+				Maybe<Id> name = Nothing();
 				Pattern* pat = nullptr;
 
 				if(token == Token::VarID) {
 					auto id = token.data.id;
 					eat();
 					if(token == Token::opEquals) {
-						name = id;
+						name = Just(id);
 						eat();
 						pat = parsePattern();
 					} else {
@@ -1052,8 +1054,8 @@ Pattern* Parser::parseLeftPattern() {
 					pat = parsePattern();
 				}
 
-				if(!pat) return nothing<FieldPat>();
-				return just(FieldPat{name, pat});
+				if(!pat) return Nothing();
+				return Just(FieldPat{name, pat});
 			}, Token::Comma);
 		}, Token::BracketL, Token::BracketR);
 		return build<TupPattern>(expr);
@@ -1089,7 +1091,6 @@ Pattern* Parser::parsePattern() {
 }
 
 Expr* Parser::error(const char* text) {
-	Core::LogError(text);
 	return nullptr;
 }
 

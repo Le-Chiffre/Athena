@@ -11,7 +11,7 @@ inline TypeRef getLiteralType(TypeManager& m, const Literal& l) {
 		case Literal::Char: return m.getU8();
 		case Literal::String: return m.getString();
 		case Literal::Bool: return m.getBool();
-		default: FatalError("Unknown literal type."); return nullptr;
+		default: fatalError("Unknown literal type."); return nullptr;
 	}
 }
 
@@ -57,7 +57,7 @@ Expr* Resolver::resolveExpression(Scope& scope, ast::ExprRef expr, bool used) {
 		case ast::Expr::Case:
 			return resolveCase(scope, *(ast::CaseExpr*)expr, used);
 		default:
-			FatalError("Unsupported expression type.");
+			fatalError("Unsupported expression type.");
 	}
 
 	return nullptr;
@@ -68,12 +68,12 @@ Expr* Resolver::resolveMulti(Scope& scope, ast::MultiExpr& expr, bool used) {
 	auto e = expr.exprs;
 	while(e) {
 		// Expressions that are part of a statement list are never used, unless they are the last in the list.
-		es += this->resolveExpression(scope, e->item, e->next ? false : used);
+		es << this->resolveExpression(scope, e->item, e->next ? false : used);
 		e = e->next;
 	}
-	return build<MultiExpr>(Core::Move(es));
+	return build<MultiExpr>(move(es));
 }
-	
+
 Expr* Resolver::resolveLiteral(Scope& scope, ast::Literal& literal) {
 	return build<LitExpr>(literal, getLiteralType(types, literal));
 }
@@ -82,7 +82,7 @@ Expr* Resolver::resolveInfix(Scope& scope, ast::InfixExpr& expr) {
 	ast::InfixExpr* e;
 	if(expr.ordered) e = &expr;
 	else e = reorder(expr);
-	
+
 	return resolveBinaryCall(scope, e->op,
 							 *getRV(*resolveExpression(scope, e->lhs, true)),
 							 *getRV(*resolveExpression(scope, e->rhs, true)));
@@ -189,7 +189,7 @@ Expr* Resolver::resolveCall(Scope& scope, ast::AppExpr& expr) {
 		if(expr.callee->isVar()) {
 			auto name = ((ast::VarExpr*)expr.callee)->name;
 			auto a = args;
-			uint i = 0;
+			U32 i = 0;
 			while(a) {
 				constrain(a->item->type, FunConstraint(name, i));
 				a = a->next;
@@ -197,7 +197,7 @@ Expr* Resolver::resolveCall(Scope& scope, ast::AppExpr& expr) {
 			}
 			return build<GenAppExpr>(name, args, build<GenType>(0));
 		} else {
-			DebugError("Not implemented");
+			debugError("Not implemented");
 			return nullptr;
 		}
 	}
@@ -286,14 +286,14 @@ Expr* Resolver::resolveDecl(Scope& scope, ast::DeclExpr& expr) {
 		if(!content && var->funParam && var->constant) {
 			var = build<Variable>(expr.name, var->type, scope, false);
 			content = getRV(*resolveVar(scope, expr.name));
-			scope.shadows += var;
+			scope.shadows << var;
 		} else {
 			error("redefinition of '%@'", var->name);
 		}
 	} else {
 		// Create the variable allocation.
 		var = build<Variable>(expr.name, type, scope, expr.constant);
-		scope.variables += var;
+		scope.variables << var;
 	}
 
 	// If the variable was assigned, we return the assignment expression.
@@ -384,7 +384,7 @@ Expr* Resolver::resolveCoerce(Scope& scope, ast::CoerceExpr& expr) {
 		// Note that this works with code like "var x = 1: U8", since the coercion is applied to the literal.
 		// This particular branch only executes for code like "var x: U8".
 		auto decl = (EmptyDeclExpr*)target;
-		ASSERT(!decl->type->isKnown());
+		assert(!decl->type->isKnown());
 
 		// Set the type of the referenced variable.
 		decl->type = type;
@@ -413,7 +413,7 @@ Expr* Resolver::resolveField(Scope& scope, ast::FieldExpr& expr, ast::ExprList* 
 		} else if(target->type->isPointer()) {
 			tupType = (TupleType*)((PtrType*)target->type)->type;
 		} else {
-			ASSERT(target->type->isLvalue());
+			assert(target->type->isLvalue());
 			tupType = (TupleType*)target->type->canonical;
 		}
 
@@ -465,7 +465,7 @@ Expr* Resolver::resolveConstruct(Scope& scope, ast::ConstructExpr& expr) {
 		auto con = scope.findConstructor(expr.type->con);
 		auto cone = build<ConstructExpr>(type, con);
 		auto f = expr.args;
-		uint counter = 0;
+		U32 counter = 0;
 		while(f) {
 			auto e = getRV(*resolveExpression(scope, f->item, true));
 			auto t = con->contents[counter];
@@ -473,12 +473,12 @@ Expr* Resolver::resolveConstruct(Scope& scope, ast::ConstructExpr& expr) {
 				error("incompatible constructor argument type");
 			}
 
-			cone->args += ConstructArg{counter, *implicitCoerce(*e, t)};
+			cone->args << ConstructArg{counter, *implicitCoerce(*e, t)};
 			f = f->next;
 			counter++;
 		}
 
-		if(counter != con->contents.Count()) error("constructor argument count does not match type");
+		if(counter != con->contents.size()) error("constructor argument count does not match type");
 		return cone;
 	}
 
@@ -486,7 +486,7 @@ Expr* Resolver::resolveConstruct(Scope& scope, ast::ConstructExpr& expr) {
 		auto ttype = (TupleType*)type;
 		auto con = build<ConstructExpr>(type);
 		auto f = expr.args;
-		uint counter = 0;
+		U32 counter = 0;
 		while(f) {
 			auto e = getRV(*resolveExpression(scope, f->item, true));
 			auto t = ttype->fields[counter].type;
@@ -494,31 +494,31 @@ Expr* Resolver::resolveConstruct(Scope& scope, ast::ConstructExpr& expr) {
 				error("incompatible constructor argument type");
 			}
 
-			con->args += ConstructArg{counter, *implicitCoerce(*e, t)};
+			con->args << ConstructArg{counter, *implicitCoerce(*e, t)};
 			f = f->next;
 			counter++;
 		}
 
-		if(counter != ttype->fields.Count()) error("constructor argument count does not match type");
+		if(counter != ttype->fields.size()) error("constructor argument count does not match type");
 		return con;
 	}
-	
+
 	return nullptr;
 }
 
 Expr* Resolver::resolveAnonConstruct(Scope& scope, ast::TupleConstructExpr& expr) {
 	// Generate a hash for the fields.
-	Core::Hasher h;
+	Tritium::Hasher h;
 	auto f = expr.args;
 	auto con = build<ConstructExpr>(types.getUnknown());
-	uint index = 0;
+	U32 index = 0;
 	while(f) {
-		ASSERT(f->item.defaultValue);
+		assert(f->item.defaultValue);
 		auto e = getRV(*resolveExpression(scope, f->item.defaultValue, true));
-		h.Add(e->type);
-		if(f->item.name) h.Add(f->item.name());
+		h.add(e->type);
+		if(f->item.name) h.add(f->item.name.force());
 
-		con->args += ConstructArg{index, *e};
+		con->args << ConstructArg{index, *e};
 
 		index++;
 		f = f->next;
@@ -526,14 +526,14 @@ Expr* Resolver::resolveAnonConstruct(Scope& scope, ast::TupleConstructExpr& expr
 
 	// Check if this kind of tuple has been used already.
 	TupleType* result = nullptr;
-	if(!types.getTuple(h, result)) {
+	if(!types.getTuple((U32)h, result)) {
 		// Otherwise, create the type.
 		new (result) TupleType;
-		uint i = 0;
+		U32 i = 0;
 		f = expr.args;
 		while(f) {
 			auto t = con->args[i].expr.type;
-			result->fields += Field{f->item.name ? f->item.name() : 0, i, t, result, nullptr, true};
+			result->fields << Field{f->item.name ? f->item.name.force() : 0, i, t, result, nullptr, true};
 			f = f->next;
 			i++;
 		}
@@ -548,7 +548,7 @@ Expr* Resolver::resolveAlt(Scope& scope, ExprRef pivot, ast::AltList* alt, bool 
 		IfConds conds;
 		resolvePattern(s->scope, pivot, *alt->item.pattern, conds);
 		auto result = resolveExpression(s->scope, alt->item.expr, used);
-		s->contents = createIf(Move(conds), *result, resolveAlt(scope, pivot, alt->next, used), used, CondMode::And);
+		s->contents = createIf(move(conds), *result, resolveAlt(scope, pivot, alt->next, used), used, CondMode::And);
 		s->type = result->type;
 		return s;
 	} else {
@@ -571,35 +571,35 @@ void Resolver::resolvePattern(Scope& scope, ExprRef pivot, ast::Pattern& pat, If
 	switch(pat.kind) {
 		case ast::Pattern::Var: {
 			auto var = build<Variable>(((ast::VarPattern&)pat).var, pivot.type, scope, true);
-			scope.variables += var;
-			conds += IfCond(build<AssignExpr>(*var, *getRV(pivot)), nullptr);
+			scope.variables << var;
+			conds << IfCond(build<AssignExpr>(*var, *getRV(pivot)), nullptr);
 			break;
 		}
 		case ast::Pattern::Lit:
-			conds += IfCond(nullptr, createCompare(scope, *getRV(pivot), *resolveLiteral(scope, ((ast::LitPattern&)pat).lit)));
+			conds << IfCond(nullptr, createCompare(scope, *getRV(pivot), *resolveLiteral(scope, ((ast::LitPattern&)pat).lit)));
 			break;
 		case ast::Pattern::Any:
-			conds += IfCond(nullptr, nullptr);
+			conds << IfCond(nullptr, nullptr);
 			break;
 		case ast::Pattern::Tup: {
 			if(pivot.type->isTuple()) {
 				auto type = (TupleType*)pivot.type;
 				auto tpat = (ast::TupPattern&)pat;
 				auto p = tpat.fields;
-				uint i = 0;
+				U32 i = 0;
 				while(p) {
-					if(i >= type->fields.Count()) {
+					if(i >= type->fields.size()) {
 						error("the number of patterns cannot be greater than the number of fields");
-						conds += IfCond(nullptr, createFalse());
+						conds << IfCond(nullptr, createFalse());
 						break;
 					}
 
 					if(p->item.field) {
-						if(auto field = type->findField(p->item.field())) {
+						if(auto field = type->findField(p->item.field.force())) {
 							resolvePattern(scope, *createField(pivot, field), *p->item.pat, conds);
 						} else {
 							error("this field does not exist");
-							conds += IfCond(nullptr, createFalse());
+							conds << IfCond(nullptr, createFalse());
 						}
 					} else {
 						resolvePattern(scope, *createField(pivot, i), *p->item.pat, conds);
@@ -610,7 +610,7 @@ void Resolver::resolvePattern(Scope& scope, ExprRef pivot, ast::Pattern& pat, If
 				}
 			} else {
 				error("this pattern can only match a tuple");
-				conds += IfCond(nullptr, createFalse());
+				conds << IfCond(nullptr, createFalse());
 			}
 			break;
 		}
@@ -627,25 +627,25 @@ void Resolver::resolvePattern(Scope& scope, ExprRef pivot, ast::Pattern& pat, If
 				auto& cpat = (ast::ConPattern&)pat;
 				auto con = scope.findConstructor(cpat.constructor);
 				if(type == con->parentType) {
-					if(con->contents.Count() == ast::count(cpat.patterns)) {
+					if(con->contents.size() == ast::count(cpat.patterns)) {
 						// Check if this is the correct constructor.
-						conds += IfCond(nullptr, createCompare(scope, *createGetCon(pivot), *createInt(con->index)));
-						if(!con->contents.Count()) return;
+						conds << IfCond(nullptr, createCompare(scope, *createGetCon(pivot), *createInt(con->index)));
+						if(!con->contents.size()) return;
 
 						auto fieldData = createField(pivot, con->index);
-						if(con->contents.Count() == 1) {
+						if(con->contents.size() == 1) {
 							resolvePattern(scope, *fieldData, *cpat.patterns->item, conds);
 						} else {
 							// Retrieve the constructor data.
 							// We save this in an unnamed variable, because otherwise
 							// the code generator will copy these instructions for each pattern.
 							auto fieldVar = build<Variable>(0, fieldData->type, scope, true);
-							scope.variables += fieldVar;
+							scope.variables << fieldVar;
 							auto init = build<AssignExpr>(*fieldVar, *fieldData);
 							auto data = build<VarExpr>(fieldVar, fieldVar->type);
-							conds += IfCond(init, nullptr);
+							conds << IfCond(init, nullptr);
 							auto conpat = cpat.patterns;
-							uint i = 0;
+							U32 i = 0;
 							while(conpat) {
 								auto d = createField(*data, i);
 								resolvePattern(scope, *d, *conpat->item, conds);
@@ -655,19 +655,19 @@ void Resolver::resolvePattern(Scope& scope, ExprRef pivot, ast::Pattern& pat, If
 						}
 					} else {
 						error("invalid number of patterns for this constructor");
-						conds += IfCond(nullptr, createFalse());
+						conds << IfCond(nullptr, createFalse());
 					}
 				} else {
 					error("incompatible type in pattern");
-					conds += IfCond(nullptr, createFalse());
+					conds << IfCond(nullptr, createFalse());
 				}
 			} else {
-				DebugError("Not implemented");
+				debugError("Not implemented");
 			}
 			break;
 		}
 		default:
-			ASSERT(false);
+			assert(false);
 	}
 }
 
@@ -675,12 +675,12 @@ Expr* Resolver::resolveCondition(ScopeRef scope, ast::ExprRef expr) {
 	return implicitCoerce(*resolveExpression(scope, expr, true), types.getBool());
 }
 
-ast::InfixExpr* Resolver::reorder(ast::InfixExpr& expr, uint min_prec) {
+ast::InfixExpr* Resolver::reorder(ast::InfixExpr& expr, U32 min_prec) {
 	auto lhs = &expr;
 	while(lhs->rhs->isInfix() && !lhs->ordered) {
 		auto first = context.FindOp(lhs->op);
 		if(first.precedence < min_prec) break;
-		
+
 		auto rhs = (ast::InfixExpr*)lhs->rhs;
 		auto second = context.FindOp(rhs->op);
 		if(second.precedence > first.precedence ||
@@ -703,7 +703,7 @@ ast::InfixExpr* Resolver::reorder(ast::InfixExpr& expr, uint min_prec) {
 bool Resolver::alwaysTrue(ExprRef expr) {
 	// TODO: Perform constant folding.
 	auto e = &expr;
-	if(expr.kind == Expr::Multi) e = ((MultiExpr*)e)->es.Back();
+	if(expr.kind == Expr::Multi) e = ((MultiExpr*)e)->es.back();
 
 	return e->kind == Expr::Lit
 		   && ((LitExpr*)e)->literal.type == Literal::Bool

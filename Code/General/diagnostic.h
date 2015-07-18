@@ -6,8 +6,7 @@
 
 namespace athena {
 
-using String = Core::StringRef;
-using DiagID = uint;
+using DiagID = U32;
 
 struct DiagnosticConsumer;
 struct DiagnosticBuilder;
@@ -36,10 +35,10 @@ private:
 	DiagnosticConsumer& consumer;
 
 	/// The total number of errors emitted.
-	uint errorCount = 0;
+	U32 errorCount = 0;
 
 	/// The total number of warnings emitted.
-	uint warningCount = 0;
+	U32 warningCount = 0;
 
 	/// Set to true after the first compilation error occurs.
 	bool errorOccurred = false;
@@ -52,12 +51,12 @@ struct DiagnosticBuilder {
 	DiagnosticBuilder(Diagnostics& diag) : diag(diag) {}
 
 	void addString(String string) {}
-	void addVal(uint_ptr, DiagnosticArg kind) {}
+	void addVal(Size, DiagnosticArg kind) {}
 
 private:
 	Diagnostics& diag;
 };
-	
+
 inline DiagnosticBuilder Diagnostics::report(SourceLocation, DiagID) {return {*this};}
 
 struct Diagnostic {

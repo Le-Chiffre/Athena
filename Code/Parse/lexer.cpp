@@ -30,11 +30,11 @@ bool CompareConstString(const char*& source, const char* constant)
  * Parses the provided character as a hexit, to an integer in the range 0..15.
  * @return The parsed number. Returns Nothing if the character is not a valid number.
  */
-Maybe<uint> ParseHexit(wchar32 c)
+Maybe<U32> ParseHexit(WChar32 c)
 {
 	//We use a small lookup table for this,
 	//since the number of branches would be ridiculous otherwise.
-	static const byte table[] = {
+	static const Byte table[] = {
 		0,  1,  2,  3,  4,  5,  6,  7,  8,  9,	/* 0..9 */
 		255,255,255,255,255,255,255,			/* :..@ */
 		10, 11, 12, 13, 14, 15,					/* A..F */
@@ -46,53 +46,53 @@ Maybe<uint> ParseHexit(wchar32 c)
 	};
 
 	//Anything lower than '0' will underflow, giving some large number above 54.
-	uint ch = c;
-	uint index = ch - '0';
+	U32 ch = c;
+	U32 index = ch - '0';
 
-	if(index > 54) return Nothing;
+	if(index > 54) return Nothing();
 
-	uint res = table[index];
-	if(res > 15) return Nothing;
+	U32 res = table[index];
+	if(res > 15) return Nothing();
 
-	return res;
+	return Just(res);
 }
 
 /**
  * Parses the provided character as an octit, to an integer in the range 0..7.
  * @return The parsed number. Returns Nothing if the character is not a valid number.
  */
-Maybe<uint> ParseOctit(wchar32 c)
+Maybe<U32> ParseOctit(WChar32 c)
 {
 	//Anything lower than '0' will underflow, giving some large number above 7.
-	uint ch = c;
-	uint index = ch - '0';
+	U32 ch = c;
+	U32 index = ch - '0';
 
-	if(index > 7) return Nothing;
-	else return index;
+	if(index > 7) return Nothing();
+	else return Just(index);
 }
 
 /**
  * Parses the provided character as a digit, to an integer in the range 0..9.
  * @return The parsed number. Returns Nothing if the character is not a valid number.
  */
-Maybe<uint> ParseDigit(wchar32 c)
+Maybe<U32> ParseDigit(WChar32 c)
 {
-	uint ch = c;
-	uint index = ch - '0';
-	if(index > 9) return Nothing;
-	else return index;
+	U32 ch = c;
+	U32 index = ch - '0';
+	if(index > 9) return Nothing();
+	else return Just(index);
 }
 
 /**
  * Parses the provided character as a bit, to an integer in the range 0..1.
  * @return The parsed number. Returns Nothing if the character is not a valid number.
  */
-Maybe<uint> ParseBit(wchar32 c)
+Maybe<U32> ParseBit(WChar32 c)
 {
-	uint ch = c;
-	uint index = ch - '0';
-	if(index > 1) return Nothing;
-	else return index;
+	U32 ch = c;
+	U32 index = ch - '0';
+	if(index > 1) return Nothing();
+	else return Just(index);
 }
 
 /**
@@ -100,26 +100,26 @@ Maybe<uint> ParseBit(wchar32 c)
  * Supported bases are 2, 8, 10, 16.
  * Returns Nothing if the character doesn't represent a numeric in Base.
  */
-template<uint Base>
-Maybe<uint> ParseNumericAtom(wchar32);
+template<U32 Base>
+Maybe<U32> ParseNumericAtom(WChar32);
 
 template<>
-Maybe<uint> ParseNumericAtom<16>(wchar32 p) {return ParseHexit(p);}
+Maybe<U32> ParseNumericAtom<16>(WChar32 p) {return ParseHexit(p);}
 
 template<>
-Maybe<uint> ParseNumericAtom<10>(wchar32 p) {return ParseDigit(p);}
+Maybe<U32> ParseNumericAtom<10>(WChar32 p) {return ParseDigit(p);}
 
 template<>
-Maybe<uint> ParseNumericAtom<8>(wchar32 p) {return ParseOctit(p);}
+Maybe<U32> ParseNumericAtom<8>(WChar32 p) {return ParseOctit(p);}
 
 template<>
-Maybe<uint> ParseNumericAtom<2>(wchar32 p) {return ParseBit(p);}
+Maybe<U32> ParseNumericAtom<2>(WChar32 p) {return ParseBit(p);}
 
 /**
  * Returns the name of the provided numeric base.
  * Supported bases are 2, 8, 10, 16.
  */
-template<uint Base>
+template<U32 Base>
 const char* GetBaseName();
 
 template<>
@@ -144,15 +144,15 @@ const char* GetBaseName<2>() {return "binary";}
  * @param diag The diagnostics to which problems will be written.
  * @return The code point generated from the sequence.
  */
-template<uint Base>
-wchar32 ParseIntSequence(const char*& p, uint numChars, uint max, Diagnostics* diag)
+template<U32 Base>
+WChar32 ParseIntSequence(const char*& p, U32 numChars, U32 max, Diagnostics* diag)
 {
-	wchar32 res = 0;
-	for(uint i=0; i<numChars; i++) {
+    U32 res = 0;
+	for(U32 i=0; i<numChars; i++) {
 		char c = *p;
 		if(auto num = ParseNumericAtom<Base>(c)) {
 			res *= Base;
-			res += num();
+			res += num.force();
 			p++;
 		} else {
 			break;
@@ -170,13 +170,13 @@ wchar32 ParseIntSequence(const char*& p, uint numChars, uint max, Diagnostics* d
  * This pointer is increased to the first character after the number.
  * @return The parsed number.
  */
-template<uint Base>
-uint ParseIntLiteral(const char*& p)
+template<U32 Base>
+U32 ParseIntLiteral(const char*& p)
 {
-	uint res = 0;
+	U32 res = 0;
 	while(auto c = ParseNumericAtom<Base>(*p)) {
 		res *= Base;
-		res += c();
+		res += c.force();
 		p++;
 	}
 	return res;
@@ -194,17 +194,17 @@ uint ParseIntLiteral(const char*& p)
  */
 double ParseFloatLiteral(const char*& p)
 {
-	return Core::DoubleFromString(p);
+	return Tritium::read<Float>(p);
 }
 
 /**
  * Returns true if this is an uppercase character.
  * TODO: Currently, only characters in the ASCII range are considered.
  */
-bool IsUpperCase(wchar32 c)
+bool IsUpperCase(WChar32 c)
 {
-	uint ch = c;
-	uint index = ch - 'A';
+	U32 ch = c;
+	U32 index = ch - 'A';
 	return index <= ('Z' - 'A');
 }
 
@@ -212,17 +212,17 @@ bool IsUpperCase(wchar32 c)
  * Returns true if this is a lowercase character.
  * TODO: Currently, only characters in the ASCII range are considered.
  */
-bool IsLowerCase(wchar32 c)
+bool IsLowerCase(WChar32 c)
 {
-	uint ch = c;
-	uint index = ch - 'a';
+	U32 ch = c;
+	U32 index = ch - 'a';
 	return index <= ('z' - 'a');
 }
 
 /**
  * Returns true if this is a lowercase or uppercase character.
  */
-bool IsAlpha(wchar32 c)
+bool IsAlpha(WChar32 c)
 {
 	return IsUpperCase(c) || IsLowerCase(c);
 }
@@ -230,37 +230,37 @@ bool IsAlpha(wchar32 c)
 /**
  * Returns true if this is a bit.
  */
-bool IsBit(wchar32 c)
+bool IsBit(WChar32 c)
 {
-	uint ch = c;
-	uint index = ch - '0';
+	U32 ch = c;
+	U32 index = ch - '0';
 	return index <= 1;
 }
 
 /**
  * Returns true if this is a digit.
  */
-bool IsDigit(wchar32 c)
+bool IsDigit(WChar32 c)
 {
-	uint ch = c;
-	uint index = ch - '0';
+	U32 ch = c;
+	U32 index = ch - '0';
 	return index <= 9;
 }
 
 /**
  * Returns true if this is an octit.
  */
-bool IsOctit(wchar32 c)
+bool IsOctit(WChar32 c)
 {
-	uint ch = c;
-	uint index = ch - '0';
+	U32 ch = c;
+	U32 index = ch - '0';
 	return index <= 7;
 }
 
 /**
  * Returns true if this is a hexit.
  */
-bool IsHexit(wchar32 c)
+bool IsHexit(WChar32 c)
 {
 	//We use a small lookup table for this,
 	//since the number of branches would be ridiculous otherwise.
@@ -276,8 +276,8 @@ bool IsHexit(wchar32 c)
 	};
 
 	//Anything lower than '0' will underflow, giving some large number above 54.
-	uint ch = c;
-	uint index = ch - '0';
+	U32 ch = c;
+	U32 index = ch - '0';
 
 	if(index > 54) return false;
 	else return table[index];
@@ -286,7 +286,7 @@ bool IsHexit(wchar32 c)
 /**
  * Returns true if the provided character is alpha-numeric.
  */
-bool IsAlphaNumeric(wchar32 c)
+bool IsAlphaNumeric(WChar32 c)
 {
 	return IsAlpha(c) || IsDigit(c);
 }
@@ -294,7 +294,7 @@ bool IsAlphaNumeric(wchar32 c)
 /**
  * Returns true if the provided character is valid as part of an identifier (VarID or ConID).
  */
-bool IsIdentifier(wchar32 c)
+bool IsIdentifier(WChar32 c)
 {
 	static const bool table[] = {
 		false, /* ' */
@@ -323,8 +323,8 @@ bool IsIdentifier(wchar32 c)
 	};
 
 	//Anything lower than ' will underflow, giving some large number above 83.
-	uint ch = c;
-	uint index = ch - '\'';
+	U32 ch = c;
+	U32 index = ch - '\'';
 
 	if(index > 83) return false;
 	else return table[index];
@@ -334,7 +334,7 @@ bool IsIdentifier(wchar32 c)
  * Checks if the provided character is a symbol, as specified in section 2.2 of the Haskell spec.
  * TODO: Currently, only characters in the ASCII range are considered valid.
  */
-bool IsSymbol(wchar32 c)
+bool IsSymbol(WChar32 c)
 {
 	//We use a small lookup table for this,
 	//since the number of branches would be ridiculous otherwise.
@@ -380,8 +380,8 @@ bool IsSymbol(wchar32 c)
 		true /* ~ */
 	};
 
-	uint ch = c;
-	uint index = ch - '!';
+	U32 ch = c;
+	U32 index = ch - '!';
 	if(index > 93) return false;
 	else return table[index];
 }
@@ -389,7 +389,7 @@ bool IsSymbol(wchar32 c)
 /**
  * Checks if the provided character is special, as specified in section 2.2 of the Haskell spec.
  */
-bool IsSpecial(wchar32 c)
+bool IsSpecial(WChar32 c)
 {
 	//We use a small lookup table for this,
 	//since the number of branches would be ridiculous otherwise.
@@ -427,8 +427,8 @@ bool IsSpecial(wchar32 c)
 		true /* } */
 	};
 
-	uint ch = c;
-	uint index = ch - '(';
+	U32 ch = c;
+	U32 index = ch - '(';
 	if(index > 85) return false;
 	else return table[index];
 }
@@ -437,13 +437,13 @@ bool IsSpecial(wchar32 c)
  * Checks if the provided character is white, as specified in section 2.2 of the Haskell spec.
  * TODO: Currently, only characters in the ASCII range are considered valid.
  */
-bool IsWhiteChar(wchar32 c)
+bool IsWhiteChar(WChar32 c)
 {
 	//Spaces are handled separately.
 	//All other white characters are in the same range.
 	//Anything lower than TAB will underflow, giving some large number above 4.
-	uint ch = c;
-	uint index = ch - 9;
+	U32 ch = c;
+	U32 index = ch - 9;
 	return index <= 4 || c == ' ';
 }
 
@@ -451,10 +451,10 @@ bool IsWhiteChar(wchar32 c)
  * Checks if the provided character is a graphic, as specified in section 2.2 of the Haskell spec.
  * TODO: Currently, only characters in the ASCII range are considered valid.
  */
-bool IsGraphic(wchar32 c)
+bool IsGraphic(WChar32 c)
 {
-	uint ch = c;
-	uint index = ch - '!';
+	U32 ch = c;
+	U32 index = ch - '!';
 	return index <= 93;
 }
 
@@ -473,10 +473,10 @@ Token* Lexer::Next()
 	return mToken;
 }
 
-wchar32 Lexer::NextCodePoint()
+WChar32 Lexer::NextCodePoint()
 {
-	wchar32 c;
-	if(Core::Unicode::ConvertNextPoint(mP, &c)) {
+    WChar32 c;
+	if(Tritium::Unicode::convertNextPoint(mP, &c)) {
 		return c;
 	} else {
 		mDiag.Warning("Invalid UTF-8 sequence");
@@ -536,7 +536,7 @@ void Lexer::SkipWhitespace()
 			else if(*p == '{' && p[1] == '-')
 			{
 				//The current nested comment depth.
-				uint level = 1;
+				U32 level = 1;
 
 				//Skip until the comment end.
 				p += 2;
@@ -578,7 +578,7 @@ void Lexer::SkipWhitespace()
 String Lexer::ParseStringLiteral()
 {
 	//There is no real limit on the length of a string literal, so we use a dynamic array while parsing.
-	Core::Array<char> chars(128);
+	Array<char> chars(128);
 
 	mP++;
 	while(1) {
@@ -599,7 +599,7 @@ String Lexer::ParseStringLiteral()
 				//Continue parsing the string.
 				mP++;
 			} else {
-				chars += ParseEscapedLiteral();
+				chars << ParseEscapedLiteral();
 			}
 		} else if(*mP == kFormatStart) {
 			// Start a string format sequence.
@@ -617,22 +617,22 @@ String Lexer::ParseStringLiteral()
 				break;
 			} else {
 				//Add this UTF-8 character to the string.
-				chars += NextCodePoint();
+				chars << NextCodePoint();
 			}
 		}
 	}
 
 	//Create a new buffer for this string.
-	uint count = chars.Count();
+	U32 count = chars.size();
 	auto buffer = (char*)Alloc(count * sizeof(char));
-	Core::Copy(chars.GetData(), buffer, count);
-	return {buffer, chars.Count()};
+	Tritium::copy(chars.begin().p, buffer, count);
+	return {buffer, chars.size()};
 }
 
-wchar32 Lexer::ParseCharLiteral()
+WChar32 Lexer::ParseCharLiteral()
 {
 	mP++;
-	wchar32 c;
+    WChar32 c;
 
 	if(*mP == '\\') {
 		//This is an escape sequence.
@@ -658,7 +658,7 @@ wchar32 Lexer::ParseCharLiteral()
 	return c;
 }
 
-wchar32 Lexer::ParseEscapedLiteral()
+WChar32 Lexer::ParseEscapedLiteral()
 {
 	char c = *mP++;
 	switch(c)
@@ -851,18 +851,19 @@ void Lexer::ParseSymbol()
 
 		//Parse a symbol sequence.
 		//Get the length of the sequence, we already know that the first one is a symbol.
-		uint count = 1;
+		Size count = 1;
 		auto start = p;
 		while(IsSymbol(*(++p))) count++;
 
 		//Check for a single minus operator - used for parser optimization.
-		if(count == 1 && *start == '-')
-			tok.singleMinus = true;
-		else
-			tok.singleMinus = false;
+		if(count == 1 && *start == '-') {
+            tok.singleMinus = true;
+        } else {
+            tok.singleMinus = false;
+        }
 
 		//Convert to UTF-32 and save in the current qualified name..
-		mQualifier.name = {start, count};
+		mQualifier.name = String{start, count};
 	} else {
 		//Skip to the next token.
 		if(sym1) p += 2;
@@ -874,8 +875,8 @@ bool Lexer::ParseUniSymbol()
 {
 	auto& tok = *mToken;
 	auto p = mP;
-	wchar32 ch;
-	if(!Core::Unicode::ConvertNextPoint(p, &ch)) {
+    WChar32 ch;
+	if(!Tritium::Unicode::convertNextPoint(p, &ch)) {
 		mDiag.Warning("Source code must be valid UTF-8.");
 		return false;
 	}
@@ -899,17 +900,17 @@ bool Lexer::ParseUniSymbol()
 	} else if(ch == U'≤') {
 		tok.type = Token::VarSym;
 		tok.kind = Token::Identifier;
-		mQualifier.name = Core::StringRef{"<="};
+		mQualifier.name = String{"<="};
 		handled = true;
 	} else if(ch == U'≥') {
 		tok.type = Token::VarSym;
 		tok.kind = Token::Identifier;
-		mQualifier.name = Core::StringRef{">="};
+		mQualifier.name = String{">="};
 		handled = true;
 	} else if(ch == U'≠') {
 		tok.type = Token::VarSym;
 		tok.kind = Token::Identifier;
-		mQualifier.name = Core::StringRef{"!="};
+		mQualifier.name = String{"!="};
 		handled = true;
 	}
 
@@ -933,7 +934,7 @@ void Lexer::ParseQualifier()
 	auto& tok = *mToken;
 
 	auto start = p;
-	uint length = 1;
+	Size length = 1;
 	tok.kind = Token::Identifier;
 	tok.type = Token::ConID;
 
@@ -942,7 +943,7 @@ void Lexer::ParseQualifier()
 parseQ:
 	while(IsIdentifier(*(++p))) length++;
 
-	String str = {start, length};
+	String str = String(start, length);
 	if(*p == '.')
 	{
 		bool u = IsUpperCase(p[1]);
@@ -1088,7 +1089,7 @@ void Lexer::ParseVariable()
 	}
 
 	//Read the identifier name.
-	uint length = 1;
+	U32 length = 1;
 	auto start = p;
 	while(IsIdentifier(*(++p))) length++;
 
@@ -1107,7 +1108,7 @@ parseT:
 
 	// Check if we are inside a string literal.
 	if(mFormatting == 3) {
-		tok.sourceColumn = (uint)(p - mL) + mTabs * (kTabWidth - 1);
+		tok.sourceColumn = (U32)(p - mL) + mTabs * (kTabWidth - 1);
 		tok.sourceLine = mLine;
 		mFormatting = 0;
 		goto stringLit;
@@ -1115,7 +1116,7 @@ parseT:
 		//Skip any whitespace and comments.
 		SkipWhitespace();
 
-		tok.sourceColumn = (uint)(p - mL) + mTabs * (kTabWidth - 1);
+		tok.sourceColumn = (U32)(p - mL) + mTabs * (kTabWidth - 1);
 		tok.sourceLine = mLine;
 	}
 
@@ -1229,7 +1230,7 @@ stringLit:
 
 	mNewItem = false;
 newItem:
-	tok.length = (uint)(p - b);
+	tok.length = (U32)(p - b);
 }
 
 }} //namespace athena::ast

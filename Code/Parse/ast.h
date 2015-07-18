@@ -1,15 +1,13 @@
 #ifndef Athena_Parser_ast_h
 #define Athena_Parser_ast_h
 
-#include <core.h>
-#include <Array.h>
-#include <Map.h>
+#include <Types/Array.h>
+#include <Types/Map.h>
 
 namespace athena {
 namespace ast {
 
-typedef Core::StringRef String;
-typedef uint Id;
+typedef U32 Id;
 
 template<class T>
 struct ASTList
@@ -35,7 +33,7 @@ struct ASTList<T*>
 template<class T>
 inline auto getListElem(T* a) { return a; }
 template<class T>
-inline auto getListElem(const Core::Maybe<T>& a) { return a(); }
+inline auto getListElem(const Maybe<T>& a) { return a.get(); }
 
 template<class T, class F>
 void walk(ASTList<T>* l, F&& f) {
@@ -55,7 +53,7 @@ U fold(ASTList<T>* l, U start, F&& f) {
 }
 
 template<class T>
-uint count(const ASTList<T>* l) {
+U32 count(const ASTList<T>* l) {
 	if(!l) return 0;
 	else return 1 + count(l->next);
 }
@@ -68,12 +66,12 @@ enum class ForeignConvention {
 };
 
 struct Fixity {
-	enum Kind : uint8 {
+	enum Kind : Byte {
 		Left, Right, Prefix
 	};
 
 	Kind kind;
-	uint8 prec;
+	Byte prec;
 };
 
 struct Literal {
@@ -87,8 +85,8 @@ struct Literal {
 
     union {
         double f;
-        uint64 i;
-        wchar32 c;
+        U64 i;
+        WChar32 c;
         Id s;
     };
 
@@ -127,11 +125,11 @@ struct Type {
 typedef const Type* TypeRef;
 
 struct TupleField {
-    TupleField(TypeRef type, Core::Maybe<Id> name, struct Expr* def) : type(type), defaultValue(def), name(name) {}
+    TupleField(TypeRef type, Maybe<Id> name, struct Expr* def) : type(type), defaultValue(def), name(name) {}
 
     TypeRef type;
     struct Expr* defaultValue;
-    Core::Maybe<Id> name;
+    Maybe<Id> name;
 };
 
 typedef ASTList<TupleField> TupleFieldList;
@@ -344,8 +342,8 @@ struct LitPattern : Pattern {
 };
 
 struct FieldPat {
-	FieldPat(Core::Maybe<Id> field, Pattern* pat) : field(field), pat(pat) {}
-	Core::Maybe<Id> field;
+	FieldPat(Maybe<Id> field, Pattern* pat) : field(field), pat(pat) {}
+	Maybe<Id> field;
 	Pattern* pat;
 };
 
@@ -408,7 +406,7 @@ typedef ASTList<FunCase*> FunCaseList;
 
 struct FunDecl;
 typedef ASTList<FunDecl*> FunDeclList;
-	
+
 struct FunDecl : Decl {
 	FunDecl(Id name, ExprRef body, TupleType* args, TypeRef ret) :
 			Decl(Function), name(name), args(args), ret(ret), body(body), cases(nullptr) {}
@@ -469,17 +467,17 @@ struct DataDecl : Decl {
 
 struct Module {
 	Id name;
-	Core::Array<Decl*> declarations{32};
-	Core::NumberMap<Fixity, Id> operators{16};
+	Array<Decl*> declarations{32};
+	Tritium::Map<Id, Fixity> operators{16};
 };
 
 typedef const Module& ModuleRef;
 
 struct CompileContext;
 
-String toString(ExprRef e, CompileContext& c);
-String toString(DeclRef e, CompileContext& c);
-String toString(ModuleRef m, CompileContext& c);
+StringBuilder toString(ExprRef e, CompileContext& c);
+StringBuilder toString(DeclRef e, CompileContext& c);
+StringBuilder toString(ModuleRef m, CompileContext& c);
 
 }} // namespace athena::ast
 

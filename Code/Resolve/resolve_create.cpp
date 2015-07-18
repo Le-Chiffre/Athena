@@ -17,13 +17,13 @@ Expr* Resolver::createBool(bool b) {
 
 Expr* Resolver::createInt(int i) {
     Literal lit;
-    lit.i = (uint)i; // The code generator makes no distinction between signed and unsigned.
+    lit.i = (U32)i; // The code generator makes no distinction between signed and unsigned.
     lit.type = Literal::Int;
     return build<LitExpr>(lit, types.getInt());
 }
 
 Expr* Resolver::createCompare(Scope& scope, ExprRef left, ExprRef right) {
-    return resolveBinaryCall(scope, context.AddUnqualifiedName("=="), left, right);
+    return resolveBinaryCall(scope, context.AddUnqualifiedName({"=="}), left, right);
 }
 
 Expr* Resolver::createIf(ExprRef cond, ExprRef then, Expr* otherwise, bool used) {
@@ -64,7 +64,7 @@ Expr* Resolver::createIf(IfConds&& conds, ExprRef then_, Expr* otherwise_, bool 
         }
     }
 
-    auto expr = build<IfExpr>(Move(conds), *then, otherwise, type, used, mode);
+    auto expr = build<IfExpr>(move(conds), *then, otherwise, type, used, mode);
     if(!otherwise && used && !expr->alwaysTrue) {
         error("this expression may not return a value");
     }
@@ -82,7 +82,7 @@ Expr* Resolver::createField(ExprRef pivot, int field) {
     auto stype = pivot.type->canonical;
     if(stype->isTuple()) {
         auto ttype = (TupleType*)stype;
-        if(ttype->fields.Count() <= field) {
+        if(ttype->fields.size() <= field) {
             error("field does not exist");
             return nullptr;
         }
@@ -96,7 +96,7 @@ Expr* Resolver::createField(ExprRef pivot, int field) {
         }
 
         auto vtype = (VarType*)stype;
-        if(vtype->list.Count() <= field) {
+        if(vtype->list.size() <= field) {
             error("constructor does not exist");
             return nullptr;
         }
@@ -105,7 +105,7 @@ Expr* Resolver::createField(ExprRef pivot, int field) {
         if(pivot.type->isLvalue()) type = types.getLV(type);
         return build<FieldExpr>(pivot, field, type);
     } else {
-        ASSERT("cannot retrieve field from this type" == 0);
+        assert("cannot retrieve field from this type" == 0);
         return nullptr;
     }
 }

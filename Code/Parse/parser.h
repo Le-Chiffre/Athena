@@ -3,24 +3,20 @@
 
 #include "ast.h"
 #include "lexer.h"
-#include <StaticBuffer.h>
+#include <Mem/StaticBuffer.h>
 
 namespace athena {
 namespace ast {
 
-using Core::Maybe;
-using Core::just;
-using Core::nothing;
-
 struct SourcePos {
-	Core::StringRef file;
-	uint line;
-	uint column;
+	String file;
+	U32 line;
+	U32 column;
 };
 
-inline SourcePos initialPos(Core::StringRef file) {return {file, 1, 1};}
+inline SourcePos initialPos(const String& file) {return {file, 1, 1};}
 
-inline SourcePos updatePos(SourcePos pos, char c) {
+inline SourcePos updatePos(char c, SourcePos pos) {
 	if(c == '\n') {
 		pos.line++;
 		pos.column = 1;
@@ -33,7 +29,7 @@ inline SourcePos updatePos(SourcePos pos, char c) {
 	return pos;
 }
 
-inline SourcePos updateStringPos(SourcePos pos, Core::StringRef string) {
+inline SourcePos updateStringPos(SourcePos pos, const String& string) {
 	return fold(updatePos, pos, string);
 }
 
@@ -221,13 +217,13 @@ struct Parser {
 
 	template<class T, class... P>
 	T* build(P&&... p) {
-		return buffer.New<T>(Core::Forward<P>(p)...);
+		return buffer.create<T>(forward<P>(p)...);
 	}
 
 	Module& module;
 	Token token;
 	Lexer lexer;
-	Core::StaticBuffer buffer;
+	Tritium::StaticBuffer buffer;
 };
 
 

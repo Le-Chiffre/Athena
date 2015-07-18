@@ -11,7 +11,7 @@ struct SourceLocation {
 	bool isValid() const {return id == 0;}
 	bool isInvalid() const {return id != 0;}
 
-	uint id;
+	U32 id;
 };
 
 inline bool operator == (SourceLocation a, SourceLocation b) {return a.id == b.id;}

@@ -18,7 +18,7 @@ bool Resolver::resolveForeignFunction(Scope& scope, ForeignFunction& fun) {
     while(1) {
         if(arg->next) {
             auto a = resolveArgument(scope, arg->item);
-            fun.arguments += a;
+            fun.arguments << a;
             arg = arg->next;
         } else {
             fun.type = resolveType(scope, arg->item);
@@ -34,7 +34,7 @@ bool Resolver::resolveFunction(Scope& scope, Function& fun) {
     if(!fun.astDecl) return true;
 
     auto& decl = *fun.astDecl;
-    ASSERT(fun.name == decl.name);
+    assert(fun.name == decl.name);
 
     fun.scope.parent = &scope;
     fun.scope.function = &fun;
@@ -42,7 +42,7 @@ bool Resolver::resolveFunction(Scope& scope, Function& fun) {
         auto arg = decl.args->fields;
         while (arg) {
             auto a = resolveArgument(fun.scope, arg->item);
-            fun.arguments += a;
+            fun.arguments << a;
             arg = arg->next;
         }
     }
@@ -57,23 +57,23 @@ bool Resolver::resolveFunction(Scope& scope, Function& fun) {
         // Local functions cannot be overloaded.
         auto name = local->item->name;
         FunctionDecl** f;
-        if(fun.scope.functions.AddGet(name, f)) {
+        if(fun.scope.functions.addGet(name, f)) {
             error("local functions cannot be overloaded");
         }
         *f = build<Function>(name, local->item);
         local = local->next;
     }
 
-    fun.scope.functions.Iterate([this, &fun](Id name, FunctionDecl* f) {
+    walk([this, &fun](Id name, FunctionDecl* f) {
         resolveFunctionDecl(fun.scope, *f);
-    });
+    }, fun.scope.functions);
 
     // The function has either a normal body or a set of patterns.
     Expr* body;
     if(decl.body) {
         body = resolveExpression(fun.scope, decl.body, true);
     } else {
-        ASSERT(decl.cases != nullptr);
+        assert(decl.cases != nullptr);
         body = resolveFunctionCases(scope, fun, decl.cases);
     }
 
@@ -102,11 +102,11 @@ bool Resolver::resolveFunction(Scope& scope, Function& fun) {
 Expr* Resolver::resolveFunctionCases(Scope& scope, Function& fun, ast::FunCaseList* cases) {
     if(cases) {
         IfConds conds;
-        uint i = 0;
+        U32 i = 0;
         auto pat = cases->item->patterns;
         auto s = build<ScopedExpr>(scope);
         while(pat) {
-            if(fun.arguments.Count() <= i) {
+            if(fun.arguments.size() <= i) {
                 error("pattern count must match with the number of arguments");
                 return nullptr;
             }
@@ -118,7 +118,7 @@ Expr* Resolver::resolveFunctionCases(Scope& scope, Function& fun, ast::FunCaseLi
         }
 
         auto body = resolveExpression(s->scope, cases->item->body, true);
-        s->contents = createIf(Move(conds), *body, resolveFunctionCases(scope, fun, cases->next), true, CondMode::And);
+        s->contents = createIf(move(conds), *body, resolveFunctionCases(scope, fun, cases->next), true, CondMode::And);
         s->type = body->type;
         return s;
     } else {
@@ -128,15 +128,15 @@ Expr* Resolver::resolveFunctionCases(Scope& scope, Function& fun, ast::FunCaseLi
 
 Variable* Resolver::resolveArgument(ScopeRef scope, ast::TupleField& arg) {
     auto type = arg.type ? resolveType(scope, arg.type) : build<GenType>(0);
-    auto var = build<Variable>(arg.name ? arg.name() : 0, type, scope, true, true);
-    scope.variables += var;
+    auto var = build<Variable>(arg.name ? arg.name.force() : 0, type, scope, true, true);
+    scope.variables << var;
     return var;
 }
 
 Variable* Resolver::resolveArgument(ScopeRef scope, ast::Type* arg) {
     auto type = resolveType(scope, arg);
     auto var = build<Variable>(0, type, scope, true, true);
-    scope.variables += var;
+    scope.variables << var;
     return var;
 }
 

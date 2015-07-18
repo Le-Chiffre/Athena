@@ -18,11 +18,11 @@ struct SaveInsert {
 		block = builder.GetInsertBlock();
 		insert = builder.GetInsertPoint();
 	}
-	
+
 	~SaveInsert() {
 		builder.SetInsertPoint(block, insert);
 	}
-	
+
 	llvm::IRBuilder<>& builder;
 	llvm::BasicBlock::iterator insert;
 	llvm::BasicBlock* block;
@@ -37,7 +37,7 @@ struct TypeData {
 	void* data = nullptr;
 	bool onStack = false;
 };
-	
+
 struct Generator {
 	Generator(ast::CompileContext& ccontext, llvm::LLVMContext& context, llvm::Module& target);
 
@@ -70,7 +70,7 @@ struct Generator {
 	llvm::Value* genScoped(resolve::ScopedExpr& expr);
 	llvm::Value* genLazyCond(resolve::PrimitiveOp op, resolve::ExprRef lhs, resolve::ExprRef rhs);
 	void genVarDecl(resolve::Variable& var);
-	
+
 	llvm::Function* getFunction() {
 		return builder.GetInsertBlock()->getParent();
 	}
@@ -83,7 +83,7 @@ struct Generator {
 		return (TypeData*)type->codegen;
 	}
 
-	uint getCconv(resolve::ForeignConvention conv) {
+	U32 getCconv(resolve::ForeignConvention conv) {
 		switch(conv) {
 			case resolve::ForeignConvention::CCall:
 				return llvm::CallingConv::C;

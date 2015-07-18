@@ -6,7 +6,7 @@ namespace resolve {
 
 inline void error(Maybe<Diagnostics*> diag, const char* text) {
 	if(diag) {
-		diag()->report(SourceLocation{0}, 0);
+		diag.force()->report(SourceLocation{0}, 0);
 	}
 }
 
@@ -46,9 +46,9 @@ bool TypeCheck::implicitCoerce(TypeRef src, TypeRef dst, Maybe<Diagnostics*> dia
 		// Tuples can be implicitly converted to more defined tuples.
 		auto s = (TupleType*)src;
 		auto d = (TupleType*)dst;
-		if(s->fields.Count() != d->fields.Count()) return false;
+		if(s->fields.size() != d->fields.size()) return false;
 
-		for(uint i=0; i<s->fields.Count(); i++) {
+		for(U32 i=0; i<s->fields.size(); i++) {
 			if(s->fields[i].name && s->fields[i].name != d->fields[i].name) return false;
 			if(!compatible(s->fields[i].type, d->fields[i].type)) return false;
 		}
