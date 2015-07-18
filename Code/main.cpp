@@ -41,7 +41,7 @@ void CreateAddFunc(llvm::LLVMContext& context, llvm::Module* module)
 void CoreMain(Core::ArgList& args)
 {
 	Core::Terminal.Show();
-	athena::ast::CompileContext context;
+	athena::ast::CompileContext context{athena::ast::CompileSettings{athena::ast::CompileAthena}};
 
 	auto test = R"s(
 main =
@@ -74,7 +74,7 @@ add {a: Int, b: Int} = a + b
 max {a: Int, b: Int} = if a > b then a else b
 main = add 4 5 * max 100 200
 )s";
-	
+
 	auto test3 = R"s(
 main {a: Int, b: Int} =
 	var x = a*b
@@ -96,7 +96,7 @@ main {x: Float} =
 	let a = {x, 6: Float}
 	dot a {1: Float, 6: Float}
 )s";
-	
+
 	auto test5 = R"s(
 h [x: Int] = x*2
 g [x: Int] = x*4

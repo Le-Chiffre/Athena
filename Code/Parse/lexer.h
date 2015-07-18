@@ -12,6 +12,11 @@ using Core::Maybe;
 using Core::Nothing;
 typedef Core::StringRef String;
 
+enum CompileMode {
+    CompileAthena,
+    CompileShader
+};
+
 struct Diagnostics {
 	template<class... P>
 	void Error(const char* format, P... args) {Core::LogError(format, args...);}
@@ -45,11 +50,13 @@ struct OpProperties {
 typedef uint32 ID;
 
 struct CompileSettings {
-
+    CompileMode mode;
 };
 
 struct CompileContext {
-	CompileSettings settings;
+    CompileContext(CompileSettings settings) : settings(settings) {}
+
+	const CompileSettings settings;
 
 	/**
 	 * Adds an operator to the list with unknown precedence and associativity.
@@ -162,7 +169,7 @@ struct Token {
 		EndOfBlock,
 		StartOfFormat,
 		EndOfFormat,
-		
+
 		/* Special symbols */
 		ParenL = '(',
 		ParenR = ')',
@@ -174,19 +181,19 @@ struct Token {
 		Grave = '`',
 		BraceL = '{',
 		BraceR = '}',
-		
+
 		/* Literals */
 		Integer = 128,
 		Float,
 		String,
 		Char,
-		
+
 		/* Identifiers */
 		VarID,
 		ConID,
 		VarSym,
 		ConSym,
-		
+
 		/* Keywords */
 		kwCase,
 		kwClass,
@@ -209,13 +216,14 @@ struct Token {
 		kwModule,
 		kwNewType,
 		kwOf,
+        kwResource, // Only when compiling shaders.
 		kwThen,
 		kwType,
 		kwVar,
 		kwWhere,
 		kwWhile,
 		kw_,
-		
+
 		/* Reserved operators */
 		opDot,
 		opDotDot,
@@ -231,19 +239,19 @@ struct Token {
 		opTilde,
 		opArrowD,
 	};
-	
+
 	enum Kind {
 		Literal,
 		Special,
 		Identifier,
 		Keyword
 	};
-	
+
 	bool operator == (Type t) {return type == t;}
 	bool operator == (Kind c) {return kind == c;}
 	bool operator != (Type t) {return !(*this == t);}
 	bool operator != (Kind c) {return !(*this == c);}
-	
+
 	uint sourceLine;
 	uint sourceColumn;
 	uint length;
@@ -255,7 +263,7 @@ struct Token {
 		wchar32 character;
 		ID id;
 	} data;
-	
+
 	//Special case for VarSym, used to find unary minus more easily.
 	//Undefined value if the type is not VarSym.
 	bool singleMinus = false;
@@ -265,13 +273,13 @@ struct Token {
  * A lexer for Haskell 2010 with unlimited lookahead.
  * This is implemented through the function PeekNext(), which returns the token after the provided one.
  * The lexer implements the layout rules by inserting the '{', ';' and '}' tokens according to the spec.
- * If no module specification is found at the start of the file, 
+ * If no module specification is found at the start of the file,
  * it assumes that the base indentation level is the indentation of the first token.
  */
 struct Lexer
 {
 	Lexer(CompileContext& context, const char* text, Token* tok);
-	
+
 	/**
 	 * Returns the next token from the stream.
 	 * On the next call to Next(), the returned token is overwritten with the data from that call.
@@ -281,60 +289,60 @@ struct Lexer
 	CompileContext& GetContext() {
 		return mContext;
 	}
-	
+
 private:
-	
+
 	/**
 	 * Increments mP until it no longer points to whitespace.
 	 * Updates the line statistics.
 	 */
 	void SkipWhitespace();
-	
+
 	/**
 	 * Parses mP as a UTF-8 code point and returns it as UTF-32.
 	 * If mP doesn't contain valid UTF-32, warnings are generated and ' ' is returned.
 	 */
 	wchar32 NextCodePoint();
-	
+
 	/**
 	 * Indicates that the current source pointer is the start of a new line,
 	 * and updates the location.
 	 */
 	void NextLine();
-	
+
 	/**
 	 * Checks if the current source character is white.
 	 * If it is a newline, the current source location is updated.
 	 */
 	bool WhiteChar_UpdateLine();
-	
+
 	/**
 	 * Parses a string literal.
 	 * mP must point to the first character after the start of the literal (").
 	 * If the literal is invalid, warnings or errors are generated and an empty string is returned.
 	 */
 	String ParseStringLiteral();
-	
+
 	/**
 	 * Parses a character literal.
 	 * mP must point to the first character after the start of the literal (').
 	 * If the literal is invalid, warnings are generated and ' ' is returned.
 	 */
 	wchar32 ParseCharLiteral();
-	
+
 	/**
 	 * Parses an escape sequence from a character literal.
 	 * mP must point to the first character after '\'.
 	 * @return The code point generated. If the sequence is invalid, warnings are generated and ' ' is returned.
 	 */
 	wchar32 ParseEscapedLiteral();
-	
+
 	/**
 	 * Parses a numeric literal into the current token.
 	 * mP must point to the first digit of the literal.
 	 */
 	void ParseNumericLiteral();
-	
+
 	/**
 	 * Parses a constuctor operator, reserved operator or variable operator.
 	 * mP must point to the first symbol of the operator.
@@ -345,39 +353,39 @@ private:
 	 * Parses any special unicode symbols.
 	 */
 	bool ParseUniSymbol();
-	
+
 	/**
 	 * Parses a special symbol.
 	 * mP must point to the first symbol of the sequence.
 	 */
 	void ParseSpecial();
-	
+
 	/**
 	 * Parses a qualified id (qVarID, qConID, qVarSym, qConSym) or constructor.
 	 */
 	void ParseQualifier();
-	
+
 	/**
 	 * Parses a variable id or reserved id.
 	 */
 	void ParseVariable();
-	
+
 	/**
 	 * Parses the next token into mToken.
 	 * Updates mLocation with the new position of mP.
 	 * If we have reached the end of the file, this will produce EOF tokens indefinitely.
 	 */
 	void ParseToken();
-	
+
 	/**
 	 * Allocates memory from the current parsing context.
 	 */
 	void* Alloc(uint_ptr size) {
 		return mContext.Alloc(size);
 	}
-	
+
 	/**
-	 * Allocates memory from the current parsing context 
+	 * Allocates memory from the current parsing context
 	 * and constructs an object with the provided parameters.
 	 */
 	template<class T, class... P>

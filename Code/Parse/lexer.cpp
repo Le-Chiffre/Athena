@@ -3,7 +3,7 @@
 
 namespace athena {
 namespace ast {
-	
+
 /**
  * Compares source code to a string constant.
  * @param source The source code to compare. Must point to the first character of the string.
@@ -18,14 +18,14 @@ bool CompareConstString(const char*& source, const char* constant)
 		constant++;
 		source++;
 	}
-	
+
 	if(*constant == 0) return true;
 	else {
 		source = src;
 		return false;
 	}
 }
-	
+
 /**
  * Parses the provided character as a hexit, to an integer in the range 0..15.
  * @return The parsed number. Returns Nothing if the character is not a valid number.
@@ -44,16 +44,16 @@ Maybe<uint> ParseHexit(wchar32 c)
 		255,255,255,255,255,255,
 		10, 11, 12, 13, 14, 15,					/* a..f */
 	};
-	
+
 	//Anything lower than '0' will underflow, giving some large number above 54.
 	uint ch = c;
 	uint index = ch - '0';
-	
+
 	if(index > 54) return Nothing;
-	
+
 	uint res = table[index];
 	if(res > 15) return Nothing;
-	
+
 	return res;
 }
 
@@ -66,7 +66,7 @@ Maybe<uint> ParseOctit(wchar32 c)
 	//Anything lower than '0' will underflow, giving some large number above 7.
 	uint ch = c;
 	uint index = ch - '0';
-	
+
 	if(index > 7) return Nothing;
 	else return index;
 }
@@ -158,7 +158,7 @@ wchar32 ParseIntSequence(const char*& p, uint numChars, uint max, Diagnostics* d
 			break;
 		}
 	}
-	
+
 	if(res > max) diag->Warning("%@ escape sequence out of range", GetBaseName<Base>());
 	return res;
 }
@@ -218,7 +218,7 @@ bool IsLowerCase(wchar32 c)
 	uint index = ch - 'a';
 	return index <= ('z' - 'a');
 }
-	
+
 /**
  * Returns true if this is a lowercase or uppercase character.
  */
@@ -226,7 +226,7 @@ bool IsAlpha(wchar32 c)
 {
 	return IsUpperCase(c) || IsLowerCase(c);
 }
-	
+
 /**
  * Returns true if this is a bit.
  */
@@ -246,7 +246,7 @@ bool IsDigit(wchar32 c)
 	uint index = ch - '0';
 	return index <= 9;
 }
-	
+
 /**
  * Returns true if this is an octit.
  */
@@ -274,15 +274,15 @@ bool IsHexit(wchar32 c)
 		false,false,false,false,false,false,
 		true, true, true, true, true, true,							/* a..f */
 	};
-	
+
 	//Anything lower than '0' will underflow, giving some large number above 54.
 	uint ch = c;
 	uint index = ch - '0';
-	
+
 	if(index > 54) return false;
 	else return table[index];
 }
-	
+
 /**
  * Returns true if the provided character is alpha-numeric.
  */
@@ -290,7 +290,7 @@ bool IsAlphaNumeric(wchar32 c)
 {
 	return IsAlpha(c) || IsDigit(c);
 }
-	
+
 /**
  * Returns true if the provided character is valid as part of an identifier (VarID or ConID).
  */
@@ -321,11 +321,11 @@ bool IsIdentifier(wchar32 c)
 		true, true, true, true, true, true, true, true, true, true,
 		true, true, true, true, true, true
 	};
-	
+
 	//Anything lower than ' will underflow, giving some large number above 83.
 	uint ch = c;
 	uint index = ch - '\'';
-	
+
 	if(index > 83) return false;
 	else return table[index];
 }
@@ -379,7 +379,7 @@ bool IsSymbol(wchar32 c)
 		false, /* } */
 		true /* ~ */
 	};
-	
+
 	uint ch = c;
 	uint index = ch - '!';
 	if(index > 93) return false;
@@ -426,7 +426,7 @@ bool IsSpecial(wchar32 c)
 		false, /* | */
 		true /* } */
 	};
-	
+
 	uint ch = c;
 	uint index = ch - '(';
 	if(index > 85) return false;
@@ -459,20 +459,20 @@ bool IsGraphic(wchar32 c)
 }
 
 //------------------------------------------------------------------------------
-	
+
 Lexer::Lexer(CompileContext& context, const char* text, Token* tok) :
 	mToken(tok), mText(text), mP(text), mL(text), mNewItem(true), mContext(context)
 {
 	// The first indentation level of a file should be 0.
 	mIdent = 0;
 }
-	
+
 Token* Lexer::Next()
 {
 	ParseToken();
 	return mToken;
 }
-	
+
 wchar32 Lexer::NextCodePoint()
 {
 	wchar32 c;
@@ -483,14 +483,14 @@ wchar32 Lexer::NextCodePoint()
 		return ' ';
 	}
 }
-	
+
 void Lexer::NextLine()
 {
 	mL = mP + 1;
 	mLine++;
 	mTabs = 0;
 }
-	
+
 bool Lexer::WhiteChar_UpdateLine()
 {
 	if(*mP == '\n')
@@ -507,7 +507,7 @@ bool Lexer::WhiteChar_UpdateLine()
 
 	return IsWhiteChar(*mP);
 }
-	
+
 void Lexer::SkipWhitespace()
 {
 	auto& p = mP;
@@ -522,7 +522,7 @@ void Lexer::SkipWhitespace()
 				//Skip the current line.
 				p += 2;
 				while(*p && *p != '\n') p++;
-				
+
 				//If this is a newline, we update the location.
 				//If it is the file end, the caller will take care of it.
 				if(*p == '\n')
@@ -531,23 +531,23 @@ void Lexer::SkipWhitespace()
 					p++;
 				}
 			}
-			
+
 			//Check for multi-line comments.
 			else if(*p == '{' && p[1] == '-')
 			{
 				//The current nested comment depth.
 				uint level = 1;
-				
+
 				//Skip until the comment end.
 				p += 2;
 				while(*p)
 				{
 					//Update the source location if needed.
 					if(*p == '\n') NextLine();
-					
+
 					//Check for nested comments.
 					if(*p == '{' && p[1] == '-') level++;
-					
+
 					//Check for comment end.
 					if(*p == '-' && p[1] == '}')
 					{
@@ -559,17 +559,17 @@ void Lexer::SkipWhitespace()
 						}
 					}
 				}
-				
+
 				//mP now points to the first character after the comment, or the file end.
 				//Check if the comments were nested correctly.
 				if(level)
 					mDiag.Warning("Incorrectly nested comment: missing %@ comment terminator(s).", level);
 			}
-			
+
 			//No comment or whitespace - we are done.
 			break;
 		}
-		
+
 		//Check the next character.
 		p++;
 	}
@@ -590,12 +590,12 @@ String Lexer::ParseStringLiteral()
 				//Update the current source line if needed.
 				mP++;
 				while(WhiteChar_UpdateLine()) mP++;
-				
+
 				if(*mP != '\\') {
 					//The first character after a gap must be '\'.
 					mDiag.Warning("Missing gap end in string literal");
 				}
-				
+
 				//Continue parsing the string.
 				mP++;
 			} else {
@@ -621,7 +621,7 @@ String Lexer::ParseStringLiteral()
 			}
 		}
 	}
-	
+
 	//Create a new buffer for this string.
 	uint count = chars.Count();
 	auto buffer = (char*)Alloc(count * sizeof(char));
@@ -633,7 +633,7 @@ wchar32 Lexer::ParseCharLiteral()
 {
 	mP++;
 	wchar32 c;
-	
+
 	if(*mP == '\\') {
 		//This is an escape sequence.
 		mP++;
@@ -642,7 +642,7 @@ wchar32 Lexer::ParseCharLiteral()
 		//This is a char literal.
 		c = NextCodePoint();
 	}
-	
+
 	//Ignore any remaining characters in the literal.
 	//It needs to end on this line.
 	if(*mP++ != '\'') {
@@ -719,7 +719,7 @@ void Lexer::ParseNumericLiteral()
 	auto& tok = *mToken;
 	tok.type = Token::Integer;
 	tok.kind = Token::Literal;
-	
+
 	//Parse the type of this literal.
 	//HcS mode also supports binary literals.
 	if(p[1] == 'b' || p[1] == 'B') {
@@ -756,34 +756,34 @@ void Lexer::ParseNumericLiteral()
 				//This wasn't a valid float.
 				goto parseInt;
 			}
-			
+
 			d++;
 		}
-		
+
 		//Parse a float literal.
 		tok.type = Token::Float;
 		tok.data.floating = ParseFloatLiteral(p);
 	}
-	
+
 	return;
-	
+
 parseInt:
-	
+
 	//Parse a normal integer.
 	tok.data.integer = ParseIntLiteral<10>(p);
 }
-	
+
 void Lexer::ParseSymbol()
 {
 	auto& tok = *mToken;
 	auto& p = mP;
-	
+
 	bool sym1 = IsSymbol(p[1]);
 	bool sym2 = sym1 && IsSymbol(p[2]);
-	
+
 	//Instead of setting this in many different cases, we make it the default and override it later.
 	tok.kind = Token::Keyword;
-	
+
 	if(!sym1) {
 		//Check for various reserved operators of length 1.
 		if(*p == ':') {
@@ -839,8 +839,8 @@ void Lexer::ParseSymbol()
 		//This is a variable operator.
 		tok.kind = Token::Identifier;
 	}
-	
-	
+
+
 	if(tok.kind == Token::Identifier) {
 		//Check if this is a constructor.
 		if(*p == ':') {
@@ -848,19 +848,19 @@ void Lexer::ParseSymbol()
 		} else {
 			tok.type = Token::VarSym;
 		}
-		
+
 		//Parse a symbol sequence.
 		//Get the length of the sequence, we already know that the first one is a symbol.
 		uint count = 1;
 		auto start = p;
 		while(IsSymbol(*(++p))) count++;
-		
+
 		//Check for a single minus operator - used for parser optimization.
 		if(count == 1 && *start == '-')
 			tok.singleMinus = true;
 		else
 			tok.singleMinus = false;
-		
+
 		//Convert to UTF-32 and save in the current qualified name..
 		mQualifier.name = {start, count};
 	} else {
@@ -919,26 +919,26 @@ bool Lexer::ParseUniSymbol()
 
 	return handled;
 }
-	
+
 void Lexer::ParseSpecial()
 {
 	auto& tok = *mToken;
 	tok.kind = Token::Special;
 	tok.type = (Token::Type)*mP++;
 }
-	
+
 void Lexer::ParseQualifier()
 {
 	auto& p = mP;
 	auto& tok = *mToken;
-	
+
 	auto start = p;
 	uint length = 1;
 	tok.kind = Token::Identifier;
 	tok.type = Token::ConID;
-	
+
 	auto q = &mQualifier.qualifier;
-	
+
 parseQ:
 	while(IsIdentifier(*(++p))) length++;
 
@@ -948,7 +948,7 @@ parseQ:
 		bool u = IsUpperCase(p[1]);
 		bool l = IsLowerCase(p[1]) || p[1] == '_';
 		bool s = IsSymbol(p[1]);
-		
+
 		//If the next character is a valid identifier or symbol,
 		//we add this qualifier to the list and parse the remaining characters.
 		//Otherwise, we parse as a ConID.
@@ -957,7 +957,7 @@ parseQ:
 			*q = New<Qualified>();
 			(*q)->name = str;
 			q = &(*q)->qualifier;
-			
+
 			p++;
 			start = p;
 			length = 0;
@@ -966,18 +966,18 @@ parseQ:
 		{
 			goto makeCon;
 		}
-		
+
 		//If the next character is upper case, we either have a ConID or another qualifier.
 		if(u)
 		{
 			goto parseQ;
 		}
-		
+
 		//If the next character is lowercase, we either have a VarID or keyword.
 		else if(l)
 		{
 			ParseVariable();
-			
+
 			//If this was a keyword, we parse as a constructor and dot operator instead.
 			if(tok.kind == Token::Keyword)
 			{
@@ -985,7 +985,7 @@ parseQ:
 				goto makeCon;
 			}
 		}
-		
+
 		//If the next character is a symbol, we have a VarSym or ConSym.
 		else if(s)
 		{
@@ -1000,14 +1000,14 @@ parseQ:
 		mQualifier.name = str;
 	}
 };
-	
+
 void Lexer::ParseVariable()
 {
 	auto& p = mP;
 	auto& tok = *mToken;
 	tok.type = Token::VarID;
 	tok.kind = Token::Identifier;
-	
+
 	//First, check if we have a reserved keyword.
 	auto c = p + 1;
 	switch(*p)
@@ -1057,6 +1057,11 @@ void Lexer::ParseVariable()
 		case 'p':
 			if(CompareConstString(c, "refix")) tok.type = Token::kwPrefix;
 			break;
+        case 'r':
+            if(mContext.settings.mode == CompileShader && CompareConstString(c, "esource")) {
+                tok.type = Token::kwResource;
+            }
+            break;
 		case 't':
 			if(CompareConstString(c, "hen")) tok.type = Token::kwThen;
 			else if(CompareConstString(c, "ype")) tok.type = Token::kwType;
@@ -1068,7 +1073,7 @@ void Lexer::ParseVariable()
 			else if(CompareConstString(c, "hile")) tok.type = Token::kwWhile;
 			break;
 	}
-	
+
 	//We have to read the longest possible lexeme.
 	//If a reserved keyword was found, we check if a longer lexeme is possible.
 	if(tok.type != Token::VarID)
@@ -1081,7 +1086,7 @@ void Lexer::ParseVariable()
 			return;
 		}
 	}
-	
+
 	//Read the identifier name.
 	uint length = 1;
 	auto start = p;
@@ -1095,7 +1100,7 @@ void Lexer::ParseToken()
 	auto& tok = *mToken;
 	auto& p = mP;
 	auto b = p;
-	
+
 parseT:
 	//This needs to be reset manually.
 	mQualifier.qualifier = nullptr;
@@ -1130,7 +1135,7 @@ parseT:
 		mNewItem = true;
 		goto newItem;
 	}
-	
+
 	//Check if we need to end a layout block.
 	else if(tok.sourceColumn < mIdent)
 	{
@@ -1155,13 +1160,13 @@ parseT:
 		tok.type = Token::EndOfFormat;
 		mFormatting = 3;
 	}
-	
+
 	//Check for integral literals.
 	else if(IsDigit(*p))
 	{
 		ParseNumericLiteral();
 	}
-	
+
 	//Check for character literals.
 	else if(*p == '\'')
 	{
@@ -1169,7 +1174,7 @@ parseT:
 		tok.kind = Token::Literal;
 		tok.type = Token::Char;
 	}
-	
+
 	//Check for string literals.
 	else if(*p == '\"')
 	{
@@ -1179,13 +1184,13 @@ stringLit:
 		tok.kind = Token::Literal;
 		tok.data.id = mContext.AddUnqualifiedName(ParseStringLiteral());
 	}
-	
+
 	//Check for special operators.
 	else if(IsSpecial(*p))
 	{
 		ParseSpecial();
 	}
-	
+
 	//Parse symbols.
 	else if(IsSymbol(*p))
 	{
@@ -1199,21 +1204,21 @@ stringLit:
 		if(tok.kind == Token::Identifier)
 			tok.data.id = mContext.AddUnqualifiedName(mQualifier.name);
 	}
-	
+
 	//Parse ConIDs
 	else if(IsUpperCase(*p))
 	{
 		ParseQualifier();
 		tok.data.id = mContext.AddName(&mQualifier);
 	}
-	
+
 	//Parse variables and reserved ids.
 	else if(IsLowerCase(*p) || *p == '_')
 	{
 		ParseVariable();
 		tok.data.id = mContext.AddUnqualifiedName(mQualifier.name);
 	}
-	
+
 	//Unknown token - issue an error and skip it.
 	else
 	{
@@ -1221,7 +1226,7 @@ stringLit:
 		p++;
 		goto parseT;
 	}
-	
+
 	mNewItem = false;
 newItem:
 	tok.length = (uint)(p - b);
