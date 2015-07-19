@@ -41,6 +41,8 @@ set(SOURCE_FILES
 
     Generate/generate.cpp
     Generate/generate.h
+    Generate/genHLSL.cpp
+    Generate/genHLSL.h
 )
 
 
