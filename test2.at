@@ -1,0 +1,8 @@
+one = 1 : Float
+two = one + one
+power [base Int, exponent Int] -> Int =
+	if exponent == 0 then base
+	else power[base * base, exponent - 1]
+add [a Int, b Int] = a + b
+max [a Int, b Int] = if a > b then a else b
+main = add[4, 5 * max[100, 200]]

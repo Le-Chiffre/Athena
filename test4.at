@@ -1,0 +1,11 @@
+type Float2 = [x Float, y Float]
+
+dot [a Float2, b Float2] =
+	var res = a.x * b.x + a.y * b.y
+	res
+
+stuff [x *Float2] = x.y
+
+main [x Float] =
+	let a = [x, 6: Float]
+	dot a [1: Float, 6: Float]

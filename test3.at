@@ -1,0 +1,5 @@
+main [a Int, b Int] =
+	var x = a*b
+	x = x*2
+	if x > 5 then x = 5
+	x

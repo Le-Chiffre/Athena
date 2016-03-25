@@ -1,0 +1,4 @@
+h [x Int] = x*2
+g [x Int] = x*4
+f [x Int] = x*8
+e = f[g[h[1]]]

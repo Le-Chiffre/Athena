@@ -1,0 +1,16 @@
+
+main =
+	let path = Path ["hello.txt"]
+		display = path.display
+	File.open [path] >>= readToString >>= print ["{display} contains {str}"]
+	let x = "Time taken: {let time = timer.tick} ms ({1000/time} fps)."
+(+) [a Int, b Int] = a `add` b
+
+cast [a Int] = truncate [a] : *I8
+
+test [a Int, b Int] = a + b
+
+gg = var i : Int
+	 i.x = 0
+
+data X = X Float Float
