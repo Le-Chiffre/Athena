@@ -11,6 +11,7 @@ struct Printer {
 
 	StringBuilder toString(const Expr& expr) {
 		switch(expr.type) {
+            case Expr::Unit: string << "UnitExpr"; break;
 			case Expr::Multi: toString((const MultiExpr&)expr); break;
 			case Expr::Lit: toString((const LitExpr&)expr); break;
 			case Expr::Var: toString((const VarExpr&)expr); break;

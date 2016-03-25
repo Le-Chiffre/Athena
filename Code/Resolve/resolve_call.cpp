@@ -34,11 +34,11 @@ FunctionDecl* Resolver::findFunction(ScopeRef scope, Id name, ExprList* args) {
 			identifierExists = true;
 
 			// If there are multiple overloads, we have to resolve each one.
-			auto fn = *fns;
+			auto fn = *fns.force();
 			while(fn) {
 				resolveFunctionDecl(*s, *fn);
 				if(potentiallyCallable(fn, args))
-					potentialCallees += fn;
+					potentialCallees << fn;
 				fn = fn->sibling;
 			}
 		}

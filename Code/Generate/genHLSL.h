@@ -2,6 +2,7 @@
 #ifndef Athena_Generate_genHLSL_h
 #define Athena_Generate_genHLSL_h
 
+#include <llvm/IR/Value.h>
 #include "../Resolve/resolve_ast.h"
 #include "../Parse/lexer.h"
 

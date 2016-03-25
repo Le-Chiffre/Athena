@@ -15,16 +15,16 @@ Generator::Generator(ast::CompileContext& ccontext, llvm::LLVMContext& context, 
 	context(context), module(target), builder(context), ccontext(ccontext) {}
 
 Module* Generator::generate(resolve::Module& module) {
-	module.functions.Iterate([=](resolve::Id name, resolve::FunctionDecl* f) {
+	walk([=](resolve::Id name, resolve::FunctionDecl* f) {
 		if(!f->codegen) genFunctionDecl(*f);
-	});
+	}, module.functions);
 
 	return &this->module;
 }
 
 Function* Generator::genFunctionDecl(resolve::FunctionDecl& function) {
-	auto argCount = function.arguments.Count();
-	auto argTypes = (Type**)StackAlloc(sizeof(Type*) * argCount);
+	auto argCount = function.arguments.size();
+	auto argTypes = (Type**)alloca(sizeof(Type*) * argCount);
 	for(U32 i=0; i<argCount; i++) {
 		argTypes[i] = getType(function.arguments[i]->type)->llType;
 	}
@@ -50,7 +50,7 @@ Function* Generator::genFunctionDecl(resolve::FunctionDecl& function) {
 void Generator::genFunction(Function* func, resolve::Function& function) {
 	// Generate the function arguments.
 	U32 i=0;
-	for(auto it=func->arg_begin(); i<function.arguments.Count(); i++, it++) {
+	for(auto it=func->arg_begin(); i<function.arguments.size(); i++, it++) {
 		auto a = function.arguments[i];
 		it->setName(toRef(ccontext.Find(a->name).name));
 		a->codegen = it;
@@ -128,7 +128,7 @@ Value* Generator::genExpr(resolve::ExprRef expr) {
 		case resolve::Expr::Scoped:
 			return genScoped((resolve::ScopedExpr&)expr);
         default:
-            FatalError("Unsupported expression type.");
+            fatalError("Unsupported expression type.");
             return nullptr;
 	}
 }
@@ -141,22 +141,22 @@ Value* Generator::genLiteral(resolve::Literal& literal, resolve::TypeRef type) {
 		case resolve::Literal::Char: return ConstantInt::get(lltype, literal.c);
 		case resolve::Literal::String: {
 			auto str = ccontext.Find(literal.s).name;
-			return builder.CreateGlobalStringPtr(StringRef(str.ptr, str.length));
+			return builder.CreateGlobalStringPtr(StringRef(str.text(), str.size()));
 		}
 		case resolve::Literal::Bool: return ConstantInt::get(lltype, literal.i);
 	}
 
-	FatalError("Unsupported literal type.");
+	fatalError("Unsupported literal type.");
 	return nullptr;
 }
 
 Value* Generator::genVar(resolve::Variable& var) {
-	ASSERT(var.codegen != nullptr); // This could happen if a constant is used before its creation.
+	assert(var.codegen != nullptr); // This could happen if a constant is used before its creation.
 	return (Value*)var.codegen;
 }
 
 Value* Generator::genAssign(resolve::AssignExpr& assign) {
-	ASSERT(!assign.target.isVar());
+	assert(!assign.target.isVar());
 	auto e = genExpr(assign.value);
 
 	// This should also work for stack types - in that case the pointer to the stack object is replaced.
@@ -172,7 +172,7 @@ Value* Generator::genLoad(resolve::Expr& target) {
 }
 
 Value* Generator::genStore(resolve::StoreExpr& expr) {
-	ASSERT(expr.target.type->isLvalue());
+	assert(expr.target.type->isLvalue());
 	auto target = genExpr(expr.target);
 	builder.CreateStore(genExpr(expr.value), target);
 	return target;
@@ -203,8 +203,8 @@ Value* Generator::genCall(resolve::FunctionDecl& function, resolve::ExprList* ar
 	}
 
 	// Generate the function arguments.
-	auto argCount = function.arguments.Count();
-	auto args = (Value**)StackAlloc(sizeof(Value*) * argCount);
+	auto argCount = function.arguments.size();
+	auto args = (Value**)alloca(sizeof(Value*) * argCount);
 	for(U32 i=0; i<argCount; i++) {
 		args[i] = genExpr(*argList->item);
 		if(getType(argList->item->type)->onStack) {
@@ -221,7 +221,7 @@ Value* Generator::genCall(resolve::FunctionDecl& function, resolve::ExprList* ar
 
 Value* Generator::genPrimitiveCall(resolve::PrimitiveOp op, resolve::ExprList* args) {
 	if(resolve::isBinary(op)) {
-		ASSERT(args && args->next && !args->next->next);
+		assert(args && args->next && !args->next->next);
 		auto lhs = args->item;
 		auto rhs = args->next->item;
 
@@ -243,10 +243,10 @@ Value* Generator::genPrimitiveCall(resolve::PrimitiveOp op, resolve::ExprList* a
 			return genBinaryOp(op, le, re, *(const resolve::PrimType*)lhs->type, *(const resolve::PrimType*)rhs->type);
 		}
 	} else if(resolve::isUnary(op)) {
-		ASSERT(args && !args->next);
+		assert(args && !args->next);
 		return genUnaryOp(op, *(const resolve::PrimType*)args->item->type, genExpr(*args->item));
 	} else {
-		FatalError("Unsupported primitive operator provided");
+		fatalError("Unsupported primitive operator provided");
 		return nullptr;
 	}
 }
@@ -256,7 +256,7 @@ Value* Generator::genUnaryOp(resolve::PrimitiveOp op, resolve::PrimType type, ll
 		case resolve::PrimitiveOp::Neg:
 			// Negate works for integers and floats, but not bool.
 			// This is a bit of an arbitrary distinction, since negating an i1 is the same as inverting it.
-			ASSERT(resolve::category(type.type) <= resolve::PrimitiveTypeCategory::Float);
+            assert(resolve::category(type.type) <= resolve::PrimitiveTypeCategory::Float);
 			if(resolve::category(type.type) == resolve::PrimitiveTypeCategory::Float) {
 				return builder.CreateFNeg(in);
 			} else {
@@ -264,23 +264,23 @@ Value* Generator::genUnaryOp(resolve::PrimitiveOp op, resolve::PrimType type, ll
 			}
 		case resolve::PrimitiveOp::Not:
 			// Performs a bitwise inversion. Defined for integers and Bool.
-			ASSERT(type.type == resolve::PrimitiveType::Bool || resolve::category(type.type) <= resolve::PrimitiveTypeCategory::Unsigned);
+            assert(type.type == resolve::PrimitiveType::Bool || resolve::category(type.type) <= resolve::PrimitiveTypeCategory::Unsigned);
 			return builder.CreateNot(in);
 		case resolve::PrimitiveOp::Deref:
-			ASSERT(type.isPointer());
+            assert(type.isPointer());
 			return builder.CreateLoad(in);
 		default:
-			FatalError("Unsupported primitive operator provided.");
+			fatalError("Unsupported primitive operator provided.");
             return nullptr;
 	}
 }
 
 Value* Generator::genBinaryOp(resolve::PrimitiveOp op, llvm::Value* lhs, llvm::Value* rhs, resolve::PrimType lt, resolve::PrimType rt) {
-	ASSERT(op < resolve::PrimitiveOp::FirstUnary);
+    assert(op < resolve::PrimitiveOp::FirstUnary);
 	auto cat = resolve::category(lt.type);
 	if(cat == resolve::PrimitiveTypeCategory::Float) {
 		// Handle floating point types.
-		ASSERT(op < resolve::PrimitiveOp::FirstBit || op >= resolve::PrimitiveOp::FirstCompare);
+        assert(op < resolve::PrimitiveOp::FirstBit || op >= resolve::PrimitiveOp::FirstCompare);
 		switch(op) {
 			case resolve::PrimitiveOp::Add:
 				return builder.CreateFAdd(lhs, rhs);
@@ -353,12 +353,12 @@ Value* Generator::genBinaryOp(resolve::PrimitiveOp op, llvm::Value* lhs, llvm::V
 		}
 	}
 
-	FatalError("Unsupported primitive operator provided.");
+	fatalError("Unsupported primitive operator provided.");
 	return nullptr;
 }
 
 Value* Generator::genPtrOp(resolve::PrimitiveOp op, llvm::Value* lhs, llvm::Value* rhs, resolve::PtrType type) {
-	ASSERT(op == resolve::PrimitiveOp::Sub || (op >= resolve::PrimitiveOp::FirstCompare && op < resolve::PrimitiveOp::FirstUnary));
+    assert(op == resolve::PrimitiveOp::Sub || (op >= resolve::PrimitiveOp::FirstCompare && op < resolve::PrimitiveOp::FirstUnary));
 	switch(op) {
 		case resolve::PrimitiveOp::Sub:
 			return builder.CreatePtrDiff(lhs, rhs);
@@ -380,7 +380,7 @@ Value* Generator::genPtrOp(resolve::PrimitiveOp op, llvm::Value* lhs, llvm::Valu
 }
 
 Value* Generator::genPtrOp(resolve::PrimitiveOp op, llvm::Value* lhs, llvm::Value* rhs, resolve::PtrType lt, resolve::PrimType rt) {
-	ASSERT(op == resolve::PrimitiveOp::Sub || op == resolve::PrimitiveOp::Add);
+    assert(op == resolve::PrimitiveOp::Sub || op == resolve::PrimitiveOp::Add);
 	if(op == resolve::PrimitiveOp::Sub) {
 		rhs = builder.CreateNeg(rhs);
 	}
@@ -414,7 +414,7 @@ Value* Generator::genIf(resolve::IfExpr& ife) {
 		auto c = &ife.conds[i];
 		if(c->scope) genExpr(*c->scope);
 
-		if(i == ife.conds.Count() - 1) {
+		if(i == ife.conds.size() - 1) {
 			if(c->cond) {
 				auto gen = genExpr(*c->cond);
 				thenBlock = BasicBlock::Create(context, "then", function);
@@ -458,7 +458,7 @@ Value* Generator::genIf(resolve::IfExpr& ife) {
 	// TODO: Should we explicitly use the stack for some types?
 	builder.SetInsertPoint(contBlock);
 	if(ife.returnResult && !ife.then.type->isUnit()) {
-		ASSERT(ife.otherwise && ife.then.type == ife.otherwise->type);
+        assert(ife.otherwise && ife.then.type == ife.otherwise->type);
 		auto phi = builder.CreatePHI(getType(ife.then.type)->llType, 2);
 		phi->addIncoming(thenValue, thenBlock);
 		phi->addIncoming(elseValue, elseBlock);
@@ -485,7 +485,7 @@ Value* Generator::genCoerce(resolve::Expr& srce, resolve::Type* dst) {
 
 		if(src->isPointer()) {
 			// Pointer to integer conversion.
-			ASSERT(d_typ < resolve::PrimitiveType::FirstFloat);
+            assert(d_typ < resolve::PrimitiveType::FirstFloat);
 			return builder.CreatePtrToInt(expr, llDst);
 		}
 
@@ -537,23 +537,23 @@ Value* Generator::genCoerce(resolve::Expr& srce, resolve::Type* dst) {
 	} else if(dst->isPointer()) {
 		// Integer to pointer conversion.
 		auto s_typ = ((const resolve::PrimType*)src)->type;
-		ASSERT(s_typ < resolve::PrimitiveType::FirstFloat);
+        assert(s_typ < resolve::PrimitiveType::FirstFloat);
 	}
 
-	FatalError("Invalid coercion between types.");
+	fatalError("Invalid coercion between types.");
 	return nullptr;
 }
 
 Value* Generator::genCoerceLV(resolve::Expr& src, resolve::Type* dst) {
-	ASSERT(src.type->isLvalue());
-	ASSERT(src.type->canonical == dst);
+    assert(src.type->isLvalue());
+    assert(src.type->canonical == dst);
 
 	// LValues are always implicitly pointers in the code generator.
 	return builder.CreateLoad(genExpr(src));
 }
 
 Value* Generator::genWhile(resolve::WhileExpr& expr) {
-	ASSERT(expr.cond.type->isBool());
+    assert(expr.cond.type->isBool());
 
 	// Create basic blocks for each branch.
 	// Don't restore the previous one, as the next expression needs to be put in the continuation block.
@@ -595,7 +595,7 @@ Value* Generator::genField(resolve::FieldExpr& expr) {
 				return builder.CreateCast(Instruction::ZExt, con, builder.getInt32Ty());
 			}
 		} else {
-			ASSERT(!var->isEnum);
+            assert(!var->isEnum);
 			// Cast the variant data into a pointer to its constructor data.
 			auto targetType = PointerType::getUnqual(getType(var->list[expr.constructor]->dataType)->llType);
 			return builder.CreateLoad(builder.CreatePointerCast(genExpr(expr.container), targetType));
@@ -605,7 +605,7 @@ Value* Generator::genField(resolve::FieldExpr& expr) {
 		if(container->getType()->isPointerTy()) {
 			return builder.CreateStructGEP(container, expr.field->index);
 		} else {
-			ASSERT(container->getType()->isAggregateType());
+            assert(container->getType()->isAggregateType());
 			return builder.CreateExtractValue(container, expr.field->index);
 		}
 	}
@@ -632,9 +632,9 @@ Value* Generator::genConstruct(resolve::ConstructExpr& expr) {
 		if(var->isEnum) {
 			// Enum variants are constructed as the index of their constructor.
 			return ConstantInt::get(type->llType, expr.con->index, false);
-		} else if(var->list.Count() == 1) {
+		} else if(var->list.size() == 1) {
 			// Single-constructor variants are constructed like the equivalent tuple.
-			if(expr.args.Count() > 1) {
+			if(expr.args.size() > 1) {
 				Value* v = UndefValue::get(type->llType);
 				for(auto a : expr.args) {
 					v = builder.CreateInsertValue(v, genExpr(a.expr), a.index);
@@ -655,9 +655,9 @@ Value* Generator::genConstruct(resolve::ConstructExpr& expr) {
 			builder.CreateStore(conIndex, idPointer);
 
 			// Set the constructor-specific data, if any.
-			if(expr.args.Count()) {
+			if(expr.args.size()) {
 				auto conData = builder.CreatePointerCast(pointer, PointerType::getUnqual(((TypeData*)expr.con->codegen)->llType));
-				if(expr.args.Count() > 1) {
+				if(expr.args.size() > 1) {
 					for (auto &i : expr.args) {
 						auto argPointer = builder.CreateStructGEP(conData, i.index);
 						builder.CreateStore(genExpr(i.expr), argPointer);
@@ -670,7 +670,7 @@ Value* Generator::genConstruct(resolve::ConstructExpr& expr) {
 			return pointer;
 		}
 	} else {
-		DebugError("Not implemented");
+		debugError("Not implemented");
 		return nullptr;
 	}
 }
@@ -746,7 +746,7 @@ TypeData* Generator::genLlvmType(resolve::TypeRef type) {
 			case resolve::PrimitiveType::F16: data->llType = builder.getHalfTy(); break;
 
 			case resolve::PrimitiveType::Bool: data->llType = builder.getInt1Ty(); break;
-			default: FatalError("Unsupported primitive type."); return nullptr;
+			default: fatalError("Unsupported primitive type."); return nullptr;
 		}
 		return data;
 	} else if(type->isPointer()) {
@@ -758,8 +758,8 @@ TypeData* Generator::genLlvmType(resolve::TypeRef type) {
 		auto tuple = (resolve::TupleType*)type;
 
 		// Generate the tuple contents.
-		auto fCount = tuple->fields.Count();
-		auto fields = (Type**)StackAlloc(sizeof(Type*) * fCount);
+		auto fCount = tuple->fields.size();
+		auto fields = (Type**)alloca(sizeof(Type*) * fCount);
 		for(U32 i=0; i<fCount; i++) {
 			fields[i] = getType(tuple->fields[i].type)->llType;
 		}
@@ -782,7 +782,7 @@ TypeData* Generator::genLlvmType(resolve::TypeRef type) {
 			Type* baseType;
 			U32 baseSize = 0;
 			for (auto& con : var->list) {
-				auto fCount = con->contents.Count();
+				auto fCount = con->contents.size();
 				if(fCount) {
 					auto s = getType(con->dataType);
 					auto dl = module.getDataLayout();
@@ -794,14 +794,14 @@ TypeData* Generator::genLlvmType(resolve::TypeRef type) {
 						baseSize = (U32)size;
 					}
 
-					totalSize = Core::Max(totalSize, (U32)size);
+					totalSize = Tritium::Math::max(totalSize, (U32)size);
 					con->codegen = s;
 				} else {
 					con->codegen = nullptr;
 				}
 			}
 
-			if (var->list.Count() == 1) {
+			if (var->list.size() == 1) {
 				// Variants with a single constructor are represented as that constructor.
 				data->llType = (Type*)var->list[0]->codegen;
 				varData->selectorIndex = -1;
@@ -827,7 +827,7 @@ TypeData* Generator::genLlvmType(resolve::TypeRef type) {
 		return data;
 	}
 
-	FatalError("Unsupported type.");
+	fatalError("Unsupported type.");
 	return nullptr;
 }
 

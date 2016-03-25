@@ -703,7 +703,7 @@ ast::InfixExpr* Resolver::reorder(ast::InfixExpr& expr, U32 min_prec) {
 bool Resolver::alwaysTrue(ExprRef expr) {
 	// TODO: Perform constant folding.
 	auto e = &expr;
-	if(expr.kind == Expr::Multi) e = ((MultiExpr*)e)->es.back();
+	if(expr.kind == Expr::Multi) e = *((MultiExpr*)e)->es.back();
 
 	return e->kind == Expr::Lit
 		   && ((LitExpr*)e)->literal.type == Literal::Bool

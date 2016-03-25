@@ -44,6 +44,7 @@ struct Parser {
 	void parseDataDecl();
 	void parseTypeDecl();
 	void parseForeignDecl();
+    void parseShaderDecl();
 
 	Expr* parseExpr();
 	Expr* parseTypedExpr();
@@ -87,7 +88,7 @@ struct Parser {
 
 	void eat() {lexer.Next();}
 
-	template<class T> auto list(const T& t) {return build<ASTList<T>>(t);}
+	template<class T> auto list(const T& t) {return new(buffer) ASTList<T>(t);}
 	template<class T> auto listE(const T& t) {return list(getListElem(t));}
 
 	auto tokenE(Token::Type type) {
@@ -213,11 +214,6 @@ struct Parser {
 			token = tok;
 		}
 		return v;
-	}
-
-	template<class T, class... P>
-	T* build(P&&... p) {
-		return buffer.create<T>(forward<P>(p)...);
 	}
 
 	Module& module;

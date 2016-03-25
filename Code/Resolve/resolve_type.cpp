@@ -162,12 +162,12 @@ TypeRef Resolver::resolveType(ScopeRef scope, ast::TypeRef type, bool constructo
 				error("'Bool' cannot be used as a constructor; use True or False instead");
 			} else {
 				// Check if this is a primitive type.
-				if (auto t = types.primMap.get(type->con)) return *t;
+				if(auto t = types.primMap.get(type->con)) return *(t.get());
 			}
 		} else {
 			if(auto t = scope.findType(type->con)) return lazyResolve(t);
 			// Check if this is a primitive type.
-			if(auto t = types.primMap.get(type->con)) return *t;
+			if(auto t = types.primMap.get(type->con)) return *(t.get());
 		}
 
 		return types.getUnknown();

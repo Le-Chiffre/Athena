@@ -9,8 +9,8 @@
 namespace athena {
 namespace gen {
 
-inline llvm::StringRef toRef(ast::String str) {
-	return {str.ptr, str.length};
+inline llvm::StringRef toRef(String str) {
+	return {str.text(), str.size()};
 }
 
 struct SaveInsert {
@@ -96,7 +96,7 @@ struct Generator {
 				return llvm::CallingConv::WebKit_JS;
 		}
 
-		ASSERT(false);
+		assert(false);
 		return llvm::CallingConv::C;
 	}
 

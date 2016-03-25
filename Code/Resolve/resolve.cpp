@@ -130,11 +130,11 @@ Field Resolver::resolveField(ScopeRef scope, TypeRef container, U32 index, ast::
 }
 
 PrimitiveOp* Resolver::tryPrimitiveBinaryOp(Id callee) {
-	return primitiveBinaryMap.get(callee);
+	return primitiveBinaryMap.get(callee).get();
 }
 
 PrimitiveOp* Resolver::tryPrimitiveUnaryOp(Id callee) {
-	return primitiveUnaryMap.get(callee);
+	return primitiveUnaryMap.get(callee).get();
 }
 
 Expr* Resolver::implicitLoad(ExprRef target) {

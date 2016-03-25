@@ -33,7 +33,7 @@ struct ASTList<T*>
 template<class T>
 inline auto getListElem(T* a) { return a; }
 template<class T>
-inline auto getListElem(const Maybe<T>& a) { return a.get(); }
+inline auto getListElem(const Maybe<T>& a) { return (T)a.get(); }
 
 template<class T, class F>
 void walk(ASTList<T>* l, F&& f) {
@@ -132,7 +132,7 @@ struct TupleField {
     Maybe<Id> name;
 };
 
-typedef ASTList<TupleField> TupleFieldList;
+typedef ASTList<TupleField*> TupleFieldList;
 typedef ASTList<Type*> TypeList;
 
 struct TupleType : Type {
@@ -380,7 +380,8 @@ struct Decl {
 		Function,
 		Type,
 		Data,
-		Foreign
+		Foreign,
+        Shader
 	} kind;
 
 	Decl(Kind t) : kind(t) {}
@@ -436,6 +437,29 @@ struct ForeignDecl : Decl {
 	Id importedName;
 	::athena::ast::Type* type;
 	ForeignConvention cconv;
+};
+
+struct ShaderDecl : Decl {
+    enum Type {
+        Buffer,
+        StructuredBuffer,
+        Texture,
+        Patch
+    };
+
+    ShaderDecl(Id name, Type type, Byte dim, Bool r, Bool w, Bool cube, Byte aa, Bool array) :
+            Decl(Shader),
+            name(name), type(type), textureDim(dim), samples(aa),
+            readable(r), writable(w), cube(cube), array(array) {}
+
+    Id name;
+    Type type;
+    Byte textureDim;
+    Byte samples;
+    Bool readable : 1;
+    Bool writable : 1;
+    Bool cube : 1;
+    Bool array : 1;
 };
 
 struct Field {
