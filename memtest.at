@@ -1,0 +1,36 @@
+
+copyMem [src *U8, dst *U8, count Int] =
+	var p = 0
+	while p < count ->
+		*(src+p) = *(dst+p)
+		p = p + 1
+
+fillMem [mem *U8, count Int, pattern U8] =
+	var p = 0
+	while p < count ->
+		*(mem+p) = pattern
+		p = p + 1
+
+zeroMem [mem *U8, count Int] = fillMem[mem, count, 0]
+
+compareMem [a *U8, b *U8, count Int] =
+	var p = 0
+	while p < count `and` *(a+p) == *(b+p) -> p = p + 1
+	*(a+p) - *(b+p)
+
+strlen [str *U8] =
+	var str, l = 0
+	while *str > 0 ->
+		str = str + 1
+		l = l + 1
+	l
+
+parseNum [ch U8] = ch - 48
+
+parseInt [string *U8] =
+	var string
+	var i = 0 : U32
+	while *string != 0 ->
+		i = i * 10 + parseNum [*string]
+		string = string + 1
+	i

@@ -1,0 +1,4 @@
+foreign import "strlen" stringLength : *U8 -> Int
+foreign import "printf" print : *U8 -> Int
+
+fluff = print["hello world!"]
