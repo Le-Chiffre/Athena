@@ -1,17 +1,17 @@
 #ifndef Athena_Parser_ast_h
 #define Athena_Parser_ast_h
 
-#include <Types/Array.h>
-#include <Types/Map.h>
+#include "../General/types.h"
+#include "../General/maybe.h"
+#include "../General/array.h"
+#include "../General/map.h"
+#include <string>
 
 namespace athena {
 namespace ast {
 
-typedef U32 Id;
-
 template<class T>
-struct ASTList
-{
+struct ASTList {
 	ASTList<T>* next = nullptr;
 	T item;
 
@@ -21,8 +21,7 @@ struct ASTList
 };
 
 template<class T>
-struct ASTList<T*>
-{
+struct ASTList<T*> {
 	ASTList<T*>* next = nullptr;
 	T* item;
 
@@ -32,8 +31,6 @@ struct ASTList<T*>
 
 template<class T>
 inline auto getListElem(T* a) { return a; }
-template<class T>
-inline auto getListElem(const Maybe<T>& a) { return (T)a.get(); }
 
 template<class T, class F>
 void walk(ASTList<T>* l, F&& f) {
@@ -101,9 +98,9 @@ inline Literal trueLit() {
 }
 
 struct SimpleType {
-	SimpleType(Id name, ASTList<Id>* kind) : name(name), kind(kind) {}
+	SimpleType(Id name, ASTList<Id*>* kind) : name(name), kind(kind) {}
 	Id name;
-	ASTList<Id>* kind;
+	ASTList<Id*>* kind;
 };
 
 struct Type {
@@ -347,7 +344,7 @@ struct FieldPat {
 	Pattern* pat;
 };
 
-typedef ASTList<FieldPat> FieldPatList;
+typedef ASTList<FieldPat*> FieldPatList;
 
 struct TupPattern : Pattern {
 	TupPattern(FieldPatList* fields, Id asVar = 0) : Pattern(Tup, asVar), fields(fields) {}
@@ -366,7 +363,7 @@ struct Alt {
 	ExprRef expr;
 };
 
-typedef ASTList<Alt> AltList;
+typedef ASTList<Alt*> AltList;
 
 struct CaseExpr : Expr {
 	CaseExpr(ExprRef pivot, AltList* alts) : Expr(Case), pivot(pivot), alts(alts) {}
@@ -380,8 +377,7 @@ struct Decl {
 		Function,
 		Type,
 		Data,
-		Foreign,
-        Shader
+		Foreign
 	} kind;
 
 	Decl(Kind t) : kind(t) {}
@@ -439,29 +435,6 @@ struct ForeignDecl : Decl {
 	ForeignConvention cconv;
 };
 
-struct ShaderDecl : Decl {
-    enum Type {
-        Buffer,
-        StructuredBuffer,
-        Texture,
-        Patch
-    };
-
-    ShaderDecl(Id name, Type type, Byte dim, Bool r, Bool w, Bool cube, Byte aa, Bool array) :
-            Decl(Shader),
-            name(name), type(type), textureDim(dim), samples(aa),
-            readable(r), writable(w), cube(cube), array(array) {}
-
-    Id name;
-    Type type;
-    Byte textureDim;
-    Byte samples;
-    Bool readable : 1;
-    Bool writable : 1;
-    Bool cube : 1;
-    Bool array : 1;
-};
-
 struct Field {
 	Field(Id name, TypeRef type, ExprRef content, bool constant) : name(name), type(type), content(content), constant(constant) {}
 
@@ -491,17 +464,17 @@ struct DataDecl : Decl {
 
 struct Module {
 	Id name;
-	Array<Decl*> declarations{32};
-	Tritium::Map<Id, Fixity> operators{16};
+    Array<Decl*> declarations{32};
+    Tritium::Map<Id, Fixity> operators;
 };
 
 typedef const Module& ModuleRef;
 
 struct CompileContext;
 
-StringBuilder toString(ExprRef e, CompileContext& c);
-StringBuilder toString(DeclRef e, CompileContext& c);
-StringBuilder toString(ModuleRef m, CompileContext& c);
+std::string toString(ExprRef e, CompileContext& c);
+std::string toString(DeclRef e, CompileContext& c);
+std::string toString(ModuleRef m, CompileContext& c);
 
 }} // namespace athena::ast
 

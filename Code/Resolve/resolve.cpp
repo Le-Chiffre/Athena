@@ -51,11 +51,11 @@ Module* Resolver::resolve() {
 				name = ((ast::DataDecl*)decl)->type->name;
 			}
 
-			TypeRef* type;
+			Type** type;
 			if(module->types.addGet(name, type)) {
 				// This type was already declared in this scope.
 				// Ignore the type that was defined last.
-				error("redefinition of '%@'", context.Find(name).name);
+				error("redefinition of '%@'", context.find(name).name);
 			} else {
 				// Insert the unresolved type.
 				if(decl->kind == ast::Decl::Type) {
@@ -73,7 +73,7 @@ Module* Resolver::resolve() {
 						if(module->constructors.addGet(con->item->name, constr)) {
 							// This constructor was already declared in this scope.
 							// Ignore the constructor that was defined last.
-							error("redefinition of type constructor '%@'", context.Find(name).name);
+							error("redefinition of type constructor '%@'", context.find(name).name);
 						} else {
 							new (constr) VarConstructor{con->item->name, index, t, con->item->types};
 							t->list << constr;
@@ -82,12 +82,12 @@ Module* Resolver::resolve() {
 						index++;
 					}
 					t->isEnum = isEnum;
-					t->selectorBits = t->list.size() ? Tritium::Math::findLastBit(t->list.size() - 1) + 1 : 0;
+					t->selectorBits = t->list.size() ? findLastBit(t->list.size() - 1) + 1 : 0;
 
 					assert(t->list.size() >= 1);
 					*type = t;
 				} else {
-					debugError("Not implemented");
+					assert("Not implemented" == 0);
 				}
 			}
 		}
@@ -96,7 +96,7 @@ Module* Resolver::resolve() {
     // Perform the resolve pass. All defined names in this scope are now available.
 	// Symbols may be resolved lazily when used by other symbols,
 	// so we just skip those that are already defined.
-    walk([=](Id name, TypeRef& t) {
+    modify([=](Id name, Type*& t) {
 		if(t->kind == Type::Alias) {
 			// Alias types are completely replaced by their contents, since they are equivalent.
             auto a = (AliasType*)t;
@@ -115,9 +115,9 @@ Module* Resolver::resolve() {
 	return module;
 }
 
-Field Resolver::resolveField(ScopeRef scope, TypeRef container, U32 index, ast::Field& field) {
+Field Resolver::resolveField(ScopeRef scope, Type* container, U32 index, ast::Field& field) {
 	assert(field.type || field.content);
-	TypeRef type = nullptr;
+	Type* type = nullptr;
 	Expr* content = nullptr;
 
 	if(field.type)
@@ -145,7 +145,7 @@ Expr* Resolver::implicitLoad(ExprRef target) {
 	}
 }
 
-Expr* Resolver::implicitCoerce(ExprRef src, TypeRef dst) {
+Expr* Resolver::implicitCoerce(ExprRef src, Type* dst) {
 	if(src.type == dst) return &src;
 
 	if(auto e = findLiteral(src)) {
@@ -166,7 +166,7 @@ Expr* Resolver::implicitCoerce(ExprRef src, TypeRef dst) {
 	return nullptr;
 }
 
-LitExpr* Resolver::literalCoerce(const ast::Literal& lit, TypeRef dst) {
+LitExpr* Resolver::literalCoerce(const ast::Literal& lit, Type* dst) {
 	Literal literal;
 	typeCheck.literalCoerce(lit, dst, literal, Nothing());
 
@@ -175,7 +175,7 @@ LitExpr* Resolver::literalCoerce(const ast::Literal& lit, TypeRef dst) {
 	return build<LitExpr>(literal, dst);
 }
 
-LitExpr* Resolver::literalCoerce(LitExpr* lit, TypeRef dst) {
+LitExpr* Resolver::literalCoerce(LitExpr* lit, Type* dst) {
 	if(typeCheck.literalCoerce(lit->literal, dst, lit->literal, Nothing()))
 		lit->type = dst;
 	return lit;

@@ -10,7 +10,7 @@ inline void error(Maybe<Diagnostics*> diag, const char* text) {
 	}
 }
 
-bool TypeCheck::implicitCoerce(TypeRef src, TypeRef dst, Maybe<Diagnostics*> diag) {
+bool TypeCheck::implicitCoerce(Type* src, Type* dst, Maybe<Diagnostics*> diag) {
 	// Lvalue types are semantically equivalent and can always be implicitly converted.
 	if(src != src->canonical) {
 		return compatible(src->canonical, dst);
@@ -61,7 +61,7 @@ bool TypeCheck::implicitCoerce(TypeRef src, TypeRef dst, Maybe<Diagnostics*> dia
 	return false;
 }
 
-bool TypeCheck::literalCoerce(const ast::Literal& lit, TypeRef dst, Literal& literal, Maybe<Diagnostics*> diag) {
+bool TypeCheck::literalCoerce(const ast::Literal& lit, Type* dst, Literal& literal, Maybe<Diagnostics*> diag) {
 	// Literal conversion rules:
 	//  - Integer and Float literals can be converted to any other integer or float
 	//    (warnings should be issued if the value would not fit).
@@ -94,7 +94,7 @@ bool TypeCheck::literalCoerce(const ast::Literal& lit, TypeRef dst, Literal& lit
 	return true;
 }
 
-bool TypeCheck::literalCoerce(const Literal& lit, TypeRef dst, Maybe<Diagnostics*> diag) {
+bool TypeCheck::literalCoerce(const Literal& lit, Type* dst, Maybe<Diagnostics*> diag) {
 	// Literal conversion rules:
 	//  - Integer and Float literals can be converted to any other integer or float
 	//    (warnings should be issued if the value would not fit).

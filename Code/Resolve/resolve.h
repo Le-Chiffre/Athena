@@ -1,11 +1,13 @@
 #ifndef Athena_Resolve_resolve_h
 #define Athena_Resolve_resolve_h
 
+#include "../General/compiler.h"
 #include "../Parse/parser.h"
 #include "resolve_ast.h"
-#include "../General/diagnostic.h"
 #include "typecheck.h"
 #include "mangle.h"
+#include "../General/array.h"
+#include "../General/map.h"
 
 namespace athena {
 namespace resolve {
@@ -15,25 +17,25 @@ typedef Tritium::Map<Id, PrimitiveOp> PrimOpMap;
 struct TypeManager {
     TypeManager() {
 		unknownType.resolved = false;
-        for(U32 i=0; i<(U32)PrimitiveType::TypeCount; i++) {
-            prims << PrimType{(PrimitiveType)i};
+        for(int i=0; i < (int)PrimitiveType::TypeCount; i++) {
+            prims.push(PrimType{(PrimitiveType)i});
         }
 
         stringType = getPtr(getU8());
     }
 
-	TypeRef getUnit() {return &unitType;}
-	TypeRef getUnknown() {return &unknownType;}
+	Type* getUnit() {return &unitType;}
+	Type* getUnknown() {return &unknownType;}
 
-    TypeRef getPrim(PrimitiveType t) {return &prims[(U32)t];}
-    TypeRef getBool() {return &prims[(U32)PrimitiveType::Bool];}
-    TypeRef getFloat() {return &prims[(U32)PrimitiveType::F32];}
-    TypeRef getDouble() {return &prims[(U32)PrimitiveType::F64];}
-    TypeRef getInt() {return &prims[(U32)PrimitiveType::I32];}
-    TypeRef getU8() {return &prims[(U32)PrimitiveType::U8];}
-    TypeRef getString() {return stringType;}
+    Type* getPrim(PrimitiveType t) {return &prims[(Size)t];}
+    Type* getBool() {return &prims[(Size)PrimitiveType::Bool];}
+    Type* getFloat() {return &prims[(Size)PrimitiveType::F32];}
+    Type* getDouble() {return &prims[(Size)PrimitiveType::F64];}
+    Type* getInt() {return &prims[(Size)PrimitiveType::I32];}
+    Type* getU8() {return &prims[(Size)PrimitiveType::U8];}
+    Type* getString() {return stringType;}
 
-    TypeRef getArray(TypeRef content) {
+    Type* getArray(Type* content) {
         ArrayType* type;
         if(!arrays.addGet(content, type)) {
 			new(type) ArrayType{content};
@@ -43,7 +45,7 @@ struct TypeManager {
         return type;
     }
 
-	TypeRef getPtr(TypeRef content) {
+	Type* getPtr(Type* content) {
 		PtrType* type;
 		if(!ptrs.addGet(content, type)) {
 			new(type) PtrType{content};
@@ -54,11 +56,11 @@ struct TypeManager {
 	}
 
 	bool getTuple(U32 hash, TupleType*& type) {
-		return tuples.addGet(hash, type);
+        return tuples.addGet(hash, type);
 	}
 
-	TypeRef getTuple(const FieldList& fields) {
-		Tritium::Hasher h;
+	Type* getTuple(const FieldList& fields) {
+		Hasher h;
 		for(auto& f : fields) {
 			h.add(f.type);
 			if(f.name) h.add(f.name);
@@ -66,66 +68,67 @@ struct TypeManager {
 
 		// Check if this kind of tuple has been used already.
 		TupleType* result = nullptr;
-		if(!getTuple((U32)h, result)) {
+		if(!getTuple((Id)h, result)) {
 			// Otherwise, create the type.
 			new (result) TupleType;
 			bool resolved = true;
-			result->fields.reserve(fields.size());
-			for(auto& f : fields) {
-				if(!f.type->resolved) resolved = false;
-				result->fields << f;
-			}
-			result->resolved = resolved;
+            result->fields.reserve(fields.size());
+            for(auto& f : fields) {
+                if(!f.type->resolved) resolved = false;
+                result->fields << f;
+            }
+            result->resolved = resolved;
 		}
 
 		return result;
 	}
 
-	TypeRef getTuple(const TypeList& types) {
-		Tritium::Hasher h;
+	Type* getTuple(const TypeList& types) {
+		Hasher h;
 		for(auto t : types) h.add(t);
 
 		// Check if this kind of tuple has been used already.
 		TupleType* result = nullptr;
-		if(!getTuple((U32)h, result)) {
+		if(!getTuple((Id)h, result)) {
 			// Otherwise, create the type.
 			new (result) TupleType;
 			bool resolved = true;
-			result->fields.reserve(types.size());
-			U32 i = 0;
-			for(auto& t : types) {
-				if(!t->resolved) resolved = false;
-				result->fields << Field{0, i, t, result, nullptr, true};
-				i++;
-			}
+            result->fields.reserve(types.size());
+            U32 i = 0;
+            for(auto& t : types) {
+                if(!t->resolved) resolved = false;
+                result->fields << Field{0, i, t, result, nullptr, true};
+                i++;
+            }
 			result->resolved = resolved;
 		}
 
 		return result;
 	}
 
-	TypeRef getLV(TypeRef t) {
-		LVType* type;
-		if(!lvalues.addGet(t, type)) {
-			new(type) LVType(t);
-			type->resolved = t->resolved;
-		}
+	Type* getLV(Type* t) {
+        LVType* type;
+        if(!lvalues.addGet(t, type)) {
+            new(type) LVType(t);
+            type->resolved = t->resolved;
+        }
 
-		return type;
+        return type;
 	}
 
 	// t must be an lvalue.
-	TypeRef getRV(TypeRef t) {
+	Type* getRV(Type* t) {
 		assert(t->isLvalue());
 		return t->canonical;
 	}
 
-    ArrayF<PrimType, (U32)PrimitiveType::TypeCount> prims;
-	Tritium::Map<Id, TypeRef> primMap; // Maps from ast type name to type.
-    Tritium::Map<TypeRef, ArrayType> arrays;
-    Tritium::Map<TypeRef, PtrType> ptrs;
-    Tritium::Map<U32, TupleType> tuples;
-    Tritium::Map<TypeRef, LVType> lvalues;
+    ArrayF<PrimType, (Size)PrimitiveType::TypeCount> prims;
+    Tritium::Map<Id, Type*> primMap; // Maps from ast type name to type.
+    Tritium::Map<Type*, ArrayType> arrays;
+    Tritium::Map<Type*, PtrType> ptrs;
+    Tritium::Map<Id, TupleType> tuples;
+    Tritium::Map<Type*, LVType> lvalues;
+
 	Type* stringType;
 	Type unitType{Type::Unit};
 	Type unknownType{Type::Unknown};
@@ -161,9 +164,9 @@ struct Resolver {
 	Expr* resolveCase(Scope& scope, ast::CaseExpr& expr, bool used);
 	Expr* resolveAlt(Scope& scope, ExprRef pivot, ast::AltList* alt, bool used);
 
-	TypeRef resolveAlias(AliasType* type);
-	TypeRef resolveTuple(Scope& scope, ast::TupleType& type, ast::SimpleType* tscope = nullptr);
-	TypeRef resolveVariant(VarType* type);
+	Type* resolveAlias(AliasType* type);
+	Type* resolveTuple(Scope& scope, ast::TupleType& type, ast::SimpleType* tscope = nullptr);
+	Type* resolveVariant(VarType* type);
 
 	/// Adds to a list of conditions that must be true.
 	void resolvePattern(Scope& scope, ExprRef pivot, ast::Pattern& pat, IfConds& conds);
@@ -178,32 +181,32 @@ struct Resolver {
 
 	Variable* resolveArgument(ScopeRef scope, ast::TupleField& arg);
 	Variable* resolveArgument(ScopeRef scope, ast::Type* arg);
-    Field resolveField(ScopeRef scope, TypeRef container, U32 index, ast::Field& field);
+    Field resolveField(ScopeRef scope, Type* container, U32 index, ast::Field& field);
 
 	/// Creates a boolean condition from the provided expression.
 	Expr* resolveCondition(ScopeRef scope, ast::ExprRef expr);
 
 	/// Retrieves or creates a concrete type.
 	/// @param constructor If set, the provided type is interpreted as a constructor instead of a type.
-	TypeRef resolveType(ScopeRef scope, ast::TypeRef type, bool constructor = false, ast::SimpleType* tscope = nullptr);
+	Type* resolveType(ScopeRef scope, ast::TypeRef type, bool constructor = false, ast::SimpleType* tscope = nullptr);
 
 	/// Ensures that the provided type has been converted from AST before use.
 	/// This is used to solve dependencies between types.
-	TypeRef lazyResolve(TypeRef);
+	Type* lazyResolve(Type*);
 
 	template<class F>
-	TypeRef mapType(F&& f, TypeRef type);
+	Type* mapType(F&& f, Type* type);
 
 	/// Instantiates a generic type.
-	TypeRef instantiateType(ScopeRef scope, TypeRef base, ast::TypeList* apps, ast::SimpleType* tscope = nullptr);
+	Type* instantiateType(ScopeRef scope, Type* base, ast::TypeList* apps, ast::SimpleType* tscope = nullptr);
 
-	void constrain(TypeRef type, const Constraint&& c);
-	void constrain(TypeRef type, TypeRef c);
+	void constrain(Type* type, const Constraint&& c);
+	void constrain(Type* type, Type* c);
 
-	TypeRef getBinaryOpType(PrimitiveOp, PrimitiveType, PrimitiveType, Expr*&, Expr*&);
-	TypeRef getPtrOpType(PrimitiveOp, PtrType*, PrimitiveType);
-	TypeRef getPtrOpType(PrimitiveOp, PtrType*, PtrType*);
-	TypeRef getUnaryOpType(PrimitiveOp, PrimitiveType);
+	Type* getBinaryOpType(PrimitiveOp, PrimitiveType, PrimitiveType, Expr*&, Expr*&);
+	Type* getPtrOpType(PrimitiveOp, PtrType*, PrimitiveType);
+	Type* getPtrOpType(PrimitiveOp, PtrType*, PtrType*);
+	Type* getUnaryOpType(PrimitiveOp, PrimitiveType);
 
 	/// Creates a return of the provided expression.
 	Expr* createRet(ExprRef);
@@ -251,12 +254,12 @@ struct Resolver {
 	Expr* implicitLoad(ExprRef target);
 
 	/// Checks if the provided type can be implicitly converted to the target type.
-	Expr* implicitCoerce(ExprRef src, TypeRef dst);
+	Expr* implicitCoerce(ExprRef src, Type* dst);
 
 	/// Checks if the provided literal type can be converted to the target type.
 	/// This is more flexible than an implicit coercion and done on compile time.
-	LitExpr* literalCoerce(const ast::Literal& lit, TypeRef dst);
-	LitExpr* literalCoerce(LitExpr* lit, TypeRef dst);
+	LitExpr* literalCoerce(const ast::Literal& lit, Type* dst);
+	LitExpr* literalCoerce(LitExpr* lit, Type* dst);
 
 	/// Tries to find a function from the provided expression that takes the provided parameters.
 	FunctionDecl* findFunction(ScopeRef scope, ast::ExprRef, ExprList* args);
@@ -315,7 +318,7 @@ struct Resolver {
 	/// This also makes sure that no primitive types and operators are redefined in the program.
 	void initPrimitives();
 
-	Id primitiveOps[(U32)PrimitiveOp::OpCount];
+	Id primitiveOps[(int)PrimitiveOp::OpCount];
 	PrimOpMap primitiveBinaryMap;
 	PrimOpMap primitiveUnaryMap;
 	ast::CompileContext& context;

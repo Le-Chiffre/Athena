@@ -15,7 +15,7 @@ Generator::Generator(ast::CompileContext& ccontext, llvm::LLVMContext& context, 
 	context(context), module(target), builder(context), ccontext(ccontext) {}
 
 Module* Generator::generate(resolve::Module& module) {
-	walk([=](resolve::Id name, resolve::FunctionDecl* f) {
+	walk([=](Id name, resolve::FunctionDecl* f) {
 		if(!f->codegen) genFunctionDecl(*f);
 	}, module.functions);
 
@@ -32,12 +32,12 @@ Function* Generator::genFunctionDecl(resolve::FunctionDecl& function) {
 	auto type = FunctionType::get(getType(function.type)->llType, ArrayRef<Type*>(argTypes, argCount), false);
 	if(function.isForeign) {
 		auto &ff = (resolve::ForeignFunction&)function;
-		auto func = Function::Create(type, Function::ExternalLinkage, toRef(ccontext.Find(ff.importName).name), &module);
+		auto func = Function::Create(type, Function::ExternalLinkage, toRef(ccontext.find(ff.importName).name), &module);
 		func->setCallingConv(getCconv(ff.cconv));
 		function.codegen = func;
 		return func;
 	} else {
-		auto func = Function::Create(type, Function::ExternalLinkage, toRef(ccontext.Find(function.name).name), &module);
+		auto func = Function::Create(type, Function::ExternalLinkage, toRef(ccontext.find(function.name).name), &module);
 		func->setCallingConv(CallingConv::Fast);
 		function.codegen = func;
 		if(function.hasImpl) {
@@ -52,8 +52,8 @@ void Generator::genFunction(Function* func, resolve::Function& function) {
 	U32 i=0;
 	for(auto it=func->arg_begin(); i<function.arguments.size(); i++, it++) {
 		auto a = function.arguments[i];
-		it->setName(toRef(ccontext.Find(a->name).name));
-		a->codegen = it;
+		it->setName(toRef(ccontext.find(a->name).name));
+		a->codegen = &*it;
 	}
 
 	// Generate the function body.
@@ -80,10 +80,10 @@ BasicBlock* Generator::genScope(resolve::Scope& scope) {
 void Generator::genVarDecl(resolve::Variable& v) {
 	auto type = getType(v.type);
 	if(v.isVar() && !v.funParam) {
-		auto var = builder.CreateAlloca(type->llType, nullptr, toRef(ccontext.Find(v.name).name));
+		auto var = builder.CreateAlloca(type->llType, nullptr, toRef(ccontext.find(v.name).name));
 		v.codegen = var;
 	} else if(v.funParam && type->onStack) {
-		auto var = builder.CreateAlloca(type->llType, nullptr, toRef(ccontext.Find(v.name).name));
+		auto var = builder.CreateAlloca(type->llType, nullptr, toRef(ccontext.find(v.name).name));
 		builder.CreateStore((Value*)v.codegen, var);
 		v.codegen = var;
 	}
@@ -128,25 +128,25 @@ Value* Generator::genExpr(resolve::ExprRef expr) {
 		case resolve::Expr::Scoped:
 			return genScoped((resolve::ScopedExpr&)expr);
         default:
-            fatalError("Unsupported expression type.");
+            assert("Unsupported expression type." == 0);
             return nullptr;
 	}
 }
 
-Value* Generator::genLiteral(resolve::Literal& literal, resolve::TypeRef type) {
+Value* Generator::genLiteral(resolve::Literal& literal, resolve::Type* type) {
 	auto lltype = getType(type)->llType;
 	switch(literal.type) {
 		case resolve::Literal::Float: return ConstantFP::get(lltype, literal.f);
 		case resolve::Literal::Int: return ConstantInt::get(lltype, literal.i);
 		case resolve::Literal::Char: return ConstantInt::get(lltype, literal.c);
 		case resolve::Literal::String: {
-			auto str = ccontext.Find(literal.s).name;
-			return builder.CreateGlobalStringPtr(StringRef(str.text(), str.size()));
+			auto str = ccontext.find(literal.s).name;
+			return builder.CreateGlobalStringPtr(StringRef(str.c_str(), str.size()));
 		}
 		case resolve::Literal::Bool: return ConstantInt::get(lltype, literal.i);
 	}
 
-	fatalError("Unsupported literal type.");
+	assert("Unsupported literal type." == 0);
 	return nullptr;
 }
 
@@ -246,7 +246,7 @@ Value* Generator::genPrimitiveCall(resolve::PrimitiveOp op, resolve::ExprList* a
 		assert(args && !args->next);
 		return genUnaryOp(op, *(const resolve::PrimType*)args->item->type, genExpr(*args->item));
 	} else {
-		fatalError("Unsupported primitive operator provided");
+		assert("Unsupported primitive operator provided" == 0);
 		return nullptr;
 	}
 }
@@ -270,7 +270,7 @@ Value* Generator::genUnaryOp(resolve::PrimitiveOp op, resolve::PrimType type, ll
             assert(type.isPointer());
 			return builder.CreateLoad(in);
 		default:
-			fatalError("Unsupported primitive operator provided.");
+			assert("Unsupported primitive operator provided." == 0);
             return nullptr;
 	}
 }
@@ -353,7 +353,7 @@ Value* Generator::genBinaryOp(resolve::PrimitiveOp op, llvm::Value* lhs, llvm::V
 		}
 	}
 
-	fatalError("Unsupported primitive operator provided.");
+	assert("Unsupported primitive operator provided." == 0);
 	return nullptr;
 }
 
@@ -540,7 +540,7 @@ Value* Generator::genCoerce(resolve::Expr& srce, resolve::Type* dst) {
         assert(s_typ < resolve::PrimitiveType::FirstFloat);
 	}
 
-	fatalError("Invalid coercion between types.");
+	assert("Invalid coercion between types." == 0);
 	return nullptr;
 }
 
@@ -591,7 +591,8 @@ Value* Generator::genField(resolve::FieldExpr& expr) {
 			} else if(var->isEnum) {
 				return builder.CreateCast(Instruction::ZExt, genExpr(expr.container), builder.getInt32Ty());
 			} else {
-				auto con = builder.CreateLoad(builder.CreateStructGEP(genExpr(expr.container), (U32)index));
+                auto e = genExpr(expr.container);
+				auto con = builder.CreateLoad(builder.CreateStructGEP(e->getType(), e, (U32)index));
 				return builder.CreateCast(Instruction::ZExt, con, builder.getInt32Ty());
 			}
 		} else {
@@ -603,7 +604,8 @@ Value* Generator::genField(resolve::FieldExpr& expr) {
 	} else {
 		auto container = genExpr(expr.container);
 		if(container->getType()->isPointerTy()) {
-			return builder.CreateStructGEP(container, expr.field->index);
+            auto atype = ((PointerType*)container->getType())->getContainedType(0);
+			return builder.CreateStructGEP(atype, container, expr.field->index);
 		} else {
             assert(container->getType()->isAggregateType());
 			return builder.CreateExtractValue(container, expr.field->index);
@@ -651,15 +653,16 @@ Value* Generator::genConstruct(resolve::ConstructExpr& expr) {
 			// Set the constructor index.
 			auto last = stype->getStructNumElements() - 1;
 			auto conIndex = ConstantInt::get(stype->getStructElementType(last), expr.con->index, false);
-			auto idPointer = builder.CreateStructGEP(pointer, last);
+			auto idPointer = builder.CreateStructGEP(stype, pointer, last);
 			builder.CreateStore(conIndex, idPointer);
 
 			// Set the constructor-specific data, if any.
 			if(expr.args.size()) {
-				auto conData = builder.CreatePointerCast(pointer, PointerType::getUnqual(((TypeData*)expr.con->codegen)->llType));
+                auto aggType = (TypeData*)expr.con->codegen;
+				auto conData = builder.CreatePointerCast(pointer, PointerType::getUnqual(aggType->llType));
 				if(expr.args.size() > 1) {
-					for (auto &i : expr.args) {
-						auto argPointer = builder.CreateStructGEP(conData, i.index);
+					for(auto &i : expr.args) {
+						auto argPointer = builder.CreateStructGEP(aggType->llType, conData, i.index);
 						builder.CreateStore(genExpr(i.expr), argPointer);
 					}
 				} else {
@@ -670,7 +673,7 @@ Value* Generator::genConstruct(resolve::ConstructExpr& expr) {
 			return pointer;
 		}
 	} else {
-		debugError("Not implemented");
+		assert("Not implemented" == 0);
 		return nullptr;
 	}
 }
@@ -725,7 +728,7 @@ Value* Generator::genLazyCond(resolve::PrimitiveOp op, resolve::ExprRef lhs, res
 	return result;
 }
 
-TypeData* Generator::genLlvmType(resolve::TypeRef type) {
+TypeData* Generator::genLlvmType(resolve::Type* type) {
 	TypeData* data = new TypeData;
 	data->data = nullptr;
 	if(type->isUnit()) {data->llType = builder.getVoidTy(); return data;}
@@ -746,7 +749,7 @@ TypeData* Generator::genLlvmType(resolve::TypeRef type) {
 			case resolve::PrimitiveType::F16: data->llType = builder.getHalfTy(); break;
 
 			case resolve::PrimitiveType::Bool: data->llType = builder.getInt1Ty(); break;
-			default: fatalError("Unsupported primitive type."); return nullptr;
+			default: assert("Unsupported primitive type." == 0); return nullptr;
 		}
 		return data;
 	} else if(type->isPointer()) {
@@ -785,16 +788,16 @@ TypeData* Generator::genLlvmType(resolve::TypeRef type) {
 				auto fCount = con->contents.size();
 				if(fCount) {
 					auto s = getType(con->dataType);
-					auto dl = module.getDataLayout();
-					auto align = dl->getPrefTypeAlignment(s->llType);
-					auto size = dl->getTypeAllocSize(s->llType);
+					auto& dl = module.getDataLayout();
+					auto align = dl.getPrefTypeAlignment(s->llType);
+					auto size = dl.getTypeAllocSize(s->llType);
 					if(align > totalAlignment || (align == totalAlignment && size > totalSize)) {
 						totalAlignment = align;
 						baseType = s->llType;
 						baseSize = (U32)size;
 					}
 
-					totalSize = Tritium::Math::max(totalSize, (U32)size);
+					totalSize = totalSize > size ? totalSize : (U32)size;
 					con->codegen = s;
 				} else {
 					con->codegen = nullptr;
@@ -827,7 +830,7 @@ TypeData* Generator::genLlvmType(resolve::TypeRef type) {
 		return data;
 	}
 
-	fatalError("Unsupported type.");
+	assert("Unsupported type." == 0);
 	return nullptr;
 }
 

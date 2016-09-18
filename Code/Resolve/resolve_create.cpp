@@ -17,17 +17,17 @@ Expr* Resolver::createBool(bool b) {
 
 Expr* Resolver::createInt(int i) {
     Literal lit;
-    lit.i = (U32)i; // The code generator makes no distinction between signed and unsigned.
+    lit.i = (Size)i; // The code generator makes no distinction between signed and unsigned.
     lit.type = Literal::Int;
     return build<LitExpr>(lit, types.getInt());
 }
 
 Expr* Resolver::createCompare(Scope& scope, ExprRef left, ExprRef right) {
-    return resolveBinaryCall(scope, context.AddUnqualifiedName({"=="}), left, right);
+    return resolveBinaryCall(scope, context.addUnqualifiedName({"=="}), left, right);
 }
 
 Expr* Resolver::createIf(ExprRef cond, ExprRef then, Expr* otherwise, bool used) {
-    return createIf(IfConds{IfCond{nullptr, (Expr*)&cond}}, then, otherwise, used, CondMode::And);
+    return createIf(IfConds{IfCond{nullptr, &cond}}, then, otherwise, used, CondMode::And);
 }
 
 Expr* Resolver::createIf(IfConds&& conds, ExprRef then_, Expr* otherwise_, bool used, CondMode mode) {
@@ -64,7 +64,7 @@ Expr* Resolver::createIf(IfConds&& conds, ExprRef then_, Expr* otherwise_, bool 
         }
     }
 
-    auto expr = build<IfExpr>(move(conds), *then, otherwise, type, used, mode);
+    auto expr = build<IfExpr>(std::move(conds), *then, otherwise, type, used, mode);
     if(!otherwise && used && !expr->alwaysTrue) {
         error("this expression may not return a value");
     }

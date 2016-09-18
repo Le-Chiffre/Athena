@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "parser.h"
 #include "lexer.h"
 
@@ -25,7 +26,7 @@ inline Literal toLiteral(Token& tok) {
             l.s = tok.data.id;
             l.type = Literal::String;
             break;
-        default: fatalError("Invalid literal type.");
+        default: assert("Invalid literal type." == 0);
     }
 	return l;
 }
@@ -83,12 +84,12 @@ Decl* Parser::parseFunDecl() {
 		TupleType* args = nullptr;
 		if(token == Token::VarID) {
 			// Parse zero or more argument names.
-			args = new(buffer) TupleType(many1([=]() -> Maybe<TupleField> {
+			args = new(buffer) TupleType(many1([=]() -> TupleField* {
 				if(token == Token::VarID) {
 					auto id = token.data.id;
 					eat();
-					return Just(TupleField{nullptr, Just(id), nullptr});
-				} else return Nothing();
+					return new(buffer) TupleField{nullptr, Just(id), nullptr};
+				} else return nullptr;
 			}));
 		} else if(token == Token::BracketL) {
 			// Parse the function arguments as a tuple.
@@ -214,7 +215,7 @@ void Parser::parseForeignDecl() {
 			// Optional calling convention. Otherwise, default to ccall.
 			auto convention = ForeignConvention::CCall;
 			if(token == Token::VarID) {
-				auto& name = lexer.GetContext().Find(token.data.id);
+				auto& name = lexer.context.find(token.data.id);
 				if(name.name == "ccall") {
 					convention = ForeignConvention::CCall;
 				} else if(name.name == "stdcall") {
@@ -260,30 +261,6 @@ void Parser::parseForeignDecl() {
 	} else {
 		error("expected 'foreign'.");
 	}
-}
-
-void Parser::parseShaderDecl() {
-    if(token == Token::kwResource) {
-        eat();
-        if(token == Token::VarID) {
-            auto name = token.data.id;
-            eat();
-            if(token == Token::opColon) {
-                eat();
-                if(token == Token::ConID) {
-
-                } else {
-                    error("expected resource type");
-                }
-            } else {
-                error("expected ':'");
-            }
-        } else {
-            error("expected resource name");
-        }
-    } else {
-        error("expected 'resource'");
-    }
 }
 
 Expr* Parser::parseExpr() {
@@ -460,12 +437,12 @@ Expr* Parser::parseLeftExpr() {
 		bool isCase = false;
 		if(token == Token::VarID) {
 			// Parse zero or more argument names.
-			args = new(buffer) TupleType(many1([=]() -> Maybe<TupleField> {
+			args = new(buffer) TupleType(many1([=]() -> TupleField* {
 				if(token == Token::VarID) {
 					auto id = token.data.id;
 					eat();
-					return Just(TupleField{nullptr, Just(id), nullptr});
-				} else return Nothing();
+					return new(buffer) TupleField{nullptr, Just(id), nullptr};
+				} else return nullptr;
 			}));
 		} else if(token == Token::BracketL) {
 			// Parse the function arguments as a tuple.
@@ -723,35 +700,35 @@ void Parser::parseFixity() {
 }
 
 void Parser::addFixity(Fixity f) {
-	if(token == Token::VarSym) {
-		Fixity* pf;
-		if(module.operators.addGet(token.data.id, pf)) {
-			error("This operator has already had its precedence defined.");
-		} else {
-			*pf = f;
-			eat();
-		}
-	} else {
-		error("Expected one or more operators after a fixity declaration or ','.");
-	}
+    if(token == Token::VarSym) {
+        Fixity* pf;
+        if(module.operators.addGet(token.data.id, pf)) {
+            error("This operator has already had its precedence defined.");
+        } else {
+            *pf = f;
+            eat();
+        }
+    } else {
+        error("Expected one or more operators after a fixity declaration or ','.");
+    }
 }
 
-Maybe<Alt> Parser::parseAlt() {
+Alt* Parser::parseAlt() {
 	/*
 	 * alt	→	pat -> exp [where decls]
 	 * 		|	pat gdpat [where decls]
 	 * 		|		    					(empty alternative)
 	 */
 	auto pat = parsePattern();
-	if(!pat) return Nothing();
+	if(!pat) return nullptr;
 
 	if(token == Token::opArrowR) eat();
-	else {error("expected '->'"); return Nothing();}
+	else {error("expected '->'"); return nullptr;}
 
 	auto exp = parseTypedExpr();
-	if(!exp) return Nothing();
+	if(!exp) return nullptr;
 
-	return Just(Alt{pat, exp});
+	return new (buffer) Alt{pat, exp};
 }
 
 Maybe<Id> Parser::parseVar() {
@@ -824,8 +801,8 @@ Type* Parser::parseType() {
 
 Type* Parser::parseAType() {
 	if(token == Token::VarSym) {
-		auto name = lexer.GetContext().Find(token.data.id).name;
-		if(name.size() == 1 && name.text()[0] == kPointerSigil) {
+		auto name = lexer.context.find(token.data.id).name;
+		if(name.length() == 1 && name.c_str()[0] == kPointerSigil) {
 			eat();
 			if(auto type = parseAType()) {
 				type->kind = Type::Ptr;
@@ -862,13 +839,13 @@ SimpleType* Parser::parseSimpleType() {
 	if(token == Token::ConID) {
 		auto id = token.data.id;
 		eat();
-		return new(buffer) SimpleType(id, many([=]() -> Maybe<ID> {
+		return new(buffer) SimpleType(id, many([=]() -> Id* {
 			if(token == Token::VarID) {
 				auto id = token.data.id;
                 eat();
-                return Just(id);
+                return new (buffer) Id(id);
 			} else {
-				return Nothing();
+				return nullptr;
 			}
 		}));
 	} else {
@@ -903,7 +880,7 @@ Expr* Parser::parseTupleConstruct() {
 	else return error("Expected one or more tuple fields");
 }
 
-Maybe<TupleField> Parser::parseTupleField() {
+TupleField* Parser::parseTupleField() {
     /*
      * tupfield →   varid [type]
      *          |   varid [= typedexpr]
@@ -930,12 +907,12 @@ Maybe<TupleField> Parser::parseTupleField() {
         def = parseTypedExpr();
     }
 
-	if(!type && !def) return Nothing();
+	if(!type && !def) return nullptr;
 
-    return Just(TupleField{type, name, def});
+    return new (buffer) TupleField{type, name, def};
 }
 
-Maybe<TupleField> Parser::parseTupleConstructField() {
+TupleField* Parser::parseTupleConstructField() {
 	/*
      * tupcfield 	→  typedexpr
      *          	|   varid [= typedexpr]
@@ -959,8 +936,8 @@ Maybe<TupleField> Parser::parseTupleConstructField() {
 		def = parseTypedExpr();
 	}
 
-	if(!def) return Nothing();
-	return Just(TupleField{nullptr, name, def});
+	if(!def) return nullptr;
+	return new (buffer) TupleField{nullptr, name, def};
 }
 
 Field* Parser::parseField() {
@@ -1061,7 +1038,7 @@ Pattern* Parser::parseLeftPattern() {
 		return new(buffer) ConPattern(id, nullptr);
 	} else if(token == Token::BracketL) {
 		auto expr = between([=] {
-			return sepBy([=]() -> Maybe<FieldPat> {
+			return sepBy([=]() -> FieldPat* {
 				Maybe<Id> name = Nothing();
 				Pattern* pat = nullptr;
 
@@ -1079,8 +1056,8 @@ Pattern* Parser::parseLeftPattern() {
 					pat = parsePattern();
 				}
 
-				if(!pat) return Nothing();
-				return Just(FieldPat{name, pat});
+				if(!pat) return nullptr;
+				return new (buffer) FieldPat{name, pat};
 			}, Token::Comma);
 		}, Token::BracketL, Token::BracketR);
 		return new(buffer) TupPattern(expr);

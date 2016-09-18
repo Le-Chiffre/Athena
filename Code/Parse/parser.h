@@ -3,18 +3,18 @@
 
 #include "ast.h"
 #include "lexer.h"
-#include <Mem/StaticBuffer.h>
+#include "../General/mem.h"
 
 namespace athena {
 namespace ast {
 
 struct SourcePos {
-	String file;
+	const std::string& file;
 	U32 line;
 	U32 column;
 };
 
-inline SourcePos initialPos(const String& file) {return {file, 1, 1};}
+inline SourcePos initialPos(const std::string& file) {return {file, 1, 1};}
 
 inline SourcePos updatePos(char c, SourcePos pos) {
 	if(c == '\n') {
@@ -29,14 +29,10 @@ inline SourcePos updatePos(char c, SourcePos pos) {
 	return pos;
 }
 
-inline SourcePos updateStringPos(SourcePos pos, const String& string) {
-	return fold(updatePos, pos, string);
-}
-
 struct Parser {
 	static const char kPointerSigil = '*';
 
-	Parser(CompileContext& context, Module& module, const char* text) : module(module), lexer(context, text, &token), buffer(4*1024*1024) {lexer.Next();}
+	Parser(CompileContext& context, Diagnostics& diag, Module& module, const char* text) : module(module), diag(diag), lexer(context, diag, text, &token), buffer(4*1024*1024) {lexer.next();}
 
 	void parseModule();
 	void parseDecl();
@@ -44,7 +40,6 @@ struct Parser {
 	void parseDataDecl();
 	void parseTypeDecl();
 	void parseForeignDecl();
-    void parseShaderDecl();
 
 	Expr* parseExpr();
 	Expr* parseTypedExpr();
@@ -65,15 +60,15 @@ struct Parser {
 	Expr* parseVarDecl(bool constant);
 	Expr* parseDeclExpr(bool constant);
 	void parseFixity();
-	Maybe<Alt> parseAlt();
+	Alt* parseAlt();
 	Maybe<Id> parseVar();
 	Maybe<Id> parseQop();
 
 	Type* parseType();
 	Type* parseAType();
 	SimpleType* parseSimpleType();
-    Maybe<TupleField> parseTupleField();
-	Maybe<TupleField> parseTupleConstructField();
+    TupleField* parseTupleField();
+	TupleField* parseTupleConstructField();
 	Type* parseTupleType();
 	Expr* parseTupleConstruct();
 	Field* parseField();
@@ -86,7 +81,7 @@ struct Parser {
 	void addFixity(Fixity f);
 	Expr* error(const char* text);
 
-	void eat() {lexer.Next();}
+	void eat() {lexer.next();}
 
 	template<class T> auto list(const T& t) {return new(buffer) ASTList<T>(t);}
 	template<class T> auto listE(const T& t) {return list(getListElem(t));}
@@ -217,6 +212,7 @@ struct Parser {
 	}
 
 	Module& module;
+    Diagnostics& diag;
 	Token token;
 	Lexer lexer;
 	Tritium::StaticBuffer buffer;

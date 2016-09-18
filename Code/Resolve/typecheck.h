@@ -2,7 +2,7 @@
 #define Athena_Resolve_typecheck_h
 
 #include "resolve_ast.h"
-#include "../General/diagnostic.h"
+#include "../General/compiler.h"
 
 namespace athena {
 namespace resolve {
@@ -12,7 +12,7 @@ struct TypeCheck {
 		return compatible(src.type, dst.type);
 	}
 
-	bool compatible(ExprRef src, TypeRef dst) {
+	bool compatible(ExprRef src, Type* dst) {
 		if(compatible(src.type, dst)) {
 			return true;
 		} else if(auto l = findLiteral(src)) {
@@ -23,19 +23,19 @@ struct TypeCheck {
 		}
 	}
 
-	bool compatible(TypeRef src, TypeRef dst) {
+	bool compatible(Type* src, Type* dst) {
 		return src == dst || implicitCoerce(src, dst, Nothing());
 	}
 
 	/// Returns true if the source type can be implicitly converted to the target type.
 	/// @param diag The diagnostics engine to use if an error should be produced.
-	bool implicitCoerce(TypeRef source, TypeRef target, Maybe<Diagnostics*> diag);
+	bool implicitCoerce(Type* source, Type* target, Maybe<Diagnostics*> diag);
 
 	/// Checks if the source literal can be implicitly converted to the target type.
 	/// @param diag The diagnostics engine to use if an error should be produced.
 	/// @return True if the literal can be converted.
-	bool literalCoerce(const ast::Literal& lit, TypeRef dst, Literal& target, Maybe<Diagnostics*> diag);
-	bool literalCoerce(const Literal& lit, TypeRef dst, Maybe<Diagnostics*> diag);
+	bool literalCoerce(const ast::Literal& lit, Type* dst, Literal& target, Maybe<Diagnostics*> diag);
+	bool literalCoerce(const Literal& lit, Type* dst, Maybe<Diagnostics*> diag);
 };
 
 }} // namespace athena::resolve

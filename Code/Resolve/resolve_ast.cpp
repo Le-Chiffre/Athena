@@ -48,7 +48,7 @@ inline T* findHelper(Scope* scope, Tritium::Map<Id, T> Scope::*map, Id name) {
     return nullptr;
 }
 
-TypeRef Scope::findType(Id name) { auto t = findHelper(this, &Scope::types, name); return t ? *t : nullptr; }
+Type* Scope::findType(Id name) { auto t = findHelper(this, &Scope::types, name); return t ? *t : nullptr; }
 VarConstructor* Scope::findConstructor(Id name) { return findHelper(this, &Scope::constructors, name); }
 
 bool Scope::hasVariables() {
@@ -83,12 +83,12 @@ bool succeedsAlways(const IfConds& conds, CondMode mode) {
     } else return true;
 }
 
-IfExpr::IfExpr(IfConds&& conds, ExprRef then, Expr* otherwise, TypeRef type, bool ret, CondMode mode) :
+IfExpr::IfExpr(IfConds&& conds, ExprRef then, Expr* otherwise, Type* type, bool ret, CondMode mode) :
         Expr(If, type), conds(conds), then(then), otherwise(otherwise), mode(mode), returnResult(ret) {
     alwaysTrue = succeedsAlways(conds, mode);
 }
 
-IfExpr::IfExpr(IfConds&& conds, ExprRef then, Expr* otherwise, TypeRef type, bool ret, CondMode mode, bool alwaysTrue) :
+IfExpr::IfExpr(IfConds&& conds, ExprRef then, Expr* otherwise, Type* type, bool ret, CondMode mode, bool alwaysTrue) :
         Expr(If, type), conds(conds), then(then), otherwise(otherwise), mode(mode), returnResult(ret), alwaysTrue(alwaysTrue) {
 }
 

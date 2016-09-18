@@ -9,8 +9,8 @@
 namespace athena {
 namespace gen {
 
-inline llvm::StringRef toRef(String str) {
-	return {str.text(), str.size()};
+inline llvm::StringRef toRef(const std::string& str) {
+	return {str.c_str(), str.length()};
 }
 
 struct SaveInsert {
@@ -46,7 +46,7 @@ struct Generator {
 	llvm::Function* genFunctionDecl(resolve::FunctionDecl& function);
 	llvm::BasicBlock* genScope(resolve::Scope& scope);
 	llvm::Value* genExpr(resolve::ExprRef expr);
-	llvm::Value* genLiteral(resolve::Literal& literal, resolve::TypeRef type);
+	llvm::Value* genLiteral(resolve::Literal& literal, resolve::Type* type);
 	llvm::Value* genVar(resolve::Variable& var);
 	llvm::Value* genAssign(resolve::AssignExpr& assign);
 	llvm::Value* genLoad(resolve::Expr& target);
@@ -75,7 +75,7 @@ struct Generator {
 		return builder.GetInsertBlock()->getParent();
 	}
 
-	TypeData* getType(resolve::TypeRef type) {
+	TypeData* getType(resolve::Type* type) {
 		if(!type->codegen) {
 			type->codegen = genLlvmType(type);
 		}
@@ -101,7 +101,7 @@ struct Generator {
 	}
 
 private:
-	TypeData* genLlvmType(resolve::TypeRef type);
+	TypeData* genLlvmType(resolve::Type* type);
 
 	llvm::LLVMContext& context;
 	llvm::Module& module;

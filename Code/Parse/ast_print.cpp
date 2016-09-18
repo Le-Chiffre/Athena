@@ -1,4 +1,5 @@
 
+#include <sstream>
 #include "ast.h"
 #include "lexer.h"
 #include "parser.h"
@@ -9,7 +10,7 @@ namespace ast {
 struct Printer {
 	Printer(CompileContext& context) : context(context) {}
 
-	StringBuilder toString(const Expr& expr) {
+	std::string toString(const Expr& expr) {
 		switch(expr.type) {
             case Expr::Unit: string << "UnitExpr"; break;
 			case Expr::Multi: toString((const MultiExpr&)expr); break;
@@ -32,20 +33,20 @@ struct Printer {
 			case Expr::Format: toString((const FormatExpr&)expr); break;
 			case Expr::Case: toString((const CaseExpr&)expr); break;
 		}
-		return string;
+		return string.str();
 	}
 
-    StringBuilder toString(DeclRef decl) {
+	std::string toString(DeclRef decl) {
 		switch(decl.kind) {
 			case Decl::Function: toString((const FunDecl&)decl); break;
 			case Decl::Type: toString((const TypeDecl&)decl); break;
 			case Decl::Data: toString((const DataDecl&)decl); break;
 			case Decl::Foreign: toString((const ForeignDecl&)decl); break;
 		}
-		return string;
+		return string.str();
 	}
 
-    StringBuilder toString(ModuleRef mod) {
+	std::string toString(ModuleRef mod) {
 		string << "Module ";
 		Size max = mod.declarations.size();
 		if(max) {
@@ -56,7 +57,7 @@ struct Printer {
 			toString(*mod.declarations[max-1], true);
 			removeLevel();
 		}
-		return string;
+		return string.str();
 	}
 
 private:
@@ -94,8 +95,7 @@ private:
 		makeLevel();
 		auto expr = e.exprs;
 		while(expr) {
-			if(expr->next) toString(*expr->item, false);
-			else toString(*expr->item, true);
+            toString(*expr->item, expr->next == nullptr);
 			expr = expr->next;
 		}
 		removeLevel();
@@ -107,19 +107,17 @@ private:
 		char buffer[32];
 		switch(e.literal.type) {
 			case Literal::Int:
-				Tritium::show(e.literal.i, buffer, 32);
-				string << &buffer[0];
+                string << e.literal.i;
 				break;
 			case Literal::Float:
-                Tritium::show(e.literal.f, buffer, 32);
-				string << &buffer[0];
+                string << e.literal.f;
 				break;
 			case Literal::Char:
 				string << e.literal.c;
 				break;
 			case Literal::String: {
 				string << '"';
-				auto name = context.Find(e.literal.s).name;
+				auto name = context.find(e.literal.s).name;
 				string << name;
 				string << '"';
 				break;
@@ -133,8 +131,8 @@ private:
 
 	void toString(const VarExpr& e) {
 		string << "VarExpr ";
-		auto name = context.Find(e.name).name;
-		string << name;
+		auto name = context.find(e.name).name;
+		string << (name);
 	};
 
 	void toString(const AppExpr& e) {
@@ -143,17 +141,16 @@ private:
 		toString(*e.callee, false);
 		auto arg = e.args;
 		while(arg) {
-			if(arg->next) toString(*arg->item, false);
-			else toString(*arg->item, true);
+			toString(*arg->item, arg->next == nullptr);
 			arg = arg->next;
 		}
 		removeLevel();
 	}
 
 	void toString(const InfixExpr& e) {
-		string << "InfixExpr ";
-		auto name = context.Find(e.op).name;
-		string << name;
+		string << ("InfixExpr ");
+		auto name = context.find(e.op).name;
+		string << (name);
 		makeLevel();
 		toString(*e.lhs,  false);
 		toString(*e.rhs, true);
@@ -161,16 +158,16 @@ private:
 	}
 
 	void toString(const PrefixExpr& e) {
-		string << "PrefixExpr ";
-		auto name = context.Find(e.op).name;
-		string << name;
+		string << ("PrefixExpr ");
+		auto name = context.find(e.op).name;
+		string << (name);
 		makeLevel();
 		toString(*e.dst, true);
 		removeLevel();
 	}
 
 	void toString(const IfExpr& e) {
-		string << "IfExpr ";
+		string << ("IfExpr ");
 		makeLevel();
 		toString(*e.cond, false);
 		if(e.otherwise) {
@@ -183,33 +180,32 @@ private:
 	}
 
 	void toString(const MultiIfExpr& e) {
-		string << "MultiIfExpr ";
+		string << ("MultiIfExpr ");
 		makeLevel();
 		auto a = e.cases;
 		while(a) {
-			if(a->next) toString(*a->item, false);
-			else toString(*a->item, true);
+			toString(*a->item, a->next == nullptr);
 			a = a->next;
 		}
 		removeLevel();
 	}
 
 	void toString(const DeclExpr& e) {
-		string << "DeclExpr ";
-		auto name = context.Find(e.name).name;
-		string << name;
-		if(e.constant) string << " <const> ";
+		string << ("DeclExpr ");
+		auto name = context.find(e.name).name;
+		string << (name);
+		if(e.constant) string << (" <const> ");
 		if(e.content) {
 			makeLevel();
 			toString(*e.content, true);
 			removeLevel();
 		} else {
-			string << " <empty> ";
+			string << (" <empty> ");
 		}
 	}
 
 	void toString(const WhileExpr& e) {
-		string << "WhileExpr";
+		string << ("WhileExpr");
 		makeLevel();
 		toString(*e.cond, false);
 		toString(*e.loop, true);
@@ -217,7 +213,7 @@ private:
 	}
 
 	void toString(const AssignExpr& e) {
-		string << "AssignExpr ";
+		string << ("AssignExpr ");
 		makeLevel();
 		toString(*e.target, false);
 		toString(*e.value, true);
@@ -225,24 +221,24 @@ private:
 	}
 
 	void toString(const NestedExpr& e) {
-		string << "NestedExpr ";
+		string << ("NestedExpr ");
 		makeLevel();
 		toString(*e.expr, true);
 		removeLevel();
 	}
 
 	void toString(const CoerceExpr& e) {
-		string << "CoerceExpr ";
-		string << '(';
+		string << ("CoerceExpr ");
+		string << ('(');
 		toString(e.kind);
-		string << ')';
+		string << (')');
 		makeLevel();
 		toString(*e.target, true);
 		removeLevel();
 	}
 
 	void toString(const FieldExpr& e) {
-		string << "FieldExpr ";
+		string << ("FieldExpr ");
 		makeLevel();
 		toString(*e.field, false);
 		toString(*e.target, true);
@@ -250,19 +246,19 @@ private:
 	}
 
 	void toString(const ConstructExpr& e) {
-		string << "ConstructExpr ";
+		string << ("ConstructExpr ");
 		//auto name = context.Find(e.name).name;
 		//string.Append(name.ptr, name.length);
 	}
 
 	void toString(const TupleConstructExpr& e) {
-		string << "TupleConstructExpr ";
+		string << ("TupleConstructExpr ");
 		//auto name = context.Find(e.name).name;
 		//string.Append(name.ptr, name.length);
 	}
 
 	void toString(const FormatExpr& e) {
-		string << "FormatExpr ";
+		string << ("FormatExpr ");
 		makeLevel();
 		auto chunk = &e.format;
 		while(chunk) {
@@ -273,30 +269,29 @@ private:
 	}
 
 	void toString(const CaseExpr& e) {
-		string << "CaseExpr ";
+		string << ("CaseExpr ");
 		makeLevel();
 		auto a = e.alts;
 		while(a) {
-			if(a->next) toString(a->item, false);
-			else toString(a->item, true);
+			toString(*a->item, a->next == nullptr);
 			a = a->next;
 		}
 		removeLevel();
 	}
 
 	void toString(const LamExpr& e) {
-		string << "LamExpr (";
+		string << ("LamExpr (");
 		if(e.args) {
 			auto arg = e.args->fields;
 			while(arg) {
-				String name = arg->item.name ? context.Find(arg->item.name.force()).name : "<unnamed>";
+				auto name = arg->item->name ? context.find(arg->item->name.force()).name : "<unnamed>";
 
-				string << name;
-				if(arg->next) string << ", ";
+				string << (name);
+				if(arg->next) string << (", ");
 				arg = arg->next;
 			}
 		}
-		string << ')';
+		string << (')');
 
 		makeLevel();
 		toString(*e.body, true);
@@ -305,26 +300,26 @@ private:
 
 	void toString(const Alt& alt, bool last) {
 		toStringIntro(last);
-		string << "alt: ";
+		string << ("alt: ");
 		toString(*alt.expr);
 	}
 
 	void toString(const FunDecl& e) {
-		string << "FunDecl ";
-		auto name = context.Find(e.name).name;
-		string << name;
-		string << '(';
+		string << ("FunDecl ");
+		auto name = context.find(e.name).name;
+		string << (name);
+		string << ('(');
 		if(e.args) {
 			auto arg = e.args->fields;
 			while(arg) {
-                String name1 = arg->item.name ? context.Find(arg->item.name.force()).name : "<unnamed>";
+                auto name1 = arg->item->name ? context.find(arg->item->name.force()).name : "<unnamed>";
 
-				string << name1;
-				if(arg->next) string << ", ";
+				string << (name1);
+				if(arg->next) string << (", ");
 				arg = arg->next;
 			}
 		}
-		string << ')';
+		string << (')');
 
 		if(e.body) {
 			makeLevel();
@@ -334,42 +329,41 @@ private:
 	}
 
 	void toString(const TypeDecl& e) {
-		string << "TypeDecl ";
-		auto name = context.Find(e.type->name).name;
-		string << name;
-		string << " = ";
+		string << ("TypeDecl ");
+		auto name = context.find(e.type->name).name;
+		string << (name);
+		string << (" = ");
 		toString(e.target);
 	}
 
 	void toString(const DataDecl& e) {
-		string << "DataDecl ";
+		string << ("DataDecl ");
 		toString(*e.type);
 		makeLevel();
 		auto con = e.constrs;
 		while(con) {
-			if(con->next) toString(*con->item, false);
-			else toString(*con->item, true);
+			toString(*con->item, con->next == nullptr);
 			con = con->next;
 		}
 		removeLevel();
 	}
 
 	void toString(const ForeignDecl& e) {
-		string << "ForeignDecl ";
-		auto name = context.Find(e.importedName).name;
-		string << name;
-		string << " : ";
+		string << ("ForeignDecl ");
+		auto name = context.find(e.importedName).name;
+		string << (name);
+		string << (" : ");
 		toString(e.type);
 	}
 
 	void toString(const Field& f, bool last) {
 		toStringIntro(last);
 
-		string << "Field ";
-		auto name = context.Find(f.name).name;
-		string << name;
-		string << ' ';
-		if(f.constant) string << "<const> ";
+		string << ("Field ");
+		auto name = context.find(f.name).name;
+		string << (name);
+		string << (' ');
+		if(f.constant) string << ("<const> ");
 		if(f.type) {
 			toString(f.type);
 		} else {
@@ -380,7 +374,7 @@ private:
 	}
 
 	void toString(const FormatChunk& f, bool last) {
-		auto name = context.Find(f.string).name;
+		auto name = context.find(f.string).name;
 		if(f.format) {
 			toString(*f.format, name.size() ? false : last);
 		}
@@ -395,7 +389,7 @@ private:
 
 	void toString(const IfCase& c, bool last) {
 		toStringIntro(last);
-		string << "IfCase ";
+		string << ("IfCase ");
 		makeLevel();
 		toString(*c.cond, false);
 		toString(*c.then, true);
@@ -403,7 +397,7 @@ private:
 	}
 
 	void toString(const SimpleType& t) {
-		auto name = context.Find(t.name).name;
+		auto name = context.find(t.name).name;
 		if(name.size()) {
 			string << name;
 			string << ' ';
@@ -411,7 +405,7 @@ private:
 	}
 
 	void toString(const Constr& c, bool last) {
-		auto name = context.Find(c.name).name;
+		auto name = context.find(c.name).name;
 		if(name.size()) {
 			toStringIntro(last);
 			string << "Constructor ";
@@ -422,7 +416,7 @@ private:
 	void toStringIntro(bool last) {
 		string << '\n';
 		makeIndent(last);
-		string.append(indentStack, indentStart);
+		string.write(indentStack, indentStart);
 	}
 
 	void toString(const Expr& expr, bool last) {
@@ -436,23 +430,23 @@ private:
 	}
 
 	void toString(TypeRef type) {
-		string << "type: ";
+		string << ("type: ");
 		if(type->kind == Type::Unit) {
-			string << "()";
+			string << ("()");
 		} else if(type->kind == Type::Tup){
-			string << "tuple";
+			string << ("tuple");
 		} else if(type->kind == Type::Fun) {
-			string << "fun";
+			string << ("fun");
 		} else if(type->kind == Type::App) {
-			string << "app ";
+			string << ("app ");
 			toString(((AppType*)type)->base);
 		} else {
 			if(type->kind == Type::Ptr) {
-                string << Parser::kPointerSigil;
+                string << (Parser::kPointerSigil);
             }
 
-			auto name = context.Find(type->con).name;
-			string << name;
+			auto name = context.find(type->con).name;
+			string << (name);
 		}
 	}
 
@@ -460,20 +454,20 @@ private:
 	U32 indentStart = 0;
 
 	CompileContext& context;
-    StringBuilder string;
+	std::ostringstream string;
 };
 
-StringBuilder toString(const Expr& e, CompileContext& c) {
+std::string toString(const Expr& e, CompileContext& c) {
 	Printer p{c};
 	return p.toString(e);
 }
 
-StringBuilder toString(DeclRef d, CompileContext& c) {
+std::string toString(DeclRef d, CompileContext& c) {
 	Printer p{c};
 	return p.toString(d);
 }
 
-StringBuilder toString(ModuleRef m, CompileContext& c) {
+std::string toString(ModuleRef m, CompileContext& c) {
 	Printer p{c};
 	return p.toString(m);
 }

@@ -4,14 +4,14 @@
 namespace athena {
 namespace resolve {
 
-inline TypeRef getLiteralType(TypeManager& m, const Literal& l) {
+inline Type* getLiteralType(TypeManager& m, const Literal& l) {
 	switch(l.type) {
 		case Literal::Int: return m.getInt();
 		case Literal::Float: return m.getFloat();
 		case Literal::Char: return m.getU8();
 		case Literal::String: return m.getString();
 		case Literal::Bool: return m.getBool();
-		default: fatalError("Unknown literal type."); return nullptr;
+		default: assert("Unknown literal type." == 0); return nullptr;
 	}
 }
 
@@ -57,7 +57,7 @@ Expr* Resolver::resolveExpression(Scope& scope, ast::ExprRef expr, bool used) {
 		case ast::Expr::Case:
 			return resolveCase(scope, *(ast::CaseExpr*)expr, used);
 		default:
-			fatalError("Unsupported expression type.");
+			assert("Unsupported expression type." == 0);
 	}
 
 	return nullptr;
@@ -71,7 +71,7 @@ Expr* Resolver::resolveMulti(Scope& scope, ast::MultiExpr& expr, bool used) {
 		es << this->resolveExpression(scope, e->item, e->next ? false : used);
 		e = e->next;
 	}
-	return build<MultiExpr>(move(es));
+	return build<MultiExpr>(std::move(es));
 }
 
 Expr* Resolver::resolveLiteral(Scope& scope, ast::Literal& literal) {
@@ -197,7 +197,7 @@ Expr* Resolver::resolveCall(Scope& scope, ast::AppExpr& expr) {
 			}
 			return build<GenAppExpr>(name, args, build<GenType>(0));
 		} else {
-			debugError("Not implemented");
+			assert("Not implemented" == 0);
 			return nullptr;
 		}
 	}
@@ -237,7 +237,7 @@ Expr* Resolver::resolveVar(Scope& scope, Id name) {
 			return build<AppExpr>(*fun, nullptr);
 		} else {
 			// No variable or function was found; we are out of luck.
-			error("could not find a function or variable named '%@'", context.Find(name).name);
+			error("could not find a function or variable named '%@'", context.find(name).name);
 			return nullptr;
 		}
 	}
@@ -268,7 +268,7 @@ Expr* Resolver::resolveDecl(Scope& scope, ast::DeclExpr& expr) {
 	// If the caller knows the type of this variable, it must be the same as the assigned content.
 	// If no content is provided, the variable will be unusable until it is explicitly assigned.
 	Expr* content = nullptr;
-	TypeRef type;
+	Type* type;
 	if(expr.content) {
 		content = getRV(*resolveExpression(scope, expr.content, true));
 		type = content->type;
@@ -442,7 +442,7 @@ Expr* Resolver::resolveConstruct(Scope& scope, ast::ConstructExpr& expr) {
 		// Primitive types other than Bool have a single constructor of the same name.
 		// Bool has the built-in constructors True and False.
 		if(type->isBool()) {
-			auto name = context.Find(expr.type->con).name;
+			auto name = context.find(expr.type->con).name;
 
 			Literal lit;
 			lit.type = Literal::Bool;
@@ -508,15 +508,15 @@ Expr* Resolver::resolveConstruct(Scope& scope, ast::ConstructExpr& expr) {
 
 Expr* Resolver::resolveAnonConstruct(Scope& scope, ast::TupleConstructExpr& expr) {
 	// Generate a hash for the fields.
-	Tritium::Hasher h;
+	Hasher h;
 	auto f = expr.args;
 	auto con = build<ConstructExpr>(types.getUnknown());
 	U32 index = 0;
 	while(f) {
-		assert(f->item.defaultValue);
-		auto e = getRV(*resolveExpression(scope, f->item.defaultValue, true));
+		assert(f->item->defaultValue);
+		auto e = getRV(*resolveExpression(scope, f->item->defaultValue, true));
 		h.add(e->type);
-		if(f->item.name) h.add(f->item.name.force());
+		if(f->item->name) h.add(f->item->name.force());
 
 		con->args << ConstructArg{index, *e};
 
@@ -526,14 +526,14 @@ Expr* Resolver::resolveAnonConstruct(Scope& scope, ast::TupleConstructExpr& expr
 
 	// Check if this kind of tuple has been used already.
 	TupleType* result = nullptr;
-	if(!types.getTuple((U32)h, result)) {
+	if(!types.getTuple((uint32_t)h, result)) {
 		// Otherwise, create the type.
 		new (result) TupleType;
 		U32 i = 0;
 		f = expr.args;
 		while(f) {
 			auto t = con->args[i].expr.type;
-			result->fields << Field{f->item.name ? f->item.name.force() : 0, i, t, result, nullptr, true};
+			result->fields << Field{f->item->name ? f->item->name.force() : 0, i, t, result, nullptr, true};
 			f = f->next;
 			i++;
 		}
@@ -546,9 +546,9 @@ Expr* Resolver::resolveAlt(Scope& scope, ExprRef pivot, ast::AltList* alt, bool 
 	if(alt) {
 		auto s = build<ScopedExpr>(scope);
 		IfConds conds;
-		resolvePattern(s->scope, pivot, *alt->item.pattern, conds);
-		auto result = resolveExpression(s->scope, alt->item.expr, used);
-		s->contents = createIf(move(conds), *result, resolveAlt(scope, pivot, alt->next, used), used, CondMode::And);
+		resolvePattern(s->scope, pivot, *alt->item->pattern, conds);
+		auto result = resolveExpression(s->scope, alt->item->expr, used);
+		s->contents = createIf(std::move(conds), *result, resolveAlt(scope, pivot, alt->next, used), used, CondMode::And);
 		s->type = result->type;
 		return s;
 	} else {
@@ -594,15 +594,15 @@ void Resolver::resolvePattern(Scope& scope, ExprRef pivot, ast::Pattern& pat, If
 						break;
 					}
 
-					if(p->item.field) {
-						if(auto field = type->findField(p->item.field.force())) {
-							resolvePattern(scope, *createField(pivot, field), *p->item.pat, conds);
+					if(p->item->field) {
+						if(auto field = type->findField(p->item->field.force())) {
+							resolvePattern(scope, *createField(pivot, field), *p->item->pat, conds);
 						} else {
 							error("this field does not exist");
 							conds << IfCond(nullptr, createFalse());
 						}
 					} else {
-						resolvePattern(scope, *createField(pivot, i), *p->item.pat, conds);
+						resolvePattern(scope, *createField(pivot, i), *p->item->pat, conds);
 					}
 
 					p = p->next;
@@ -662,7 +662,7 @@ void Resolver::resolvePattern(Scope& scope, ExprRef pivot, ast::Pattern& pat, If
 					conds << IfCond(nullptr, createFalse());
 				}
 			} else {
-				debugError("Not implemented");
+				assert("Not implemented" == 0);
 			}
 			break;
 		}
@@ -678,11 +678,11 @@ Expr* Resolver::resolveCondition(ScopeRef scope, ast::ExprRef expr) {
 ast::InfixExpr* Resolver::reorder(ast::InfixExpr& expr, U32 min_prec) {
 	auto lhs = &expr;
 	while(lhs->rhs->isInfix() && !lhs->ordered) {
-		auto first = context.FindOp(lhs->op);
+		auto first = context.findOp(lhs->op);
 		if(first.precedence < min_prec) break;
 
 		auto rhs = (ast::InfixExpr*)lhs->rhs;
-		auto second = context.FindOp(rhs->op);
+		auto second = context.findOp(rhs->op);
 		if(second.precedence > first.precedence ||
 			  (second.precedence == first.precedence && second.associativity == ast::Assoc::Right)) {
 			lhs->rhs = reorder(*rhs, second.precedence);

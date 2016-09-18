@@ -12,13 +12,11 @@
 #include <llvm/ExecutionEngine/Interpreter.h>
 #include <llvm/Support/raw_os_ostream.h>
 #include <llvm/IR/Verifier.h>
-#include <Core.h>
 #include <iostream>
 #include <fstream>
 #include "Parse/parser.h"
 #include "Resolve/resolve.h"
 #include "Generate/generate.h"
-#include <File/FileApi.h>
 
 void CreateAddFunc(llvm::LLVMContext& context, llvm::Module* module)
 {
@@ -39,7 +37,7 @@ void CreateAddFunc(llvm::LLVMContext& context, llvm::Module* module)
 
 int main()
 {
-	athena::ast::CompileContext context{athena::ast::CompileSettings{athena::ast::CompileAthena}};
+	athena::ast::CompileContext context{athena::CompileSettings{}};
 
 	auto test = R"s(
 main =
@@ -152,20 +150,23 @@ id x = x
 )s";
 
 	athena::ast::Module module;
-	athena::ast::Parser p(context, module, gentest);
+    athena::StdOutDiagnosticConsumer diagPrinter;
+	athena::Diagnostics diagnostics{diagPrinter};
+	athena::ast::Parser p(context, diagnostics, module, gentest);
 	p.parseModule();
 
 	{
-        if(auto file = Tritium::File::createFile("ast.txt", {false, true}, Tritium::FileCreate::CreateAlways)) {
-            auto string = athena::ast::toString(module, context).string();
-            Tritium::File::writeFile(file.forceR(), string.text(), string.size());
+        std::ofstream file{"ast.txt"};
+        if(file) {
+            auto string = athena::ast::toString(module, context);
+            file << string;
         }
 	}
 
 	athena::resolve::Resolver resolver{context, module};
 	auto resolved = resolver.resolve();
 
-	llvm::LLVMContext& llcontext = llvm::getGlobalContext();
+	llvm::LLVMContext llcontext;
 	llvm::Module* llmodule = new llvm::Module("top", llcontext);
 	llmodule->setDataLayout("e-S128");
 	llmodule->setTargetTriple(LLVM_HOST_TRIPLE);
@@ -173,8 +174,7 @@ id x = x
 	athena::gen::Generator gen{context, llcontext, *llmodule};
 	gen.generate(*resolved);
 
-	std::ofstream ss;
-	ss.open("out.ll", std::ios::out | std::ios::trunc);
+	std::ofstream ss("out.ll");
 	llvm::raw_os_ostream stream{ss};
 	llmodule->print(stream, nullptr);
 	llvm::verifyModule(*llmodule, &stream);

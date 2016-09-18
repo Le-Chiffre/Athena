@@ -62,34 +62,34 @@ inline bool arithCompatible(PrimitiveType lhs, PrimitiveType rhs) {
 
 void Resolver::initPrimitives() {
 	// Make sure each operator exists in the context and add them to the map.
-	for(U32 i = 0; i < (U32)PrimitiveOp::FirstUnary; i++) {
-		primitiveOps[i] = context.AddUnqualifiedName(primitiveOperatorNames[i], primitiveOperatorLengths[i]);
+	for(Size i = 0; i < (Size)PrimitiveOp::FirstUnary; i++) {
+		primitiveOps[i] = context.addUnqualifiedName(primitiveOperatorNames[i], primitiveOperatorLengths[i]);
 		primitiveBinaryMap.add(primitiveOps[i], (PrimitiveOp)i);
 	}
 
-	for(U32 i = (U32)PrimitiveOp::FirstUnary; i < (U32)PrimitiveOp::OpCount; i++) {
-		primitiveOps[i] = context.AddUnqualifiedName(primitiveOperatorNames[i], primitiveOperatorLengths[i]);
+	for(auto i = (Size)PrimitiveOp::FirstUnary; i < (Size)PrimitiveOp::OpCount; i++) {
+		primitiveOps[i] = context.addUnqualifiedName(primitiveOperatorNames[i], primitiveOperatorLengths[i]);
 		primitiveUnaryMap.add(primitiveOps[i], (PrimitiveOp)i);
 	}
 
 	// Make sure all precedences are in the context and none have been overwritten.
-	for(U32 i = 0; i < (U32)PrimitiveOp::FirstUnary; i++) {
-		if(context.TryFindOp(primitiveOps[i]))
+	for(Size i = 0; i < (Size)PrimitiveOp::FirstUnary; i++) {
+		if(context.tryFindOp(primitiveOps[i]))
 			error("the precedence of built-in operator %@ cannot be redefined", primitiveOperatorNames[i]);
-		context.AddOp(primitiveOps[i], primitiveOperatorPrecedences[i], ast::Assoc::Left);
+		context.addOp(primitiveOps[i], primitiveOperatorPrecedences[i], ast::Assoc::Left);
 	}
 
 	// Make sure each primitive type exists in the context, and add them to the map.
-	for(U32 i = 0; i < (U32)PrimitiveType::TypeCount; i++) {
-		auto id = context.AddUnqualifiedName(primitiveTypeNames[i], primitiveTypeLengths[i]);
+	for(Size i = 0; i < (Size)PrimitiveType::TypeCount; i++) {
+		auto id = context.addUnqualifiedName(primitiveTypeNames[i], primitiveTypeLengths[i]);
 		types.primMap.add(id, types.getPrim((PrimitiveType)i));
 	}
 
 	// Add the builtin aliases.
-	types.primMap.add(context.AddUnqualifiedName("Byte"), types.getPrim(PrimitiveType::U8));
-	types.primMap.add(context.AddUnqualifiedName("Int"), types.getPrim(PrimitiveType::I32));
-	types.primMap.add(context.AddUnqualifiedName("Float"), types.getPrim(PrimitiveType::F32));
-	types.primMap.add(context.AddUnqualifiedName("Double"), types.getPrim(PrimitiveType::F64));
+	types.primMap.add(context.addUnqualifiedName("Byte"), types.getPrim(PrimitiveType::U8));
+	types.primMap.add(context.addUnqualifiedName("Int"), types.getPrim(PrimitiveType::I32));
+	types.primMap.add(context.addUnqualifiedName("Float"), types.getPrim(PrimitiveType::F32));
+	types.primMap.add(context.addUnqualifiedName("Double"), types.getPrim(PrimitiveType::F64));
 }
 
 Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, ExprRef lhs, ExprRef rhs) {
@@ -154,7 +154,7 @@ Expr* Resolver::resolvePrimitiveOp(Scope& scope, PrimitiveOp op, resolve::ExprRe
 	return nullptr;
 }
 
-TypeRef Resolver::getBinaryOpType(PrimitiveOp op, PrimitiveType lhs, PrimitiveType rhs, Expr*& left, Expr*& right) {
+Type* Resolver::getBinaryOpType(PrimitiveOp op, PrimitiveType lhs, PrimitiveType rhs, Expr*& left, Expr*& right) {
 	auto type = types.getPrim(largest(lhs, rhs));
 	left = implicitCoerce(*left, type);
 	right = implicitCoerce(*right, type);
@@ -185,7 +185,7 @@ TypeRef Resolver::getBinaryOpType(PrimitiveOp op, PrimitiveType lhs, PrimitiveTy
 	return nullptr;
 }
 
-TypeRef Resolver::getPtrOpType(PrimitiveOp op, PtrType* ptr, PrimitiveType prim) {
+Type* Resolver::getPtrOpType(PrimitiveOp op, PtrType* ptr, PrimitiveType prim) {
 	// Only addition and subtraction are defined.
 	if(prim < PrimitiveType::FirstFloat) {
 		if(op == PrimitiveOp::Add || op == PrimitiveOp::Sub) {
@@ -200,7 +200,7 @@ TypeRef Resolver::getPtrOpType(PrimitiveOp op, PtrType* ptr, PrimitiveType prim)
 	return nullptr;
 }
 
-TypeRef Resolver::getPtrOpType(PrimitiveOp op, PtrType* lhs, PtrType* rhs) {
+Type* Resolver::getPtrOpType(PrimitiveOp op, PtrType* lhs, PtrType* rhs) {
 	// Supported ptr-ptr operations: comparison and difference (for the same pointer types).
 	if(lhs == rhs) {
 		if(op >= PrimitiveOp::FirstCompare && op < PrimitiveOp::FirstUnary) {
@@ -218,7 +218,7 @@ TypeRef Resolver::getPtrOpType(PrimitiveOp op, PtrType* lhs, PtrType* rhs) {
 	return nullptr;
 }
 
-TypeRef Resolver::getUnaryOpType(PrimitiveOp op, PrimitiveType type) {
+Type* Resolver::getUnaryOpType(PrimitiveOp op, PrimitiveType type) {
 	if(op == PrimitiveOp::Neg) {
 		// Returns the same type.
 		if(category(type) <= PrimitiveTypeCategory::Float) {
@@ -234,7 +234,7 @@ TypeRef Resolver::getUnaryOpType(PrimitiveOp op, PrimitiveType type) {
 			error("the not-operation can only be applied to booleans and integers");
 		}
 	} else {
-		debugError("Not a unary operator or unsupported!");
+		assert("Not a unary operator or unsupported!" == 0);
 	}
 	return nullptr;
 }

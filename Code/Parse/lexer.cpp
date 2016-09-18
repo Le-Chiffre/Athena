@@ -1,4 +1,5 @@
 
+#include <cmath>
 #include "lexer.h"
 
 namespace athena {
@@ -10,11 +11,9 @@ namespace ast {
  * If the strings are equal, source is set to the first character after the part that is equal.
  * @param constant The constant string to compare to.
  */
-bool CompareConstString(const char*& source, const char* constant)
-{
+bool compareConstString(const char*& source, const char* constant) {
 	auto src = source;
-	while(*constant == *source)
-	{
+	while(*constant == *source) {
 		constant++;
 		source++;
 	}
@@ -30,8 +29,7 @@ bool CompareConstString(const char*& source, const char* constant)
  * Parses the provided character as a hexit, to an integer in the range 0..15.
  * @return The parsed number. Returns Nothing if the character is not a valid number.
  */
-Maybe<U32> ParseHexit(WChar32 c)
-{
+Maybe<U32> parseHexit(WChar32 c) {
 	//We use a small lookup table for this,
 	//since the number of branches would be ridiculous otherwise.
 	static const Byte table[] = {
@@ -61,8 +59,7 @@ Maybe<U32> ParseHexit(WChar32 c)
  * Parses the provided character as an octit, to an integer in the range 0..7.
  * @return The parsed number. Returns Nothing if the character is not a valid number.
  */
-Maybe<U32> ParseOctit(WChar32 c)
-{
+Maybe<U32> parseOctit(WChar32 c) {
 	//Anything lower than '0' will underflow, giving some large number above 7.
 	U32 ch = c;
 	U32 index = ch - '0';
@@ -75,8 +72,7 @@ Maybe<U32> ParseOctit(WChar32 c)
  * Parses the provided character as a digit, to an integer in the range 0..9.
  * @return The parsed number. Returns Nothing if the character is not a valid number.
  */
-Maybe<U32> ParseDigit(WChar32 c)
-{
+Maybe<U32> parseDigit(WChar32 c) {
 	U32 ch = c;
 	U32 index = ch - '0';
 	if(index > 9) return Nothing();
@@ -87,8 +83,7 @@ Maybe<U32> ParseDigit(WChar32 c)
  * Parses the provided character as a bit, to an integer in the range 0..1.
  * @return The parsed number. Returns Nothing if the character is not a valid number.
  */
-Maybe<U32> ParseBit(WChar32 c)
-{
+Maybe<U32> parseBit(WChar32 c) {
 	U32 ch = c;
 	U32 index = ch - '0';
 	if(index > 1) return Nothing();
@@ -101,38 +96,38 @@ Maybe<U32> ParseBit(WChar32 c)
  * Returns Nothing if the character doesn't represent a numeric in Base.
  */
 template<U32 Base>
-Maybe<U32> ParseNumericAtom(WChar32);
+Maybe<U32> parseNumericAtom(WChar32);
 
 template<>
-Maybe<U32> ParseNumericAtom<16>(WChar32 p) {return ParseHexit(p);}
+Maybe<U32> parseNumericAtom<16>(WChar32 p) {return parseHexit(p);}
 
 template<>
-Maybe<U32> ParseNumericAtom<10>(WChar32 p) {return ParseDigit(p);}
+Maybe<U32> parseNumericAtom<10>(WChar32 p) {return parseDigit(p);}
 
 template<>
-Maybe<U32> ParseNumericAtom<8>(WChar32 p) {return ParseOctit(p);}
+Maybe<U32> parseNumericAtom<8>(WChar32 p) {return parseOctit(p);}
 
 template<>
-Maybe<U32> ParseNumericAtom<2>(WChar32 p) {return ParseBit(p);}
+Maybe<U32> parseNumericAtom<2>(WChar32 p) {return parseBit(p);}
 
 /**
  * Returns the name of the provided numeric base.
  * Supported bases are 2, 8, 10, 16.
  */
 template<U32 Base>
-const char* GetBaseName();
+const char* getBaseName();
 
 template<>
-const char* GetBaseName<16>() {return "hexadecimal";}
+const char* getBaseName<16>() {return "hexadecimal";}
 
 template<>
-const char* GetBaseName<10>() {return "decimal";}
+const char* getBaseName<10>() {return "decimal";}
 
 template<>
-const char* GetBaseName<8>() {return "octal";}
+const char* getBaseName<8>() {return "octal";}
 
 template<>
-const char* GetBaseName<2>() {return "binary";}
+const char* getBaseName<2>() {return "binary";}
 
 /**
  * Parses a character literal from a text sequence with a certain base.
@@ -145,12 +140,11 @@ const char* GetBaseName<2>() {return "binary";}
  * @return The code point generated from the sequence.
  */
 template<U32 Base>
-WChar32 ParseIntSequence(const char*& p, U32 numChars, U32 max, Diagnostics* diag)
-{
+U32 parseIntSequence(const char*& p, U32 numChars, U32 max, Diagnostics* diag) {
     U32 res = 0;
 	for(U32 i=0; i<numChars; i++) {
 		char c = *p;
-		if(auto num = ParseNumericAtom<Base>(c)) {
+		if(auto num = parseNumericAtom<Base>(c)) {
 			res *= Base;
 			res += num.force();
 			p++;
@@ -159,7 +153,7 @@ WChar32 ParseIntSequence(const char*& p, U32 numChars, U32 max, Diagnostics* dia
 		}
 	}
 
-	if(res > max) diag->Warning("%@ escape sequence out of range", GetBaseName<Base>());
+	if(res > max) diag->warning("%@ escape sequence out of range", getBaseName<Base>());
 	return res;
 }
 
@@ -171,15 +165,23 @@ WChar32 ParseIntSequence(const char*& p, U32 numChars, U32 max, Diagnostics* dia
  * @return The parsed number.
  */
 template<U32 Base>
-U32 ParseIntLiteral(const char*& p)
-{
+U32 parseIntLiteral(const char*& p) {
 	U32 res = 0;
-	while(auto c = ParseNumericAtom<Base>(*p)) {
+	while(auto c = parseNumericAtom<Base>(*p)) {
 		res *= Base;
 		res += c.force();
 		p++;
 	}
 	return res;
+}
+
+
+template<typename T> inline bool isNumeric(T x) {
+    return (x >= '0') && (x <= '9');
+}
+
+template<typename T> inline int readDigit(T x) {
+    return (int)(x-'0');
 }
 
 /**
@@ -192,17 +194,85 @@ U32 ParseIntLiteral(const char*& p)
  * This pointer is increased to the first character after the number.
  * @return The parsed number.
  */
-double ParseFloatLiteral(const char*& p)
-{
-	return Tritium::read<Float>(p);
+double parseFloatLiteral(const char*& p) {
+    double out = (double)0.0;
+
+    // Check sign.
+    bool neg = false;
+    if(*p == '+') {
+        p++;
+    } else if(*p == '-') {
+        p++;
+        neg = true;
+    }
+
+    // Create part before decimal point.
+    while(isNumeric(*p)) {
+        double n = (double)readDigit(*p);
+        out *= 10.0;
+        out += n;
+        p++;
+    }
+
+    // Check if there is a fractional part.
+    if(*p == '.') {
+        p++;
+        double dec = 0.0;
+        U32 dpl = 0;
+
+        while(isNumeric(*p)) {
+            double n = (double)readDigit(*p);
+            dec *= 10.0;
+            dec += n;
+
+            dpl++;
+            p++;
+        }
+
+        // We need to use a floating point power here in order to support more than 9 decimals.
+        double power = pow(10.0, dpl);
+        dec /= power;
+        out += dec;
+    }
+
+    // Check if there is an exponent.
+    if(*p == 'E') {
+        p++;
+
+        // Check sign.
+        bool signNegative = false;
+        if(*p == '+') {
+            p++;
+        } else if(*p == '-') {
+            p++;
+            signNegative = true;
+        }
+
+        // Has exp. part;
+        double exp = 0.0;
+
+        while(isNumeric(*p)) {
+            double n = (double)readDigit(*p);
+            exp *= 10.0;
+            exp += n;
+            p++;
+        }
+
+        if(signNegative) exp = -exp;
+
+        double power = pow(10.0, exp);
+        out *= power;
+    }
+
+    if(neg) out = -out;
+    return out;
 }
 
 /**
  * Returns true if this is an uppercase character.
  * TODO: Currently, only characters in the ASCII range are considered.
  */
-bool IsUpperCase(WChar32 c)
-{
+bool isUpperCase(WChar32 c) {
 	U32 ch = c;
 	U32 index = ch - 'A';
 	return index <= ('Z' - 'A');
@@ -212,8 +282,7 @@ bool IsUpperCase(WChar32 c)
  * Returns true if this is a lowercase character.
  * TODO: Currently, only characters in the ASCII range are considered.
  */
-bool IsLowerCase(WChar32 c)
-{
+bool isLowerCase(WChar32 c) {
 	U32 ch = c;
 	U32 index = ch - 'a';
 	return index <= ('z' - 'a');
@@ -222,16 +291,14 @@ bool IsLowerCase(WChar32 c)
 /**
  * Returns true if this is a lowercase or uppercase character.
  */
-bool IsAlpha(WChar32 c)
-{
-	return IsUpperCase(c) || IsLowerCase(c);
+bool isAlpha(WChar32 c) {
+	return isUpperCase(c) || isLowerCase(c);
 }
 
 /**
  * Returns true if this is a bit.
  */
-bool IsBit(WChar32 c)
-{
+bool isBit(WChar32 c) {
 	U32 ch = c;
 	U32 index = ch - '0';
 	return index <= 1;
@@ -240,8 +307,7 @@ bool IsBit(WChar32 c)
 /**
  * Returns true if this is a digit.
  */
-bool IsDigit(WChar32 c)
-{
+bool isDigit(WChar32 c) {
 	U32 ch = c;
 	U32 index = ch - '0';
 	return index <= 9;
@@ -250,8 +316,7 @@ bool IsDigit(WChar32 c)
 /**
  * Returns true if this is an octit.
  */
-bool IsOctit(WChar32 c)
-{
+bool isOctit(WChar32 c) {
 	U32 ch = c;
 	U32 index = ch - '0';
 	return index <= 7;
@@ -260,10 +325,9 @@ bool IsOctit(WChar32 c)
 /**
  * Returns true if this is a hexit.
  */
-bool IsHexit(WChar32 c)
-{
-	//We use a small lookup table for this,
-	//since the number of branches would be ridiculous otherwise.
+bool isHexit(WChar32 c) {
+	// We use a small lookup table for this,
+	// since the number of branches would be ridiculous otherwise.
 	static const bool table[] = {
 		true, true, true, true, true, true, true, true, true, true,	/* 0..9 */
 		false,false,false,false,false,false,false,					/* :..@ */
@@ -275,7 +339,7 @@ bool IsHexit(WChar32 c)
 		true, true, true, true, true, true,							/* a..f */
 	};
 
-	//Anything lower than '0' will underflow, giving some large number above 54.
+	// Anything lower than '0' will underflow, giving some large number above 54.
 	U32 ch = c;
 	U32 index = ch - '0';
 
@@ -286,16 +350,14 @@ bool IsHexit(WChar32 c)
 /**
  * Returns true if the provided character is alpha-numeric.
  */
-bool IsAlphaNumeric(WChar32 c)
-{
-	return IsAlpha(c) || IsDigit(c);
+bool isAlphaNumeric(WChar32 c) {
+	return isAlpha(c) || isDigit(c);
 }
 
 /**
  * Returns true if the provided character is valid as part of an identifier (VarID or ConID).
  */
-bool IsIdentifier(WChar32 c)
-{
+bool isIdentifier(WChar32 c) {
 	static const bool table[] = {
 		false, /* ' */
 		false, /* ( */
@@ -322,7 +384,7 @@ bool IsIdentifier(WChar32 c)
 		true, true, true, true, true, true
 	};
 
-	//Anything lower than ' will underflow, giving some large number above 83.
+	// Anything lower than ' will underflow, giving some large number above 83.
 	U32 ch = c;
 	U32 index = ch - '\'';
 
@@ -334,10 +396,9 @@ bool IsIdentifier(WChar32 c)
  * Checks if the provided character is a symbol, as specified in section 2.2 of the Haskell spec.
  * TODO: Currently, only characters in the ASCII range are considered valid.
  */
-bool IsSymbol(WChar32 c)
-{
-	//We use a small lookup table for this,
-	//since the number of branches would be ridiculous otherwise.
+bool isSymbol(WChar32 c) {
+	// We use a small lookup table for this,
+	// since the number of branches would be ridiculous otherwise.
 	static const bool table[] = {
 		true, /* ! */
 		false, /* " */
@@ -389,10 +450,9 @@ bool IsSymbol(WChar32 c)
 /**
  * Checks if the provided character is special, as specified in section 2.2 of the Haskell spec.
  */
-bool IsSpecial(WChar32 c)
-{
-	//We use a small lookup table for this,
-	//since the number of branches would be ridiculous otherwise.
+bool isSpecial(WChar32 c) {
+	// We use a small lookup table for this,
+	// since the number of branches would be ridiculous otherwise.
 	static const bool table[] = {
 		true, /* ( */
 		true, /* ) */
@@ -437,11 +497,10 @@ bool IsSpecial(WChar32 c)
  * Checks if the provided character is white, as specified in section 2.2 of the Haskell spec.
  * TODO: Currently, only characters in the ASCII range are considered valid.
  */
-bool IsWhiteChar(WChar32 c)
-{
-	//Spaces are handled separately.
-	//All other white characters are in the same range.
-	//Anything lower than TAB will underflow, giving some large number above 4.
+bool isWhiteChar(WChar32 c) {
+	// Spaces are handled separately.
+	// All other white characters are in the same range.
+	// Anything lower than TAB will underflow, giving some large number above 4.
 	U32 ch = c;
 	U32 index = ch - 9;
 	return index <= 4 || c == ' ';
@@ -451,635 +510,656 @@ bool IsWhiteChar(WChar32 c)
  * Checks if the provided character is a graphic, as specified in section 2.2 of the Haskell spec.
  * TODO: Currently, only characters in the ASCII range are considered valid.
  */
-bool IsGraphic(WChar32 c)
-{
+bool isGraphic(WChar32 c) {
 	U32 ch = c;
 	U32 index = ch - '!';
 	return index <= 93;
 }
 
+// UTF-8 --> UTF-32 conversion (single code point).
+U32* decodeUtf8(const char*& string, U32* dest) {
+    // Get the bytes from the first Char.
+    U32 p;
+    Byte* s = (Byte*)string;
+    U32 c = s[0];
+    string++;
+
+    if(c < 0x80) {
+        // 1-byte sequence, 00->7F
+        *dest = (U32)c;
+        return dest + 1;
+    }
+
+    if(c < 0xC2) {
+        // Invalid sequence, 80->C1
+        goto fail;
+    }
+
+    if(c < 0xE0) {
+        // 2-byte sequence, C0->DF
+        p = (c & 0x1F);
+        goto _2bytes;
+    }
+
+    if(c < 0xF0) {
+        // 3-byte sequence, E0->EF
+        p = (c & 0xF);
+        goto _3bytes;
+    }
+
+    if(c < 0xF8) {
+        // 4-byte sequence, F0->F7
+        p = (c & 0x7);
+
+        // Valid Unicode cannot be higher than 0x10FFFF.
+        if(p > 8) goto fail;
+        else goto _4bytes;
+    }
+
+    fail:
+    string = 0;
+    return 0;
+
+    _4bytes:
+    {
+        string++;
+        s++;
+        U32 fourth = *s;
+
+        //Fourth Char must be 10xxxxxx
+        if((fourth >> 6) != 2) goto fail;
+
+        p <<= 6;
+        p |= (fourth & 0x3F);
+    }
+    _3bytes:
+    {
+        string++;
+        s++;
+        U32 third = *s;
+
+        // Third Char must be 10xxxxxx
+        if((third >> 6) != 2) goto fail;
+
+        p <<= 6;
+        p |= (third & 0x3F);
+    }
+    _2bytes:
+    string++;
+    s++;
+    U32 second = *s;
+
+    // Second Char must be 10xxxxxx
+    if((second >> 6) != 2) goto fail;
+
+    p <<= 6;
+    p |= (second & 0x3F);
+    *dest = p;
+    return dest + 1;
+}
+
+// UTF-32 --> UTF-8 conversion (single code point).
+Byte* encodeUtf8(const U32*& string, Byte* buffer) {
+    U32 codePoint = *string;
+    string++;
+
+    if(codePoint <= 0x7F) {
+        // One character.
+        buffer[0] = (Byte)codePoint;
+        return buffer+1;
+    } else if(codePoint <= 0x07FF) {
+        // Two characters.
+        buffer[0] = Byte(0xC0 | (codePoint >> 6));
+        buffer[1] = Byte(0x80 | (codePoint & 0x3F));
+        return buffer+2;
+    } else if(codePoint <= 0xFFFF) {
+        // Three characters.
+        buffer[0] = Byte( 0xE0 | (codePoint >> 12));
+        buffer[1] = Byte(0x80 | ((codePoint >> 6) & 0x3F));
+        buffer[2] = Byte(0x80 | (codePoint & 0x3F));
+        return buffer+3;
+    } else if(codePoint <= 0x10FFFF) {
+        // Four characters.
+        buffer[0] = Byte(0xF0 | (codePoint >> 18));
+        buffer[1] = Byte(0x80 | ((codePoint >> 12) & 0x3F));
+        buffer[2] = Byte(0x80 | ((codePoint >> 6) & 0x3F));
+        buffer[3] = Byte(0x80 | (codePoint & 0x3F));
+        return buffer+4;
+    } else {
+        // Invalid code point.
+        string = 0;
+        return 0;
+    }
+}
+
 //------------------------------------------------------------------------------
 
-Lexer::Lexer(CompileContext& context, const char* text, Token* tok) :
-	mToken(tok), mText(text), mP(text), mL(text), mNewItem(true), mContext(context)
-{
-	// The first indentation level of a file should be 0.
-	mIdent = 0;
+Lexer::Lexer(CompileContext& context, Diagnostics& diag, const char* text, Token* tok) :
+	token(tok), text(text), p(text), l(text), context(context), diag(diag) {}
+
+Token* Lexer::next() {
+	parseToken();
+	return token;
 }
 
-Token* Lexer::Next()
-{
-	ParseToken();
-	return mToken;
-}
-
-WChar32 Lexer::NextCodePoint()
-{
-    WChar32 c;
-	if(Tritium::Unicode::convertNextPoint(mP, &c)) {
+U32 Lexer::nextCodePoint() {
+    U32 c;
+	if(decodeUtf8(p, &c)) {
 		return c;
 	} else {
-		mDiag.Warning("Invalid UTF-8 sequence");
+		diag.warning("Invalid UTF-8 sequence");
 		return ' ';
 	}
 }
 
-void Lexer::NextLine()
-{
-	mL = mP + 1;
-	mLine++;
-	mTabs = 0;
+void Lexer::nextLine() {
+	l = p + 1;
+	line++;
+	tabs = 0;
 }
 
-bool Lexer::WhiteChar_UpdateLine()
-{
-	if(*mP == '\n')
-	{
-		NextLine();
+bool Lexer::whiteChar_UpdateLine() {
+	if(*p == '\n') {
+		nextLine();
 		return true;
 	}
 
-	if(*mP == '\t')
-	{
-		mTabs++;
+	if(*p == '\t') {
+		tabs++;
 		return true;
 	}
 
-	return IsWhiteChar(*mP);
+	return isWhiteChar(*p);
 }
 
-void Lexer::SkipWhitespace()
-{
-	auto& p = mP;
-	while(*p)
-	{
-		//Skip whitespace.
-		if(!WhiteChar_UpdateLine())
-		{
-			//Check for single-line comments.
-			if(*p == '-' && p[1] == '-' && !IsSymbol(p[2]))
-			{
-				//Skip the current line.
+void Lexer::skipWhitespace() {
+	auto& p = this->p;
+	while(*p) {
+		// Skip whitespace.
+		if(!whiteChar_UpdateLine()) {
+			// Check for single-line comments.
+			if(*p == '-' && p[1] == '-' && !isSymbol(p[2])) {
+				// Skip the current line.
 				p += 2;
 				while(*p && *p != '\n') p++;
 
-				//If this is a newline, we update the location.
-				//If it is the file end, the caller will take care of it.
-				if(*p == '\n')
-				{
-					NextLine();
+				// If this is a newline, we update the location.
+				// If it is the file end, the caller will take care of it.
+				if(*p == '\n') {
+					nextLine();
 					p++;
 				}
 			}
 
-			//Check for multi-line comments.
-			else if(*p == '{' && p[1] == '-')
-			{
-				//The current nested comment depth.
+			// Check for multi-line comments.
+			else if(*p == '{' && p[1] == '-') {
+				// The current nested comment depth.
 				U32 level = 1;
 
-				//Skip until the comment end.
+				// Skip until the comment end.
 				p += 2;
-				while(*p)
-				{
-					//Update the source location if needed.
-					if(*p == '\n') NextLine();
+				while(*p) {
+					// Update the source location if needed.
+					if(*p == '\n') nextLine();
 
-					//Check for nested comments.
+					// Check for nested comments.
 					if(*p == '{' && p[1] == '-') level++;
 
-					//Check for comment end.
-					if(*p == '-' && p[1] == '}')
-					{
+					// Check for comment end.
+					if(*p == '-' && p[1] == '}') {
 						level--;
-						if(level == 0)
-						{
+						if(level == 0) {
 							p += 2;
 							break;
 						}
 					}
 				}
 
-				//mP now points to the first character after the comment, or the file end.
-				//Check if the comments were nested correctly.
+				// mP now points to the first character after the comment, or the file end.
+				// Check if the comments were nested correctly.
 				if(level)
-					mDiag.Warning("Incorrectly nested comment: missing %@ comment terminator(s).", level);
+					diag.warning("Incorrectly nested comment: missing %@ comment terminator(s).", level);
 			}
 
-			//No comment or whitespace - we are done.
+			// No comment or whitespace - we are done.
 			break;
 		}
 
-		//Check the next character.
+		// Check the next character.
 		p++;
 	}
 }
 
-String Lexer::ParseStringLiteral()
-{
-	//There is no real limit on the length of a string literal, so we use a dynamic array while parsing.
-	Array<char> chars(128);
+std::string Lexer::parseStringLiteral() {
+	std::string chars;
 
-	mP++;
+	p++;
 	while(1) {
-		if(*mP == '\\') {
-			//This is an escape sequence or gap.
-			mP++;
-			if(WhiteChar_UpdateLine()) {
-				//This is a gap - we skip characters until the next '\'.
-				//Update the current source line if needed.
-				mP++;
-				while(WhiteChar_UpdateLine()) mP++;
+		if(*p == '\\') {
+			// This is an escape sequence or gap.
+			p++;
+			if(whiteChar_UpdateLine()) {
+				// This is a gap - we skip characters until the next '\'.
+				// Update the current source line if needed.
+				p++;
+				while(whiteChar_UpdateLine()) p++;
 
-				if(*mP != '\\') {
-					//The first character after a gap must be '\'.
-					mDiag.Warning("Missing gap end in string literal");
+				if(*p != '\\') {
+					// The first character after a gap must be '\'.
+					diag.warning("Missing gap end in string literal");
 				}
 
-				//Continue parsing the string.
-				mP++;
+				// Continue parsing the string.
+				p++;
 			} else {
-				chars << ParseEscapedLiteral();
+                const auto ch = parseEscapedLiteral();
+                auto pch = &ch;
+                Byte buffer[5];
+                auto length = encodeUtf8(pch, buffer) - buffer;
+                chars.append((const char*)buffer, length);
 			}
-		} else if(*mP == kFormatStart) {
+		} else if(*p == kFormatStart) {
 			// Start a string format sequence.
-			mFormatting = 1;
-			mP++;
+			formatting = 1;
+			p++;
 			break;
 		} else {
-			if(*mP == '\"') {
-				//Terminate the string.
-				mP++;
+			if(*p == '\"') {
+				// Terminate the string.
+				p++;
 				break;
-			} else if(!*mP || *mP == '\n') {
-				//If the line ends without terminating the string, we issue a warning.
-				mDiag.Warning("Missing terminating quote in string literal");
+			} else if(!*p || *p == '\n') {
+				// If the line ends without terminating the string, we issue a warning.
+				diag.warning("Missing terminating quote in string literal");
 				break;
 			} else {
-				//Add this UTF-8 character to the string.
-				chars << NextCodePoint();
+				// Add characters to the string in the way they appear in source.
+                chars.push_back(*p);
+                p++;
 			}
 		}
 	}
 
-	//Create a new buffer for this string.
-	U32 count = chars.size();
-	auto buffer = (char*)Alloc(count * sizeof(char));
-	Tritium::copy(chars.begin().p, buffer, count);
-	return {buffer, chars.size()};
+	// Create a new buffer for this string.
+	return move(chars);
 }
 
-WChar32 Lexer::ParseCharLiteral()
-{
-	mP++;
-    WChar32 c;
+U32 Lexer::parseCharLiteral() {
+	p++;
+    U32 c;
 
-	if(*mP == '\\') {
-		//This is an escape sequence.
-		mP++;
-		c = ParseEscapedLiteral();
+	if(*p == '\\') {
+		// This is an escape sequence.
+		p++;
+		c = parseEscapedLiteral();
 	} else {
-		//This is a char literal.
-		c = NextCodePoint();
+		// This is a char literal.
+		c = nextCodePoint();
 	}
 
-	//Ignore any remaining characters in the literal.
-	//It needs to end on this line.
-	if(*mP++ != '\'') {
-		mDiag.Warning("Multi-character character constant");
-		while(*mP != '\'') {
-			if(*mP == '\n' || *mP == 0) {
-				mDiag.Warning("Missing terminating ' character in char literal");
+	// Ignore any remaining characters in the literal.
+	// It needs to end on this line.
+	if(*p++ != '\'') {
+		diag.warning("Multi-character character constant");
+		while(*p != '\'') {
+			if(*p == '\n' || *p == 0) {
+				diag.warning("Missing terminating ' character in char literal");
 				break;
 			}
-			mP++;
+			p++;
 		}
 	}
 	return c;
 }
 
-WChar32 Lexer::ParseEscapedLiteral()
-{
-	char c = *mP++;
-	switch(c)
-	{
-		case '{':
-			// The left brace is used to start a formatting sequence.
-			// Escaping it will print a normal brace.
-			return '{';
-		case 'a':
-			return '\a';
-		case 'b':
-			return '\b';
-		case 'f':
-			return '\f';
-		case 'n':
-			return '\n';
-		case 'r':
-			return '\r';
-		case 't':
-			return '\t';
-		case 'v':
-			return '\v';
-		case '\\':
-			return '\\';
-		case '\'':
-			return '\'';
-		case '\"':
-			return '\"';
-		case '0':
-			return 0;
-		case 'x':
-			//Hexadecimal literal.
-			if(!ParseHexit(*mP)) {
-				mDiag.Error("\\x used with no following hex digits");
-				return ' ';
-			}
-			return ParseIntSequence<16>(mP, 8, 0xffffffff, &mDiag);
-		case 'o':
-			//Octal literal.
-			if(!ParseOctit(*mP)) {
-				mDiag.Error("\\o used with no following octal digits");
-				return ' ';
-			}
-			return ParseIntSequence<8>(mP, 16, 0xffffffff, &mDiag);
-		default:
-			if(IsDigit(c)) {
-				return ParseIntSequence<10>(mP, 10, 0xffffffff, &mDiag);
-			} else {
-				mDiag.Warning("Unknown escape sequence '%@'", c);
-				return ' ';
-			}
-	}
+U32 Lexer::parseEscapedLiteral() {
+    char c = *p++;
+    switch(c) {
+        case '{':
+            // The left brace is used to start a formatting sequence.
+            // Escaping it will print a normal brace.
+            return '{';
+        case 'a':
+            return '\a';
+        case 'b':
+            return '\b';
+        case 'f':
+            return '\f';
+        case 'n':
+            return '\n';
+        case 'r':
+            return '\r';
+        case 't':
+            return '\t';
+        case 'v':
+            return '\v';
+        case '\\':
+            return '\\';
+        case '\'':
+            return '\'';
+        case '\"':
+            return '\"';
+        case '0':
+            return 0;
+        case 'x':
+            //Hexadecimal literal.
+            if(!parseHexit(*p)) {
+                diag.error("\\x used with no following hex digits");
+                return ' ';
+            }
+            return parseIntSequence<16>(p, 8, 0xffffffff, &diag);
+        case 'o':
+            //Octal literal.
+            if(!parseOctit(*p)) {
+                diag.error("\\o used with no following octal digits");
+                return ' ';
+            }
+            return parseIntSequence<8>(p, 16, 0xffffffff, &diag);
+        default:
+            if(isDigit(c)) {
+                return parseIntSequence<10>(p, 10, 0xffffffff, &diag);
+            } else {
+                diag.warning("Unknown escape sequence '%@'", c);
+                return ' ';
+            }
+    }
 }
 
-void Lexer::ParseNumericLiteral()
-{
-	auto& p = mP;
-	auto& tok = *mToken;
+void Lexer::parseNumericLiteral() {
+	auto& p = this->p;
+	auto& tok = *token;
 	tok.type = Token::Integer;
 	tok.kind = Token::Literal;
 
-	//Parse the type of this literal.
-	//HcS mode also supports binary literals.
+	// Parse the type of this literal.
+	// HcS mode also supports binary literals.
 	if(p[1] == 'b' || p[1] == 'B') {
-		if(IsBit(p[2])) {
-			//This is a binary literal.
+		if(isBit(p[2])) {
+			// This is a binary literal.
 			p += 2;
-			tok.data.integer = ParseIntLiteral<2>(p);
+			tok.data.integer = parseIntLiteral<2>(p);
 		} else goto parseInt;
 	} else if(p[1] == 'o' || p[1] == 'O') {
-		if(IsOctit(p[2])) {
-			//This is an octal literal.
+		if(isOctit(p[2])) {
+			// This is an octal literal.
 			p += 2;
-			tok.data.integer = ParseIntLiteral<8>(p);
+			tok.data.integer = parseIntLiteral<8>(p);
 		} else goto parseInt;
 	} else if(p[1] == 'x' || p[1] == 'X') {
-		if(IsHexit(p[2])) {
-			//This is a hexadecimal literal.
+		if(isHexit(p[2])) {
+			// This is a hexadecimal literal.
 			p += 2;
-			tok.data.integer = ParseIntLiteral<16>(p);
+			tok.data.integer = parseIntLiteral<16>(p);
 		} else goto parseInt;
 	} else {
-		//Check for a dot or exponent to determine if this is a float.
+		// Check for a dot or exponent to determine if this is a float.
 		auto d = p + 1;
 		while(1) {
 			if(*d == '.') {
-				//The first char after the dot must be numeric, as well.
-				if(IsDigit(d[1])) break;
+				// The first char after the dot must be numeric, as well.
+				if(isDigit(d[1])) break;
 			} else if(*d == 'e' || *d == 'E') {
-				//This is an exponent. If it is valid, the next char needs to be a numeric,
-				//with an optional sign in-between.
+				// This is an exponent. If it is valid, the next char needs to be a numeric,
+				// with an optional sign in-between.
 				if(d[1] == '+' || d[1] == '-') d++;
-				if(IsDigit(d[1])) break;
-			} else if(!IsDigit(*d)) {
-				//This wasn't a valid float.
+				if(isDigit(d[1])) break;
+			} else if(!isDigit(*d)) {
+				// This wasn't a valid float.
 				goto parseInt;
 			}
 
 			d++;
 		}
 
-		//Parse a float literal.
+		// Parse a float literal.
 		tok.type = Token::Float;
-		tok.data.floating = ParseFloatLiteral(p);
+		tok.data.floating = parseFloatLiteral(p);
 	}
 
 	return;
 
 parseInt:
 
-	//Parse a normal integer.
-	tok.data.integer = ParseIntLiteral<10>(p);
+	// Parse a normal integer.
+	tok.data.integer = parseIntLiteral<10>(p);
 }
 
-void Lexer::ParseSymbol()
-{
-	auto& tok = *mToken;
-	auto& p = mP;
+void Lexer::parseSymbol() {
+	auto& tok = *token;
+	auto& p = this->p;
 
-	bool sym1 = IsSymbol(p[1]);
-	bool sym2 = sym1 && IsSymbol(p[2]);
+	bool sym1 = isSymbol(p[1]);
+	bool sym2 = sym1 && isSymbol(p[2]);
 
-	//Instead of setting this in many different cases, we make it the default and override it later.
+	// Instead of setting this in many different cases, we make it the default and override it later.
 	tok.kind = Token::Keyword;
 
 	if(!sym1) {
-		//Check for various reserved operators of length 1.
+		// Check for various reserved operators of length 1.
 		if(*p == ':') {
-			//Single colon.
+			// Single colon.
 			tok.type = Token::opColon;
 		} else if(*p == '.') {
 			// Single dot.
 			tok.type = Token::opDot;
 		} else if(*p == '=') {
-			//This is the reserved Equals operator.
+			// This is the reserved Equals operator.
 			tok.type = Token::opEquals;
 		} else if(*p == '\\') {
-			//This is the reserved backslash operator.
+			// This is the reserved backslash operator.
 			tok.type = Token::opBackSlash;
 		} else if(*p == '|') {
-			//This is the reserved bar operator.
+			// This is the reserved bar operator.
 			tok.type = Token::opBar;
 		} else if(*p == '$') {
 			// This is the reserved dollar operator.
 			tok.type = Token::opDollar;
 		} else if(*p == '@') {
-			//This is the reserved at operator.
+			// This is the reserved at operator.
 			tok.type = Token::opAt;
 		} else if(*p == '~') {
-			//This is the reserved tilde operator.
+			// This is the reserved tilde operator.
 			tok.type = Token::opTilde;
 		} else {
-			//This is a variable operator.
+			// This is a variable operator.
 			tok.kind = Token::Identifier;
 		}
 	} else if(!sym2) {
-		//Check for various reserved operators of length 2.
+		// Check for various reserved operators of length 2.
 		if(*p == ':' && p[1] == ':') {
-			//This is the reserved ColonColon operator.
+			// This is the reserved ColonColon operator.
 			tok.type = Token::opColonColon;
 		} else if(*p == '=' && p[1] == '>') {
-			//This is the reserved double-arrow operator.
+			// This is the reserved double-arrow operator.
 			tok.type = Token::opArrowD;
 		} else if(*p == '.' && p[1] == '.') {
-			//This is the reserved DotDot operator.
+			// This is the reserved DotDot operator.
 			tok.type = Token::opDotDot;
 		}  else if(*p == '<' && p[1] == '-') {
-			//This is the reserved arrow-left operator.
+			// This is the reserved arrow-left operator.
 			tok.type = Token::opArrowL;
 		} else if(*p == '-' && p[1] == '>') {
-			//This is the reserved arrow-right operator.
+			// This is the reserved arrow-right operator.
 			tok.type = Token::opArrowR;
 		} else {
-			//This is a variable operator.
+			// This is a variable operator.
 			tok.kind = Token::Identifier;
 		}
 	} else {
-		//This is a variable operator.
+		// This is a variable operator.
 		tok.kind = Token::Identifier;
 	}
 
 
 	if(tok.kind == Token::Identifier) {
-		//Check if this is a constructor.
+		// Check if this is a constructor.
 		if(*p == ':') {
 			tok.type = Token::ConSym;
 		} else {
 			tok.type = Token::VarSym;
 		}
 
-		//Parse a symbol sequence.
-		//Get the length of the sequence, we already know that the first one is a symbol.
+		// Parse a symbol sequence.
+		// Get the length of the sequence, we already know that the first one is a symbol.
 		Size count = 1;
 		auto start = p;
-		while(IsSymbol(*(++p))) count++;
+		while(isSymbol(*(++p))) count++;
 
-		//Check for a single minus operator - used for parser optimization.
+		// Check for a single minus operator - used for parser optimization.
 		if(count == 1 && *start == '-') {
             tok.singleMinus = true;
         } else {
             tok.singleMinus = false;
         }
 
-		//Convert to UTF-32 and save in the current qualified name..
-		mQualifier.name = String{start, count};
+		// Convert to UTF-32 and save in the current qualified name..
+		qualifier.name = std::string{start, count};
 	} else {
-		//Skip to the next token.
+		// Skip to the next token.
 		if(sym1) p += 2;
 		else p++;
 	}
 }
 
-bool Lexer::ParseUniSymbol()
-{
-	auto& tok = *mToken;
-	auto p = mP;
-    WChar32 ch;
-	if(!Tritium::Unicode::convertNextPoint(p, &ch)) {
-		mDiag.Warning("Source code must be valid UTF-8.");
-		return false;
-	}
-
-	if(ch > 255) return false;
-
-	bool handled = false;
-
-	if(ch == U'→') {
-		tok.type = Token::opArrowR;
-		tok.kind = Token::Keyword;
-		handled = true;
-	} else if(ch == U'←') {
-		tok.type = Token::opArrowL;
-		tok.kind = Token::Keyword;
-		handled = true;
-	} else if(ch == U'λ') {
-		tok.type = Token::opBackSlash;
-		tok.kind = Token::Keyword;
-		handled = true;
-	} else if(ch == U'≤') {
-		tok.type = Token::VarSym;
-		tok.kind = Token::Identifier;
-		mQualifier.name = String{"<="};
-		handled = true;
-	} else if(ch == U'≥') {
-		tok.type = Token::VarSym;
-		tok.kind = Token::Identifier;
-		mQualifier.name = String{">="};
-		handled = true;
-	} else if(ch == U'≠') {
-		tok.type = Token::VarSym;
-		tok.kind = Token::Identifier;
-		mQualifier.name = String{"!="};
-		handled = true;
-	}
-
-	if(handled) {
-		mP = p;
-	}
-
-	return handled;
-}
-
-void Lexer::ParseSpecial()
-{
-	auto& tok = *mToken;
+void Lexer::parseSpecial() {
+	auto& tok = *token;
 	tok.kind = Token::Special;
-	tok.type = (Token::Type)*mP++;
+	tok.type = (Token::Type)*p++;
 }
 
-void Lexer::ParseQualifier()
-{
-	auto& p = mP;
-	auto& tok = *mToken;
+void Lexer::parseQualifier() {
+	auto& p = this->p;
+	auto& tok = *token;
 
 	auto start = p;
 	Size length = 1;
 	tok.kind = Token::Identifier;
 	tok.type = Token::ConID;
 
-	auto q = &mQualifier.qualifier;
+	auto q = &qualifier.qualifier;
 
 parseQ:
-	while(IsIdentifier(*(++p))) length++;
+	while(isIdentifier(*(++p))) length++;
 
-	String str = String(start, length);
-	if(*p == '.')
-	{
-		bool u = IsUpperCase(p[1]);
-		bool l = IsLowerCase(p[1]) || p[1] == '_';
-		bool s = IsSymbol(p[1]);
+	auto str = std::string(start, length);
+	if(*p == '.') {
+		bool u = isUpperCase(p[1]);
+		bool l = isLowerCase(p[1]) || p[1] == '_';
+		bool s = isSymbol(p[1]);
 
-		//If the next character is a valid identifier or symbol,
-		//we add this qualifier to the list and parse the remaining characters.
-		//Otherwise, we parse as a ConID.
-		if(u || l || s)
-		{
-			*q = New<Qualified>();
+		// If the next character is a valid identifier or symbol,
+		// we add this qualifier to the list and parse the remaining characters.
+		// Otherwise, we parse as a ConID.
+		if(u || l || s) {
+			*q = build<Qualified>();
 			(*q)->name = str;
 			q = &(*q)->qualifier;
 
 			p++;
 			start = p;
 			length = 0;
-		}
-		else
-		{
+		} else {
 			goto makeCon;
 		}
 
-		//If the next character is upper case, we either have a ConID or another qualifier.
-		if(u)
-		{
+		// If the next character is upper case, we either have a ConID or another qualifier.
+		if(u) {
 			goto parseQ;
 		}
 
-		//If the next character is lowercase, we either have a VarID or keyword.
-		else if(l)
-		{
-			ParseVariable();
+		// If the next character is lowercase, we either have a VarID or keyword.
+		else if(l) {
+			parseVariable();
 
-			//If this was a keyword, we parse as a constructor and dot operator instead.
-			if(tok.kind == Token::Keyword)
-			{
+			// If this was a keyword, we parse as a constructor and dot operator instead.
+			if(tok.kind == Token::Keyword) {
 				p = start;
 				goto makeCon;
 			}
 		}
 
-		//If the next character is a symbol, we have a VarSym or ConSym.
-		else if(s)
-		{
-			//We have a VarSym or ConSym.
-			ParseSymbol();
+		// If the next character is a symbol, we have a VarSym or ConSym.
+		else if(s) {
+			// We have a VarSym or ConSym.
+			parseSymbol();
 		}
-	}
-	else
-	{
+	} else {
 	makeCon:
-		//We have a ConID.
-		mQualifier.name = str;
+		// We have a ConID.
+		qualifier.name = str;
 	}
 };
 
-void Lexer::ParseVariable()
-{
-	auto& p = mP;
-	auto& tok = *mToken;
+void Lexer::parseVariable() {
+	auto& p = this->p;
+	auto& tok = *token;
 	tok.type = Token::VarID;
 	tok.kind = Token::Identifier;
 
-	//First, check if we have a reserved keyword.
+	// First, check if we have a reserved keyword.
 	auto c = p + 1;
-	switch(*p)
-	{
+	switch(*p) {
 		case '_':
 			tok.type = Token::kw_;
 			break;
 		case 'c':
-			if(CompareConstString(c, "ase")) tok.type = Token::kwCase;
-			else if(CompareConstString(c, "lass")) tok.type = Token::kwClass;
+			if(compareConstString(c, "ase")) tok.type = Token::kwCase;
+			else if(compareConstString(c, "lass")) tok.type = Token::kwClass;
 			break;
 		case 'd':
-			if(CompareConstString(c, "ata")) tok.type = Token::kwData;
-			else if(CompareConstString(c, "efault")) tok.type = Token::kwDefault;
-			else if(CompareConstString(c, "eriving")) tok.type = Token::kwDeriving;
+			if(compareConstString(c, "ata")) tok.type = Token::kwData;
+			else if(compareConstString(c, "efault")) tok.type = Token::kwDefault;
+			else if(compareConstString(c, "eriving")) tok.type = Token::kwDeriving;
 			else if(*c == 'o') {c++; tok.type = Token::kwDo;}
 			break;
 		case 'e':
-			if(CompareConstString(c, "lse")) tok.type = Token::kwElse;
+			if(compareConstString(c, "lse")) tok.type = Token::kwElse;
 			break;
 		case 'f':
-			if(CompareConstString(c, "oreign")) tok.type = Token::kwForeign;
+			if(compareConstString(c, "oreign")) tok.type = Token::kwForeign;
 			else if(*c == 'o' && c[1] == 'r') {c += 2; tok.type = Token::kwFor;}
 			break;
 		case 'i':
 			if(*c == 'f') {c++; tok.type = Token::kwIf;}
-			else if(CompareConstString(c, "mport")) tok.type = Token::kwImport;
-			else if(*c == 'n' && !IsIdentifier(c[1])) {c++; tok.type = Token::kwIn;}
-			else if(CompareConstString(c, "nfix")) {
+			else if(compareConstString(c, "mport")) tok.type = Token::kwImport;
+			else if(*c == 'n' && !isIdentifier(c[1])) {c++; tok.type = Token::kwIn;}
+			else if(compareConstString(c, "nfix")) {
 				if(*c == 'l') {c++; tok.type = Token::kwInfixL;}
 				else if(*c == 'r') {c++; tok.type = Token::kwInfixR;}
 				else tok.type = Token::kwInfix;
-			} else if(CompareConstString(c, "nstance")) tok.type = Token::kwInstance;
+			} else if(compareConstString(c, "nstance")) tok.type = Token::kwInstance;
 			break;
 		case 'l':
 			if(*c == 'e' && c[1] == 't') {c += 2; tok.type = Token::kwLet;}
 			break;
 		case 'm':
-			if(CompareConstString(c, "odule")) tok.type = Token::kwModule;
+			if(compareConstString(c, "odule")) tok.type = Token::kwModule;
 			break;
 		case 'n':
-			if(CompareConstString(c, "ewtype")) tok.type = Token::kwNewType;
+			if(compareConstString(c, "ewtype")) tok.type = Token::kwNewType;
 			break;
 		case 'o':
 			if(*c == 'f') {c++; tok.type = Token::kwOf;}
 			break;
 		case 'p':
-			if(CompareConstString(c, "refix")) tok.type = Token::kwPrefix;
+			if(compareConstString(c, "refix")) tok.type = Token::kwPrefix;
 			break;
-        case 'r':
-            if(mContext.settings.mode == CompileShader && CompareConstString(c, "esource")) {
-                tok.type = Token::kwResource;
-            }
-            break;
 		case 't':
-			if(CompareConstString(c, "hen")) tok.type = Token::kwThen;
-			else if(CompareConstString(c, "ype")) tok.type = Token::kwType;
+			if(compareConstString(c, "hen")) tok.type = Token::kwThen;
+			else if(compareConstString(c, "ype")) tok.type = Token::kwType;
 			break;
 		case 'v':
 			if(*c == 'a' && c[1] == 'r') {c += 2; tok.type = Token::kwVar;}
 		case 'w':
-			if(CompareConstString(c, "here")) tok.type = Token::kwWhere;
-			else if(CompareConstString(c, "hile")) tok.type = Token::kwWhile;
+			if(compareConstString(c, "here")) tok.type = Token::kwWhere;
+			else if(compareConstString(c, "hile")) tok.type = Token::kwWhile;
 			break;
 	}
 
-	//We have to read the longest possible lexeme.
-	//If a reserved keyword was found, we check if a longer lexeme is possible.
-	if(tok.type != Token::VarID)
-	{
-		if(IsIdentifier(*c)) {
+	// We have to read the longest possible lexeme.
+	// If a reserved keyword was found, we check if a longer lexeme is possible.
+	if(tok.type != Token::VarID) {
+		if(isIdentifier(*c)) {
 			tok.type = Token::VarID;
 		} else {
 			p = c;
@@ -1088,147 +1168,126 @@ void Lexer::ParseVariable()
 		}
 	}
 
-	//Read the identifier name.
+	// Read the identifier name.
 	U32 length = 1;
 	auto start = p;
-	while(IsIdentifier(*(++p))) length++;
+	while(isIdentifier(*(++p))) length++;
 
-	mQualifier.name = {start, length};
+	qualifier.name = {start, length};
 };
 
-void Lexer::ParseToken()
-{
-	auto& tok = *mToken;
-	auto& p = mP;
+void Lexer::parseToken() {
+	auto& tok = *token;
+	auto& p = this->p;
 	auto b = p;
 
 parseT:
-	//This needs to be reset manually.
-	mQualifier.qualifier = nullptr;
+	// This needs to be reset manually.
+	qualifier.qualifier = nullptr;
 
 	// Check if we are inside a string literal.
-	if(mFormatting == 3) {
-		tok.sourceColumn = (U32)(p - mL) + mTabs * (kTabWidth - 1);
-		tok.sourceLine = mLine;
-		mFormatting = 0;
+	if(formatting == 3) {
+		tok.sourceColumn = (U32)(p - l) + tabs * (kTabWidth - 1);
+		tok.sourceLine = line;
+		formatting = 0;
 		goto stringLit;
 	} else {
-		//Skip any whitespace and comments.
-		SkipWhitespace();
+		// Skip any whitespace and comments.
+		skipWhitespace();
 
-		tok.sourceColumn = (U32)(p - mL) + mTabs * (kTabWidth - 1);
-		tok.sourceLine = mLine;
+		tok.sourceColumn = (U32)(p - l) + tabs * (kTabWidth - 1);
+		tok.sourceLine = line;
 	}
 
-	//Check for the end of the file.
-	if(!*p)
-	{
+	// Check for the end of the file.
+	if(!*p) {
 		tok.kind = Token::Special;
-		if(mBlockCount) tok.type = Token::EndOfBlock;
+		if(blockCount) tok.type = Token::EndOfBlock;
 		else tok.type = Token::EndOfFile;
 	}
 
-	//Check if we need to insert a layout token.
-	else if(tok.sourceColumn == mIdent && !mNewItem)
-	{
+	// Check if we need to insert a layout token.
+	else if(tok.sourceColumn == ident && !newItem) {
 		tok.type = Token::EndOfStmt;
 		tok.kind = Token::Special;
-		mNewItem = true;
+		newItem = true;
 		goto newItem;
 	}
 
-	//Check if we need to end a layout block.
-	else if(tok.sourceColumn < mIdent)
-	{
+	// Check if we need to end a layout block.
+	else if(tok.sourceColumn < ident) {
 		tok.type = Token::EndOfBlock;
 		tok.kind = Token::Special;
 	}
 
 	// Check for start of string formatting.
-	else if(mFormatting == 1)
-	{
+	else if(formatting == 1) {
 		tok.kind = Token::Special;
 		tok.type = Token::StartOfFormat;
-		mFormatting = 2;
+		formatting = 2;
 	}
 
-		// Check for end of string formatting.
-	else if(mFormatting == 2 && *p == kFormatEnd)
-	{
+    // Check for end of string formatting.
+	else if(formatting == 2 && *p == kFormatEnd) {
 		// Issue a format end and make sure the next token is parsed as a string literal.
 		// Don't skip the character - ParseStringLiteral skips one at the beginning.
 		tok.kind = Token::Special;
 		tok.type = Token::EndOfFormat;
-		mFormatting = 3;
+		formatting = 3;
 	}
 
 	//Check for integral literals.
-	else if(IsDigit(*p))
-	{
-		ParseNumericLiteral();
+	else if(isDigit(*p)) {
+		parseNumericLiteral();
 	}
 
-	//Check for character literals.
-	else if(*p == '\'')
-	{
-		tok.data.character = ParseCharLiteral();
+	// Check for character literals.
+	else if(*p == '\'') {
+		tok.data.character = parseCharLiteral();
 		tok.kind = Token::Literal;
 		tok.type = Token::Char;
 	}
 
-	//Check for string literals.
-	else if(*p == '\"')
-	{
+	// Check for string literals.
+	else if(*p == '\"') {
 stringLit:
-		//Since string literals can span multiple lines, this may update mLocation.line.
+		// Since string literals can span multiple lines, this may update mLocation.line.
 		tok.type = Token::String;
 		tok.kind = Token::Literal;
-		tok.data.id = mContext.AddUnqualifiedName(ParseStringLiteral());
+		tok.data.id = context.addUnqualifiedName(parseStringLiteral());
 	}
 
 	//Check for special operators.
-	else if(IsSpecial(*p))
-	{
-		ParseSpecial();
+	else if(isSpecial(*p)) {
+		parseSpecial();
 	}
 
 	//Parse symbols.
-	else if(IsSymbol(*p))
-	{
-		ParseSymbol();
-		tok.data.id = mContext.AddUnqualifiedName(mQualifier.name);
-	}
-
-	// Parse special unicode symbols.
-	else if(ParseUniSymbol())
-	{
-		if(tok.kind == Token::Identifier)
-			tok.data.id = mContext.AddUnqualifiedName(mQualifier.name);
+	else if(isSymbol(*p)) {
+		parseSymbol();
+		tok.data.id = context.addUnqualifiedName(qualifier.name);
 	}
 
 	//Parse ConIDs
-	else if(IsUpperCase(*p))
-	{
-		ParseQualifier();
-		tok.data.id = mContext.AddName(&mQualifier);
+	else if(isUpperCase(*p)) {
+		parseQualifier();
+		tok.data.id = context.addName(&qualifier);
 	}
 
 	//Parse variables and reserved ids.
-	else if(IsLowerCase(*p) || *p == '_')
-	{
-		ParseVariable();
-		tok.data.id = mContext.AddUnqualifiedName(mQualifier.name);
+	else if(isLowerCase(*p) || *p == '_') {
+		parseVariable();
+		tok.data.id = context.addUnqualifiedName(qualifier.name);
 	}
 
 	//Unknown token - issue an error and skip it.
-	else
-	{
-		mDiag.Error("Unknown token: '%@'", *p);
+	else {
+		diag.error("Unknown token: '%@'", *p);
 		p++;
 		goto parseT;
 	}
 
-	mNewItem = false;
+	newItem = false;
 newItem:
 	tok.length = (U32)(p - b);
 }

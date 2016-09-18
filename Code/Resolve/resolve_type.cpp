@@ -5,7 +5,7 @@ namespace athena {
 namespace resolve {
 
 template<class F>
-TypeRef Resolver::mapType(F&& f, TypeRef type) {
+Type* Resolver::mapType(F&& f, Type* type) {
 	switch(type->kind) {
 		case Type::Alias:
 			return mapType(f, type->canonical);
@@ -47,14 +47,14 @@ TypeRef Resolver::mapType(F&& f, TypeRef type) {
 	return type;
 }
 
-TypeRef Resolver::resolveAlias(AliasType* type) {
+Type* Resolver::resolveAlias(AliasType* type) {
 	assert(type->astDecl);
 	type->canonical = resolveType(type->scope, type->astDecl->target, false, type->astDecl->type);
 	type->astDecl = nullptr;
 	return type->resolved ? type->canonical : type;
 }
 
-TypeRef Resolver::resolveVariant(VarType* type) {
+Type* Resolver::resolveVariant(VarType* type) {
 	// Resolve each declared constructor.
     assert(type->astDecl);
 	for(auto& c : type->list) {
@@ -74,27 +74,27 @@ TypeRef Resolver::resolveVariant(VarType* type) {
 	return type;
 }
 
-TypeRef Resolver::resolveTuple(Scope& scope, ast::TupleType& type, ast::SimpleType* tscope) {
+Type* Resolver::resolveTuple(Scope& scope, ast::TupleType& type, ast::SimpleType* tscope) {
 	// Generate a hash for the fields.
-	Tritium::Hasher h;
+	Hasher h;
 	ast::walk(type.fields, [&](auto i) {
-		auto t = this->resolveType(scope, i.type, false, tscope);
+		auto t = this->resolveType(scope, i->type, false, tscope);
 		h.add(t);
 		// Include the name to ensure that different tuples with the same memory layout are not exactly the same.
-		if(i.name) h.add(i.name());
+		if(i->name) h.add(i->name.force());
 	});
 
 	// Check if this kind of tuple has been used already.
 	TupleType* result = nullptr;
-	if(!types.getTuple((U32)h, result)) {
+	if(!types.getTuple((uint32_t)h, result)) {
 		// Otherwise, create the type.
 		new (result) TupleType;
 		U32 i = 0;
 		bool resolved = true;
 		ast::walk(type.fields, [&](auto it) {
-			auto t = this->resolveType(scope, it.type, false, tscope);
+			auto t = this->resolveType(scope, it->type, false, tscope);
 			if(!t->resolved) resolved = false;
-			result->fields << Field{it.name ? it.name() : 0, i, t, result, nullptr, true};
+			result->fields << Field{it->name ? it->name.force() : 0, i, t, result, nullptr, true};
 			i++;
 		});
 
@@ -104,11 +104,11 @@ TypeRef Resolver::resolveTuple(Scope& scope, ast::TupleType& type, ast::SimpleTy
 	return result;
 }
 
-inline Maybe<U32> getGenIndex(ast::SimpleType& type, Id name) {
+inline Maybe<uint32_t> getGenIndex(ast::SimpleType& type, Id name) {
 	auto t = type.kind;
 	U32 i = 0;
 	while(t) {
-		if(t->item == name) return Just(i);
+		if(*t->item == name) return Just(i);
 		i++;
 		t = t->next;
 	}
@@ -116,7 +116,7 @@ inline Maybe<U32> getGenIndex(ast::SimpleType& type, Id name) {
 	return Nothing();
 }
 
-TypeRef Resolver::resolveType(ScopeRef scope, ast::TypeRef type, bool constructor, ast::SimpleType* tscope) {
+Type* Resolver::resolveType(ScopeRef scope, ast::TypeRef type, bool constructor, ast::SimpleType* tscope) {
 	// Check if this is a primitive type.
 	if(type->kind == ast::Type::Unit) {
 		return types.getUnit();
@@ -154,7 +154,7 @@ TypeRef Resolver::resolveType(ScopeRef scope, ast::TypeRef type, bool constructo
 
 			// TODO: This is kind of a hack.
 			// The Bool primitive type has separate constructors.
-			auto name = context.Find(type->con).name;
+			auto name = context.find(type->con).name;
 			if(name == "True" || name == "False") {
 				return types.getBool();
 			} else if(name == "Bool") {
@@ -174,7 +174,7 @@ TypeRef Resolver::resolveType(ScopeRef scope, ast::TypeRef type, bool constructo
 	}
 }
 
-TypeRef Resolver::instantiateType(ScopeRef scope, TypeRef base, ast::TypeList* apps, ast::SimpleType* tscope) {
+Type* Resolver::instantiateType(ScopeRef scope, Type* base, ast::TypeList* apps, ast::SimpleType* tscope) {
 	if(base->isAlias() || base->isVariant()) {
 		U32 generics;
 		if(base->isAlias()) generics = ((AliasType*)base)->generics;
@@ -187,10 +187,10 @@ TypeRef Resolver::instantiateType(ScopeRef scope, TypeRef base, ast::TypeList* a
 		TypeList list;
 		ast::walk(apps, [&](auto i) { list << this->resolveType(scope, i, false, tscope); });
 
-		return mapType([&](TypeRef t) {
+		return mapType([&](Type* t) {
 			switch (t->kind) {
 				case Type::Gen:
-					return (TypeRef)list[((GenType*)t)->index];
+					return (Type*)list[((GenType*)t)->index];
 				case Type::App:
 					return instantiateType(scope, list[((AppType*)t)->baseIndex], ((AppType*)t)->apps, tscope);
 				default:
@@ -203,7 +203,7 @@ TypeRef Resolver::instantiateType(ScopeRef scope, TypeRef base, ast::TypeList* a
 	}
 }
 
-TypeRef Resolver::lazyResolve(TypeRef t) {
+Type* Resolver::lazyResolve(Type* t) {
 	if(t->kind == Type::Alias && ((AliasType*)t)->astDecl) {
 		resolveAlias((AliasType*)t);
 	} else if(t->kind == Type::Var && ((VarType*)t)->astDecl) {
@@ -212,7 +212,7 @@ TypeRef Resolver::lazyResolve(TypeRef t) {
 	return t;
 }
 
-void Resolver::constrain(TypeRef type, const Constraint&& c) {
+void Resolver::constrain(Type* type, const Constraint&& c) {
 	if(type->canonical->isGeneric()) {
 		// TODO: Check if constraints conflict.
 		((GenType*)type->canonical)->constraints << c;
@@ -221,18 +221,18 @@ void Resolver::constrain(TypeRef type, const Constraint&& c) {
 	}
 }
 
-void Resolver::constrain(TypeRef type, TypeRef c) {
+void Resolver::constrain(Type* type, Type* c) {
 	if(type->canonical->isGeneric()) {
 		auto t = (GenType*)type->canonical;
 		if(t->typeConstraint) {
 			// TODO: Merge constrained types.
-			debugError("Not implemented");
+			assert("Not implemented" == 0);
 		} else {
 			t->typeConstraint = c;
 		}
 	} else {
 		// TODO: Merge complete types.
-		debugError("Not implemented");
+		assert("Not implemented" == 0);
 	}
 }
 

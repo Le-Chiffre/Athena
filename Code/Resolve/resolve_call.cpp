@@ -11,7 +11,7 @@ FunctionDecl* Resolver::findFunction(ScopeRef scope, ast::ExprRef callee, ExprLi
 			// TODO: Create closure type if the function takes more parameters.
 			return fun;
 		} else {
-			error("no function named '%@' found", context.Find(name).name);
+			error("no function named '%@' found", context.find(name).name);
 		}
 	} else {
 		error("not a callable type");
@@ -49,7 +49,7 @@ FunctionDecl* Resolver::findFunction(ScopeRef scope, Id name, ExprList* args) {
 	// No callable function was found.
 	// TODO: Should we return some dummy object here?
 	if(!potentialCallees.size()) {
-		auto n = context.Find(name).name;
+		auto n = context.find(name).name;
 		if(identifierExists)
 			error("no matching function for call to '%@'", n);
 		else
@@ -108,7 +108,7 @@ FunctionDecl* Resolver::findBestMatch(ExprList* args) {
 	}
 
 	// If multiple functions are the best, the call is ambiguous.
-	if(sameMatchCount) error("Call to '%@' is ambiguous", context.Find(potentialCallees[0]->name).name);
+	if(sameMatchCount) error("Call to '%@' is ambiguous", context.find(potentialCallees[0]->name).name);
 
 	return bestMatch;
 }

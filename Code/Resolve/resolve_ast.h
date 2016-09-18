@@ -2,13 +2,13 @@
 #define Athena_Resolve_resolve__ast_h
 
 #include "../Parse/ast.h"
+#include "../General/array.h"
 
 namespace athena {
 namespace resolve {
 
 using ast::Fixity;
 using ast::Literal;
-using ast::Id;
 
 struct Variable;
 struct Scope;
@@ -22,7 +22,6 @@ struct VarConstructor;
 
 typedef Scope& ScopeRef;
 typedef FunctionDecl& FuncRef;
-typedef Type* TypeRef;
 typedef Expr& ExprRef;
 
 typedef ast::ASTList<Expr*> ExprList;
@@ -31,21 +30,21 @@ typedef Array<Function*> FunList;
 typedef Array<Type*> TypeList;
 typedef ast::ASTList<Scope*> ScopeList;
 typedef ast::ASTList<Alt*> AltList;
-typedef Tritium::Map<Id, TypeRef> TypeMap;
+typedef Tritium::Map<Id, Type*> TypeMap;
 typedef Tritium::Map<Id, VarConstructor> ConMap;
 typedef Tritium::Map<Id, FunctionDecl*> FunMap;
 typedef ast::ForeignConvention ForeignConvention;
 
 struct VarConstructor {
-	VarConstructor(Id name, U32 index, TypeRef parentType, ast::TypeList* astDecl) : name(name), index(index), parentType(parentType), astDecl(astDecl) {}
+	VarConstructor(Id name, U32 index, Type* parentType, ast::TypeList* astDecl) : name(name), index(index), parentType(parentType), astDecl(astDecl) {}
 	VarConstructor(const VarConstructor&) = default;
 
 	Id name;
 	U32 index;
-	TypeRef parentType;
+	Type* parentType;
 	ast::TypeList* astDecl;
 	TypeList contents;
-	TypeRef dataType = nullptr; // A type that contains everything inside the contents list.
+	Type* dataType = nullptr; // A type that contains everything inside the contents list.
 	void* codegen = nullptr;
 };
 
@@ -56,7 +55,7 @@ struct Scope {
 	/// Finds any local variable with the provided name that is declared within this scope.
 	Variable* findLocalVar(Id name);
 
-    TypeRef findType(Id name);
+    Type* findType(Id name);
 	VarConstructor* findConstructor(Id name);
 
 	bool hasVariables();
@@ -120,7 +119,7 @@ struct FunctionDecl {
 
 	// The return type of this function.
 	// Note that this is resolved lazily in most cases.
-	TypeRef type = nullptr;
+	Type* type = nullptr;
 
 	// The next function overload with this name.
 	FunctionDecl* sibling = nullptr;
@@ -162,9 +161,9 @@ struct ForeignFunction : FunctionDecl {
 };
 
 struct Variable {
-	Variable(Id name, TypeRef type, ScopeRef scope, bool constant, bool funParam = false) : type(type), scope(scope), name(name), constant(constant), funParam(funParam) {}
+	Variable(Id name, Type* type, ScopeRef scope, bool constant, bool funParam = false) : type(type), scope(scope), name(name), constant(constant), funParam(funParam) {}
 	void* codegen = nullptr; // Opaque pointer that can be used by the code generator.
-	TypeRef type;
+	Type* type;
 	ScopeRef scope;
 	Id name;
 	bool constant;
@@ -229,12 +228,12 @@ inline PrimitiveTypeCategory category(PrimitiveType t) {
 
 /// Returns the largest of the two provided types.
 inline PrimitiveType largest(PrimitiveType a, PrimitiveType b) {
-	return (PrimitiveType)Tritium::Math::min((U32)a, (U32)b);
+	return b > a ? a : b;
 }
 
 struct Type {
 	void* codegen = nullptr; // Opaque pointer that can be used by the code generator.
-	TypeRef canonical;
+	Type* canonical;
 
 	enum Kind {
 		Unknown,
@@ -262,7 +261,7 @@ struct Type {
 
 	bool isPointer() const {return kind == Ptr;}
     bool isPrimitive() const {return kind == Prim;}
-	bool isPtrOrPrim() const {return ((U32)kind & 0x10) != 0;}
+	bool isPtrOrPrim() const {return ((Size)kind & 0x10) != 0;}
 	bool isTuple() const {return kind == Tuple;}
 	bool isTupleOrIndirect() const;
 	bool isKnown() const {return kind != Unknown;}
@@ -293,13 +292,13 @@ inline bool Type::isBool() const {return isPrimitive() && ((const PrimType*)this
 /// A pointer type representing a memory address to some data type.
 /// Pointers must have a concrete type; pointers to the unit type are not supported.
 struct PtrType : Type {
-	PtrType(TypeRef type) : Type(Ptr), type(type) {}
-	TypeRef type;
+	PtrType(Type* type) : Type(Ptr), type(type) {}
+	Type* type;
 };
 
 /// Represents an lvalue (as opposed to rvalue).
 struct LVType : Type {
-	LVType(TypeRef type) : Type(Lvalue) {canonical = type;}
+	LVType(Type* type) : Type(Lvalue) {canonical = type;}
 };
 
 inline bool Type::isTupleOrIndirect() const {
@@ -309,13 +308,13 @@ inline bool Type::isTupleOrIndirect() const {
 }
 
 struct Field {
-	Field(Id name, U32 index, TypeRef type, TypeRef container, Expr* content, bool constant) :
+	Field(Id name, U32 index, Type* type, Type* container, Expr* content, bool constant) :
 		name(name), index(index), type(type), container(container), content(content), constant(constant) {}
 
 	Id name;
 	U32 index;
-	TypeRef type;
-	TypeRef container;
+	Type* type;
+	Type* container;
 	Expr* content;
 	bool constant;
 };
@@ -357,14 +356,14 @@ struct LamType : Type {
 };
 
 struct ArrayType : Type {
-	ArrayType(TypeRef type) : Type(Array), type(type) {}
-	TypeRef type;
+	ArrayType(Type* type) : Type(Array), type(type) {}
+	Type* type;
 };
 
 struct MapType : Type {
-	MapType(TypeRef from, TypeRef to) : Type(Map), from(from), to(to) {}
-	TypeRef from;
-	TypeRef to;
+	MapType(Type* from, Type* to) : Type(Map), from(from), to(to) {}
+	Type* from;
+	Type* to;
 };
 
 struct Constraint {
@@ -383,7 +382,7 @@ struct Constraint {
 	struct FieldC {
 		U32 index; // Set if index equals 0.
 		Id name;
-		TypeRef type; // The type of this field.
+		Type* type; // The type of this field.
 	};
 
 	union {
@@ -401,7 +400,7 @@ inline Constraint FunConstraint(Id name, U32 index) {
 	return c;
 }
 
-inline Constraint FieldConstraint(U32 index, Id name, TypeRef type) {
+inline Constraint FieldConstraint(Size index, Id name, Type* type) {
 	Constraint c;
 	c.kind = Constraint::Field;
 	c.field.index = index;
@@ -443,7 +442,7 @@ struct GenType : Type {
 	 *  - The signature of the whole function now becomes 'Maybe a -> Bool'.
 	 */
 	::Array<Constraint> constraints;
-	TypeRef typeConstraint = nullptr;
+	Type* typeConstraint = nullptr;
 
 	/**
 	 * The index of a generic type is related to a possible type containing it.
@@ -482,14 +481,14 @@ enum class PrimitiveOp {
 	Rem,
 
     FirstBit,
-	Shl = (U32)FirstBit,
+	Shl = (Size)FirstBit,
 	Shr,
 	And,
 	Or,
 	Xor,
 
     FirstCompare,
-	CmpEq = (U32)FirstCompare,
+	CmpEq = (Size)FirstCompare,
 	CmpNeq,
 	CmpGt,
 	CmpGe,
@@ -498,7 +497,7 @@ enum class PrimitiveOp {
 
 	// Unary
 	FirstUnary,
-	Neg = (U32)FirstUnary,
+	Neg = (Size)FirstUnary,
 	Not,
 	Ref,
 	Deref,
@@ -557,24 +556,24 @@ struct Expr {
 	bool isLiteral() const {return kind == Lit;}
 	bool isVar() const {return kind == Var;}
 
-	TypeRef type;
-	Expr(Kind k, TypeRef type) : kind(k), type(type) {}
+	Type* type;
+	Expr(Kind k, Type* type) : kind(k), type(type) {}
 };
 
 typedef Array<Expr*> Exprs;
 
 struct MultiExpr : Expr {
-	MultiExpr(Exprs&& es) : Expr(Multi, (*es.back())->type), es(move(es)) {}
+	MultiExpr(Exprs&& es) : Expr(Multi, (*es.back())->type), es(std::move(es)) {}
 	Exprs es;
 };
 
 struct LitExpr : Expr {
-	LitExpr(Literal lit, TypeRef type) : Expr(Lit, type), literal(lit) {}
+	LitExpr(Literal lit, Type* type) : Expr(Lit, type), literal(lit) {}
 	Literal literal;
 };
 
 struct VarExpr : Expr {
-	VarExpr(Variable* var, TypeRef type) : Expr(Var, type), var(var) {}
+	VarExpr(Variable* var, Type* type) : Expr(Var, type), var(var) {}
 	Variable* var;
 };
 
@@ -585,25 +584,25 @@ struct AppExpr : Expr {
 };
 
 struct AppIExpr : Expr {
-	AppIExpr(const char* i, ExprList* args, TypeRef type) : Expr(AppI, type), callee(i), args(args) {}
+	AppIExpr(const char* i, ExprList* args, Type* type) : Expr(AppI, type), callee(i), args(args) {}
 	const char* callee;
 	ExprList* args;
 };
 
 struct AppPExpr : Expr {
-	AppPExpr(PrimitiveOp op, ExprList* args, TypeRef type) : Expr(AppP, type), args(args), op(op) {}
+	AppPExpr(PrimitiveOp op, ExprList* args, Type* type) : Expr(AppP, type), args(args), op(op) {}
 	ExprList* args;
 	PrimitiveOp op;
 };
 
 struct GenAppExpr : Expr {
-	GenAppExpr(Id name, ExprList* args, TypeRef type) : Expr(GenApp, type), args(args), name(name) {}
+	GenAppExpr(Id name, ExprList* args, Type* type) : Expr(GenApp, type), args(args), name(name) {}
 	ExprList* args;
 	Id name;
 };
 
 struct CaseExpr : Expr {
-    CaseExpr(AltList* alts, Expr* otherwise, TypeRef type) : Expr(Case, type), alts(alts), otherwise(otherwise) {}
+    CaseExpr(AltList* alts, Expr* otherwise, Type* type) : Expr(Case, type), alts(alts), otherwise(otherwise) {}
     AltList* alts;
     Expr* otherwise;
 };
@@ -627,8 +626,8 @@ enum class CondMode : Byte {
 bool succeedsAlways(const IfConds& conds, CondMode mode);
 
 struct IfExpr : Expr {
-	IfExpr(IfConds&& conds, ExprRef then, Expr* otherwise, TypeRef type, bool ret, CondMode mode);
-	IfExpr(IfConds&& conds, ExprRef then, Expr* otherwise, TypeRef type, bool ret, CondMode mode, bool alwaysTrue);
+	IfExpr(IfConds&& conds, ExprRef then, Expr* otherwise, Type* type, bool ret, CondMode mode);
+	IfExpr(IfConds&& conds, ExprRef then, Expr* otherwise, Type* type, bool ret, CondMode mode, bool alwaysTrue);
 	IfConds conds;
 	ExprRef then;
 	Expr* otherwise;
@@ -638,18 +637,18 @@ struct IfExpr : Expr {
 };
 
 struct WhileExpr : Expr {
-	WhileExpr(ExprRef cond, ExprRef loop, TypeRef type) : Expr(While, type), cond(cond), loop(loop) {}
+	WhileExpr(ExprRef cond, ExprRef loop, Type* type) : Expr(While, type), cond(cond), loop(loop) {}
 	ExprRef cond;
 	ExprRef loop;
 };
 
 struct LoadExpr : Expr {
-	LoadExpr(ExprRef target, TypeRef type) : Expr(Load, type), target(target) {}
+	LoadExpr(ExprRef target, Type* type) : Expr(Load, type), target(target) {}
 	ExprRef target;
 };
 
 struct StoreExpr : Expr {
-	StoreExpr(ExprRef target, ExprRef value, TypeRef type) : Expr(Store, type), target(target), value(value) {}
+	StoreExpr(ExprRef target, ExprRef value, Type* type) : Expr(Store, type), target(target), value(value) {}
 	ExprRef target;
 	ExprRef value;
 };
@@ -661,18 +660,18 @@ struct AssignExpr : Expr {
 };
 
 struct CoerceExpr : Expr {
-	CoerceExpr(ExprRef src, TypeRef dst) : Expr(Coerce, dst), src(src) {}
+	CoerceExpr(ExprRef src, Type* dst) : Expr(Coerce, dst), src(src) {}
 	ExprRef src;
 };
 
 struct CoerceLVExpr : Expr {
-	CoerceLVExpr(ExprRef src, TypeRef dst) : Expr(CoerceLV, dst), src(src) {}
+	CoerceLVExpr(ExprRef src, Type* dst) : Expr(CoerceLV, dst), src(src) {}
 	ExprRef src;
 };
 
 struct FieldExpr : Expr {
-	FieldExpr(ExprRef container, ::athena::resolve::Field* field, TypeRef type) : Expr(Field, type), container(container), field(field) {}
-	FieldExpr(ExprRef container, int constructor, TypeRef type) : Expr(Field, type), container(container), constructor(constructor) {}
+	FieldExpr(ExprRef container, ::athena::resolve::Field* field, Type* type) : Expr(Field, type), container(container), field(field) {}
+	FieldExpr(ExprRef container, int constructor, Type* type) : Expr(Field, type), container(container), constructor(constructor) {}
 	ExprRef container;
 	union {
 		// When the type is a structure.
@@ -694,7 +693,7 @@ struct ConstructArg {
 };
 
 struct ConstructExpr : Expr {
-	ConstructExpr(TypeRef type, VarConstructor* con = nullptr) : Expr(Construct, type), con(con) {}
+	ConstructExpr(Type* type, VarConstructor* con = nullptr) : Expr(Construct, type), con(con) {}
 	Array<ConstructArg> args;
 
 	// Only set if the type is a variant.
@@ -718,7 +717,7 @@ struct EmptyDeclExpr : Expr {
 
 /// A temporary expression that represents a non-existent value, such as a compilation error.
 struct EmptyExpr : Expr {
-	EmptyExpr(TypeRef type) : Expr(Empty, type) {}
+	EmptyExpr(Type* type) : Expr(Empty, type) {}
 };
 
 inline LitExpr* findLiteral(ExprRef e) {
@@ -739,7 +738,7 @@ inline LitExpr* findLiteral(ExprRef e) {
 }
 
 // Only call this after a successful call to findLiteral.
-inline void updateLiteral(ExprRef e, TypeRef type) {
+inline void updateLiteral(ExprRef e, Type* type) {
 	if(e.kind == Expr::Multi) {
 		auto m = (MultiExpr*)&e;
 		if(m->es.size() && (*m->es.back())->isLiteral()) {

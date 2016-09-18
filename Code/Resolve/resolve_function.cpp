@@ -41,7 +41,7 @@ bool Resolver::resolveFunction(Scope& scope, Function& fun) {
     if(decl.args) {
         auto arg = decl.args->fields;
         while (arg) {
-            auto a = resolveArgument(fun.scope, arg->item);
+            auto a = resolveArgument(fun.scope, *arg->item);
             fun.arguments << a;
             arg = arg->next;
         }
@@ -118,7 +118,7 @@ Expr* Resolver::resolveFunctionCases(Scope& scope, Function& fun, ast::FunCaseLi
         }
 
         auto body = resolveExpression(s->scope, cases->item->body, true);
-        s->contents = createIf(move(conds), *body, resolveFunctionCases(scope, fun, cases->next), true, CondMode::And);
+        s->contents = createIf(std::move(conds), *body, resolveFunctionCases(scope, fun, cases->next), true, CondMode::And);
         s->type = body->type;
         return s;
     } else {

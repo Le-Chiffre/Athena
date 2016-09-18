@@ -7,16 +7,14 @@ link_directories(../../Tritium/Debug)
 link_directories(../../llvm/build/lib)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -msse4.1 -mfpmath=sse -Wall")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4.1 -mfpmath=sse -Wall -std=c++14 -fno-rtti -fno-exceptions -fno-threadsafe-statics")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4.1 -mfpmath=sse -Wall -std=c++14 -fno-rtti -fno-exceptions -fno-threadsafe-statics -dl -pthread")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -D_DEBUG -DDEBUG")
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static -mwindows")
+set(CMAKE_LINKER_FLAGS "${CMAKE_LINKER_FLAGS}")
 
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/../Bin/Win32")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/../Bin/Linux")
 
 set(SOURCE_FILES
     main.cpp
-
-    General/diagnostic.h
 
     Parse/ast.h
     Parse/ast_print.cpp
@@ -41,23 +39,33 @@ set(SOURCE_FILES
 
     Generate/generate.cpp
     Generate/generate.h
-    Generate/genHLSL.cpp
-    Generate/genHLSL.h
-)
+    General/types.h
+    General/targets.h
+    General/maybe.h
+    General/compiler.h
+    General/mem.h
+    General/mem.cpp
+    General/string.h
+    Parse/context.h
+    General/hash.h
+    General/hash.cpp
+    General/compiler.cpp
+    General/map.h
+    General/pool.h
+    General/array.h)
 
 
 add_executable(Athena ${SOURCE_FILES} Resolve/resolve_create.cpp)
 target_link_libraries(Athena
 LLVMInstrumentation LLVMInterpreter LLVMTableGen LLVMXCoreDisassembler LLVMXCoreCodeGen LLVMXCoreDesc LLVMXCoreInfo LLVMXCoreAsmPrinter LLVMSystemZDisassembler
 LLVMSystemZCodeGen LLVMSystemZAsmParser LLVMSystemZDesc LLVMSystemZInfo LLVMSystemZAsmPrinter LLVMSparcDisassembler LLVMSparcCodeGen LLVMSparcAsmParser
-LLVMSparcDesc LLVMSparcInfo LLVMSparcAsmPrinter LLVMR600CodeGen LLVMR600AsmParser LLVMR600Desc LLVMR600Info LLVMR600AsmPrinter LLVMPowerPCDisassembler
+LLVMSparcDesc LLVMSparcInfo LLVMSparcAsmPrinter LLVMPowerPCDisassembler
 LLVMPowerPCCodeGen LLVMPowerPCAsmParser LLVMPowerPCDesc LLVMPowerPCInfo LLVMPowerPCAsmPrinter LLVMNVPTXCodeGen LLVMNVPTXDesc LLVMNVPTXInfo
 LLVMNVPTXAsmPrinter LLVMMSP430CodeGen LLVMMSP430Desc LLVMMSP430Info LLVMMSP430AsmPrinter LLVMMipsDisassembler LLVMMipsCodeGen LLVMMipsAsmParser
-LLVMMipsDesc LLVMMipsInfo LLVMMipsAsmPrinter LLVMHexagonDisassembler LLVMHexagonCodeGen LLVMHexagonDesc LLVMHexagonInfo LLVMCppBackendCodeGen
-LLVMCppBackendInfo LLVMARMDisassembler LLVMARMCodeGen LLVMARMAsmParser LLVMARMDesc LLVMARMInfo LLVMARMAsmPrinter LLVMAArch64Disassembler LLVMAArch64CodeGen
+LLVMMipsDesc LLVMMipsInfo LLVMMipsAsmPrinter LLVMHexagonDisassembler LLVMHexagonCodeGen LLVMHexagonDesc LLVMHexagonInfo
+LLVMARMDisassembler LLVMARMCodeGen LLVMARMAsmParser LLVMARMDesc LLVMARMInfo LLVMARMAsmPrinter LLVMAArch64Disassembler LLVMAArch64CodeGen
 LLVMAArch64AsmParser LLVMAArch64Desc LLVMAArch64Info LLVMAArch64AsmPrinter LLVMAArch64Utils LLVMLTO LLVMObjCARCOpts LLVMLinker LLVMipo LLVMVectorize
 LLVMBitWriter LLVMX86Disassembler LLVMX86AsmParser LLVMMCJIT LLVMRuntimeDyld LLVMExecutionEngine LLVMOption gtest_main gtest LLVMX86CodeGen
 LLVMX86Desc LLVMX86Info LLVMMCDisassembler LLVMX86AsmPrinter LLVMX86Utils LLVMSelectionDAG LLVMAsmPrinter LLVMCodeGen LLVMTarget LLVMScalarOpts
-LLVMProfileData LLVMInstCombine LLVMTransformUtils LLVMipa LLVMAnalysis LLVMLineEditor LLVMIRReader LLVMAsmParser LLVMDebugInfo LLVMObject
-LLVMMCParser LLVMMC LLVMBitReader LLVMCore LLVMSupport
-CoreD psapi ws2_32 shlwapi advapi32 DbgHelp)
+LLVMProfileData LLVMInstCombine LLVMTransformUtils LLVMAnalysis LLVMLineEditor LLVMIRReader LLVMAsmParser LLVMObject
+LLVMMCParser LLVMMC LLVMBitReader LLVMCore LLVMSupport LLVMDemangle dl pthread)
