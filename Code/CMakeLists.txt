@@ -69,3 +69,7 @@ LLVMBitWriter LLVMX86Disassembler LLVMX86AsmParser LLVMMCJIT LLVMRuntimeDyld LLV
 LLVMX86Desc LLVMX86Info LLVMMCDisassembler LLVMX86AsmPrinter LLVMX86Utils LLVMSelectionDAG LLVMAsmPrinter LLVMCodeGen LLVMTarget LLVMScalarOpts
 LLVMProfileData LLVMInstCombine LLVMTransformUtils LLVMAnalysis LLVMLineEditor LLVMIRReader LLVMAsmParser LLVMObject
 LLVMMCParser LLVMMC LLVMBitReader LLVMCore LLVMSupport LLVMDemangle dl pthread)
+
+if(APPLE)
+target_link_libraries(Athena ncurses)
+endif()
